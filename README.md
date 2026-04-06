@@ -76,12 +76,13 @@ stats = mem.stats()
 ## REST API
 
 ```
-POST /api/v1/learn     {content, tags, importance?}
-POST /api/v1/recall    {query, top?, filter?}
+POST /api/v1/learn          {content, tags, importance?}
+POST /api/v1/learn/batch    {items: [{content, tags?, importance?}], continue_on_error?}
+POST /api/v1/recall         {query, top?, filter?}
 GET  /api/v1/recall/stream  {q, top?, filter_tags?, min_score?}  (SSE)
-POST /api/v1/prune     {threshold, max_age?}
+POST /api/v1/prune          {threshold, max_age?}
 GET  /api/v1/stats
-GET  /api/v1/search    {q, limit?}
+GET  /api/v1/search         {q, limit?}
 DELETE /api/v1/memory/{id}
 ```
 
@@ -123,6 +124,7 @@ asyncio.run(stream_recall())
 | **In-memory** | Testing, single-session | `pip install memos` | `backend="memory"` |
 | **ChromaDB** | Local development, small-medium datasets | `pip install memos[chroma]` | `backend="chroma"` |
 | **Qdrant** | Production, large datasets, hybrid search | `pip install memos[qdrant]` | `backend="qdrant"` |
+| **Pinecone** | Cloud-native, serverless, managed | `pip install memos[pinecone]` | `backend="pinecone"` |
 
 ### Qdrant Features (v0.7.0+)
 
@@ -144,6 +146,64 @@ mem = MemOS(
     embed_host="http://localhost:11434",
     embed_model="nomic-embed-text",
 )
+```
+
+### Pinecone Features (v0.9.0+)
+
+- **Serverless or Pod-based** — automatic index creation, AWS/GCP/Azure
+- **Native vector search** — Pinecone similarity with score thresholds
+- **Batch upsert** — optimized bulk operations (100-item batches)
+- **Namespace isolation** — multi-agent support with Pinecone namespaces
+- **Fully managed** — no infrastructure to maintain
+
+```python
+# Pinecone Serverless (recommended)
+mem = MemOS(
+    backend="pinecone",
+    pinecone_api_key="pc-key-...",
+    pinecone_index_name="agent-memories",
+    embed_host="http://localhost:11434",
+)
+
+# Pinecone Pod-based
+mem = MemOS(
+    backend="pinecone",
+    pinecone_api_key="pc-key-...",
+    pinecone_serverless=False,
+    pinecone_environment="us-east-1-aws",
+)
+```
+
+## Batch Learn API (v0.9.0+)
+
+Store multiple memories in a single call — ideal for initial loading, file ingestion, or bulk operations.
+
+```python
+result = mem.batch_learn([
+    {"content": "User prefers Python", "tags": ["preference"], "importance": 0.8},
+    {"content": "Server runs on ARM64", "tags": ["infra"]},
+    {"content": "Dark mode enabled", "tags": ["ui"]},
+])
+# result = {"learned": 3, "skipped": 0, "errors": [], "items": [...]}
+
+# Strict mode — raises on first invalid item
+result = mem.batch_learn(items, continue_on_error=False)
+```
+
+REST API:
+```bash
+curl -X POST http://localhost:8100/api/v1/learn/batch \
+  -H 'Content-Type: application/json' \
+  -d '{"items": [
+    {"content": "Memory 1", "tags": ["a"]},
+    {"content": "Memory 2", "tags": ["b"]}
+  ]}'
+```
+
+CLI:
+```bash
+echo '[{"content": "Batch 1"}, {"content": "Batch 2"}]' | memos batch-learn -
+memos batch-learn memories.json --verbose
 ```
 
 ## Architecture
@@ -181,6 +241,8 @@ MemOS is assembled from battle-tested components:
 | ChromaDB Client | chroma-memory-index | 405 LOC |
 | Qdrant Backend + Hybrid Search | v0.7.0 new | 37 tests |
 | SSE Streaming Recall | v0.8.0 new | 32 tests |
+| Pinecone Backend + Batch Upsert | v0.9.0 new | 18 tests |
+| Batch Learn API | v0.9.0 new | 12 tests |
 | Security Sanitizer | memory-sanitization-linter | 100% recall |
 
 ## Requirements

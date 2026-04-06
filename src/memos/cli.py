@@ -63,6 +63,32 @@ def cmd_learn(ns: argparse.Namespace) -> None:
     print(f"✓ Learned [{item.id[:8]}...] ({len(item.content)} chars, tags={item.tags})")
 
 
+def cmd_batch_learn(ns: argparse.Namespace) -> None:
+    """Batch learn — store multiple memories from a JSON file."""
+    memos = _get_memos(ns)
+    src = ns.input
+    text = Path(src).read_text(encoding="utf-8") if src != "-" else sys.stdin.read()
+    data = json.loads(text)
+    items = data if isinstance(data, list) else data.get("items", [])
+    if not items:
+        print("No items found in input", file=sys.stderr)
+        sys.exit(1)
+    result = memos.batch_learn(
+        items=items,
+        continue_on_error=not ns.strict,
+    )
+    label = " (dry-run)" if ns.dry_run else ""
+    print(f"{label}Batch learn: {result['learned']} learned, {result['skipped']} skipped, {len(result['errors'])} errors")
+    if ns.verbose and result["items"]:
+        for item in result["items"][:10]:
+            print(f"  ✓ [{item['id'][:8]}] {item['content'][:80]}")
+        if len(result["items"]) > 10:
+            print(f"  ... and {len(result['items']) - 10} more")
+    if result["errors"]:
+        for err in result["errors"][:5]:
+            print(f"  ⚠ {err.get('reason', err)}", file=sys.stderr)
+
+
 def cmd_recall(ns: argparse.Namespace) -> None:
     """Recall memories matching a query."""
     memos = _get_memos(ns)
@@ -232,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     # init
     init = sub.add_parser("init", help="Initialize a MemOS data directory")
     init.add_argument("directory", nargs="?", default=".memos", help="Directory path")
-    init.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    init.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
     init.add_argument("--force", action="store_true", help="Overwrite existing config")
 
     # learn
@@ -241,25 +267,33 @@ def build_parser() -> argparse.ArgumentParser:
     learn.add_argument("--file", "-f", help="Read content from file")
     learn.add_argument("--tags", "-t", help="Comma-separated tags")
     learn.add_argument("--importance", "-i", type=float, default=0.5)
-    learn.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    learn.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
     learn.add_argument("--no-sanitize", action="store_true")
+
+    # batch-learn
+    batch_learn = sub.add_parser("batch-learn", help="Store multiple memories from JSON")
+    batch_learn.add_argument("input", help="JSON file with items (use - for stdin)")
+    batch_learn.add_argument("--strict", action="store_true", help="Stop on first error")
+    batch_learn.add_argument("--dry-run", action="store_true", help="Preview only")
+    batch_learn.add_argument("--verbose", "-v", action="store_true")
+    batch_learn.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # recall
     recall = sub.add_parser("recall", help="Recall memories matching a query")
     recall.add_argument("query", help="Search query")
     recall.add_argument("--top", "-n", type=int, default=5)
     recall.add_argument("--min-score", type=float, default=0.0)
-    recall.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    recall.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # stats
     stats = sub.add_parser("stats", help="Show memory statistics")
     stats.add_argument("--json", action="store_true", help="JSON output")
-    stats.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # forget
     forget = sub.add_parser("forget", help="Delete a memory")
     forget.add_argument("target", help="Memory ID or content")
-    forget.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    forget.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # prune
     prune = sub.add_parser("prune", help="Remove decayed memories")
@@ -267,7 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     prune.add_argument("--max-age", type=float, default=90.0)
     prune.add_argument("--dry-run", action="store_true")
     prune.add_argument("--verbose", "-v", action="store_true")
-    prune.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    prune.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # consolidate
     cons = sub.add_parser("consolidate", help="Find and merge duplicate memories")
@@ -275,7 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
     cons.add_argument("--merge", action="store_true", help="Merge content from duplicates")
     cons.add_argument("--dry-run", action="store_true", help="Report only, don't modify")
     cons.add_argument("--verbose", "-v", action="store_true")
-    cons.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    cons.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # ingest
     ing = sub.add_parser("ingest", help="Import file(s) into memory")
@@ -284,13 +318,13 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--importance", "-i", type=float, default=0.5)
     ing.add_argument("--dry-run", action="store_true", help="Parse only, don't store")
     ing.add_argument("--max-chunk", type=int, default=2000, help="Max chars per chunk")
-    ing.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    ing.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # export
     exp = sub.add_parser("export", help="Export all memories to JSON")
     exp.add_argument("--output", "-o", help="Output file (default: stdout)")
     exp.add_argument("--no-metadata", action="store_true", help="Exclude metadata")
-    exp.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    exp.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # import
     imp = sub.add_parser("import", help="Import memories from JSON")
@@ -298,13 +332,13 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--merge", default="skip", choices=["skip", "overwrite", "duplicate"])
     imp.add_argument("--tags", "-t", help="Extra tags to add to imported memories")
     imp.add_argument("--dry-run", action="store_true", help="Preview only")
-    imp.add_argument("--backend", default="memory", choices=["memory", "chroma"])
+    imp.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # serve
     serve = sub.add_parser("serve", help="Start REST API server")
     serve.add_argument("--host", default=os.environ.get("MEMOS_HOST", "127.0.0.1"))
     serve.add_argument("--port", type=int, default=int(os.environ.get("MEMOS_PORT", "8000")))
-    serve.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma"])
+    serve.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
     serve.add_argument("--chroma-host", default="localhost")
     serve.add_argument("--chroma-port", type=int, default=8000)
 
@@ -389,6 +423,7 @@ def main(argv: list[str] | None = None) -> None:
     commands = {
         "init": cmd_init,
         "learn": cmd_learn,
+        "batch-learn": cmd_batch_learn,
         "recall": cmd_recall,
         "stats": cmd_stats,
         "forget": cmd_forget,

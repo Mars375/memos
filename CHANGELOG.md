@@ -1,5 +1,77 @@
 # Changelog
 
+## v0.9.0 (2026-04-06) — Batch Learn API + Pinecone Backend
+
+### New Features
+
+#### Batch Learn API
+- **`MemOS.batch_learn()`** — Store multiple memories in a single call with validation, sanitization, and error handling.
+  - Accepts list of dicts: `content` (required), `tags`, `importance`, `metadata`
+  - `continue_on_error` mode: skip invalid items vs raise on first error
+  - Returns detailed result: `learned`, `skipped`, `errors` counts + item details
+  - Emits `batch_learned` event on the event bus
+  - Optimized for backends with `upsert_batch()` support
+- **`POST /api/v1/learn/batch`** — REST endpoint for batch learning
+  - Accepts up to 1000 items per request
+  - Configurable error handling via `continue_on_error` param
+- **`memos batch-learn`** — CLI command for batch learning from JSON files
+  - Supports stdin (`-`) for piping data
+  - `--strict` mode for fail-fast behavior
+  - `--verbose` for detailed output
+
+#### Pinecone Storage Backend
+- **`PineconeBackend`** — Full `StorageBackend` implementation with:
+  - Pinecone Serverless (recommended) and Pod-based index support
+  - Native vector similarity search via `vector_search()`
+  - Batch upsert (`upsert_batch()`) for efficient bulk operations (100-item batches)
+  - Automatic index creation on first use
+  - Namespace isolation via Pinecone namespaces
+  - Embedding computation and caching (Ollama-compatible)
+  - Keyword fallback search when vectors unavailable
+  - Configurable: `cloud`, `region`, `metric`, `vector_size`, `index_name`
+- **`pip install memos[pinecone]`** — Optional dependency
+- **MemOS integration** — `MemOS(backend="pinecone", pinecone_api_key="...")`
+
+### SDK Usage
+```python
+# Batch learn
+result = mem.batch_learn([
+    {"content": "User prefers Python", "tags": ["preference"]},
+    {"content": "Server on ARM64", "tags": ["infra"]},n    {"content": "Dark mode enabled", "tags": ["ui"]},
+])
+# result = {"learned": 3, "skipped": 0, "errors": [], "items": [...]}
+
+# Pinecone backend
+mem = MemOS(
+    backend="pinecone",
+    pinecone_api_key="pc-key-...",
+    pinecone_index_name="my-agent-memories",
+)
+```
+
+### Tests
+- 30 new tests covering:
+  - Batch learn core: basic, importance, empty content, strict mode, sanitization, dedup, metadata, integration, large batch (11 tests)
+  - Batch learn events: emit verification, empty batch (2 tests)
+  - Pinecone backend unit: ID conversion, metadata serialization, upsert, batch upsert, delete, get, list, search, namespaces (15 tests)
+  - Pinecone integration: MemOS init with Pinecone, batch learn via Pinecone (2 tests)
+- Total test suite: **327 tests, all passing**
+
+### Files Added
+- `src/memos/storage/pinecone_backend.py` — Pinecone backend (300+ LOC)
+- `tests/test_batch_learn.py` — Batch learn tests (120+ LOC)
+- `tests/test_pinecone.py` — Pinecone backend tests (250+ LOC)
+
+### Files Modified
+- `src/memos/core.py` — Added `batch_learn()` method + Pinecone backend init
+- `src/memos/api/__init__.py` — Added `POST /api/v1/learn/batch` endpoint
+- `src/memos/cli.py` — Added `batch-learn` subcommand + Pinecone backend choices
+- `pyproject.toml` — Added `pinecone` optional dependency
+- `README.md` — Updated with batch learn + Pinecone docs
+- `CHANGELOG.md` — This entry
+
+---
+
 ## v0.8.0 (2026-04-06) — SSE Streaming Recall API
 
 ### New Features

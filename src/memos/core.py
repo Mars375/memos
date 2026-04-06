@@ -11,6 +11,7 @@ from .storage.base import StorageBackend
 from .storage.chroma_backend import ChromaBackend
 from .storage.memory_backend import InMemoryBackend
 from .storage.qdrant_backend import QdrantBackend
+from .storage.pinecone_backend import PineconeBackend
 from .decay.engine import DecayEngine
 from .sanitizer import MemorySanitizer
 from .crypto import MemoryCrypto
@@ -57,6 +58,18 @@ class MemOS:
                 embed_host=embed_host,
                 embed_model=embed_model,
                 vector_size=kwargs.get("vector_size", 768),
+            )
+        elif backend == "pinecone":
+            store = PineconeBackend(
+                api_key=kwargs.get("pinecone_api_key", ""),
+                environment=kwargs.get("pinecone_environment"),
+                index_name=kwargs.get("pinecone_index_name", "memos"),
+                embed_host=embed_host,
+                embed_model=embed_model,
+                vector_size=kwargs.get("vector_size", 768),
+                cloud=kwargs.get("pinecone_cloud", "aws"),
+                region=kwargs.get("pinecone_region", "us-east-1"),
+                serverless=kwargs.get("pinecone_serverless", True),
             )
         else:
             store = InMemoryBackend()
@@ -140,6 +153,97 @@ class MemOS:
         }, namespace=self._namespace)
 
         return item
+
+    def batch_learn(
+        self,
+        items: list[dict[str, Any]],
+        *,
+        continue_on_error: bool = True,
+    ) -> dict[str, Any]:
+        """Store multiple memories in one call.
+
+        Each item dict should have: content (required), tags, importance, metadata.
+        Returns a summary with counts of learned, skipped, and errors.
+
+        Args:
+            items: List of dicts with memory data.
+            continue_on_error: If True, skip invalid items. If False, raise on first error.
+
+        Returns:
+            dict with learned, skipped, errors counts and details.
+        """
+        result = {
+            "learned": 0,
+            "skipped": 0,
+            "errors": [],
+            "items": [],
+        }
+
+        # Prepare valid items for batch upsert
+        valid_items: list[MemoryItem] = []
+
+        for entry in items:
+            content = entry.get("content", "").strip()
+            if not content:
+                result["skipped"] += 1
+                if not continue_on_error:
+                    raise ValueError("Empty content in batch_learn item")
+                continue
+
+            # Sanitize
+            if self._sanitize:
+                issues = MemorySanitizer.check(content)
+                if issues:
+                    result["errors"].append({
+                        "content": content[:100],
+                        "reason": f"Sanitization failed: {issues}",
+                    })
+                    if not continue_on_error:
+                        raise ValueError(f"Memory failed sanitization: {issues}")
+                    continue
+
+            item = MemoryItem(
+                id=generate_id(content),
+                content=content,
+                tags=entry.get("tags", []),
+                importance=max(0.0, min(1.0, entry.get("importance", 0.5))),
+                metadata=entry.get("metadata", {}),
+            )
+            valid_items.append(item)
+
+        # Use batch upsert for backends that support it
+        if hasattr(self._store, "upsert_batch") and len(valid_items) > 1:
+            # Pinecone and similar backends have optimized batch upsert
+            try:
+                self._store.upsert_batch(valid_items, namespace=self._namespace)
+            except AttributeError:
+                # Fallback to individual upserts
+                for item in valid_items:
+                    self._store.upsert(item, namespace=self._namespace)
+        else:
+            for item in valid_items:
+                self._store.upsert(item, namespace=self._namespace)
+
+        # Index all valid items
+        for item in valid_items:
+            self._retrieval.index(item)
+            result["items"].append({
+                "id": item.id,
+                "content": item.content[:100],
+                "tags": item.tags,
+            })
+
+        result["learned"] = len(valid_items)
+
+        # Emit batch event
+        if valid_items:
+            self._events.emit_sync("batch_learned", {
+                "count": len(valid_items),
+                "skipped": result["skipped"],
+                "errors": len(result["errors"]),
+            }, namespace=self._namespace)
+
+        return result
 
     def recall(
         self,

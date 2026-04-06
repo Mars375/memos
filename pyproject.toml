@@ -24,6 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 chroma = ["chromadb>=0.4"]
 qdrant = ["qdrant-client>=1.7"]
+pinecone = ["pinecone-client>=3.0"]
 server = ["fastapi>=0.104", "uvicorn>=0.24"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "httpx"]
 

@@ -92,8 +92,24 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         success = memos.forget(item_id)
         return {"status": "deleted" if success else "not_found"}
 
+    async def batch_learn(body: dict) -> dict:
+        items = body.get("items", [])
+        if not items:
+            return {"status": "error", "message": "No items provided"}
+        if len(items) > 1000:
+            return {"status": "error", "message": "Batch size exceeds 1000 items"}
+        try:
+            result = memos.batch_learn(
+                items=items,
+                continue_on_error=body.get("continue_on_error", True),
+            )
+            return {"status": "ok", **result}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
     return {
         "learn": learn,
+        "batch_learn": batch_learn,
         "recall": recall,
         "prune": prune,
         "stats": stats,
@@ -132,6 +148,19 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     @app.post("/api/v1/learn")
     async def api_learn(body: dict):
         return await routes["learn"](body)
+
+    @app.post("/api/v1/learn/batch")
+    async def api_batch_learn(body: dict):
+        """Batch learn — store multiple memories in one call.
+
+        Body:
+            items: list of dicts, each with content (required), tags, importance, metadata.
+            continue_on_error: bool (default True) — skip invalid items vs raise.
+
+        Returns:
+            status, learned count, skipped count, errors, item details.
+        """
+        return await routes["batch_learn"](body)
 
     @app.post("/api/v1/recall")
     async def api_recall(body: dict):
@@ -250,7 +279,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.8.0",
+            "version": "0.9.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
         }
