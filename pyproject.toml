@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memos"
+version = "0.1.0"
+description = "Memory Operating System for LLM Agents — persistent, smart, local-first memory"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [{name = "Mars375", email = "proto.labs.rnd@gmail.com"}]
+keywords = ["llm", "agent", "memory", "rag", "vector-search"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "httpx>=0.25",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+chroma = ["chromadb>=0.4"]
+qdrant = ["qdrant-client>=1.7"]
+server = ["fastapi>=0.104", "uvicorn>=0.24"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "httpx"]
+
+[project.scripts]
+memos = "memos.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
