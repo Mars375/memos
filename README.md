@@ -84,6 +84,11 @@ POST /api/v1/prune          {threshold, max_age?}
 GET  /api/v1/stats
 GET  /api/v1/search         {q, limit?}
 DELETE /api/v1/memory/{id}
+POST /api/v1/consolidate    {similarity_threshold?, async?, dry_run?}  Sync or async
+GET  /api/v1/consolidate    {}                                         List tasks
+GET  /api/v1/consolidate/:id {}                                         Task status
+GET  /api/v1/export/parquet {include_metadata?, compression?}          Download .parquet
+GET  /health
 ```
 
 ### Streaming Recall (SSE)
@@ -204,6 +209,61 @@ CLI:
 ```bash
 echo '[{"content": "Batch 1"}, {"content": "Batch 2"}]' | memos batch-learn -
 memos batch-learn memories.json --verbose
+```
+
+## Parquet Export/Import (v0.10.0+)
+
+Efficient binary serialization for large memory stores — 3-10x smaller than JSON.
+
+```python
+# Export to Parquet (compressed binary)
+result = mem.export_parquet("backup.parquet", compression="zstd")
+# {"total": 500, "size_bytes": 8192, "compression": "zstd"}
+
+# Import with merge strategy
+result = mem.import_parquet("backup.parquet", merge="skip", tags_prefix=["backup"])
+# {"imported": 500, "skipped": 0, "overwritten": 0}
+```
+
+CLI:
+```bash
+memos export --format parquet -o backup.parquet
+memos import backup.parquet --merge skip
+```
+
+REST:
+```bash
+curl -O http://localhost:8100/api/v1/export/parquet
+```
+
+Install: `pip install memos[parquet]`
+
+## Async Consolidation (v0.10.0+)
+
+Run memory deduplication in the background without blocking the event loop.
+
+```python
+import asyncio
+
+async def background_dedup():
+    handle = await mem.consolidate_async(similarity_threshold=0.7)
+    # Do other work while consolidation runs...
+    status = mem.consolidation_status(handle.task_id)
+    print(f"Status: {status['status']}, merged: {status['result']['memories_merged']}")
+
+asyncio.run(background_dedup())
+```
+
+REST:
+```bash
+# Start async consolidation
+curl -X POST http://localhost:8100/api/v1/consolidate \
+  -H 'Content-Type: application/json' \
+  -d '{"async": true, "similarity_threshold": 0.7}'
+# {"status": "started", "task_id": "abc123"}
+
+# Check status
+curl http://localhost:8100/api/v1/consolidate/abc123
 ```
 
 ## Architecture

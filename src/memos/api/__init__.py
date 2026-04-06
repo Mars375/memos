@@ -279,9 +279,78 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.9.0",
+            "version": "0.10.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
         }
+
+    # Parquet export
+    @app.get("/api/v1/export/parquet")
+    async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd"):
+        """Export all memories as a downloadable Parquet file."""
+        import tempfile
+        from fastapi.responses import FileResponse
+
+        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
+            result = memos.export_parquet(
+                tmp.name,
+                include_metadata=include_metadata,
+                compression=compression,
+            )
+            return FileResponse(
+                tmp.name,
+                media_type="application/octet-stream",
+                filename=f"memos-export-{int(time.time())}.parquet",
+                headers={"X-Memos-Total": str(result["total"]), "X-Memos-Size": str(result["size_bytes"])},
+            )
+
+    # Async consolidation
+    @app.post("/api/v1/consolidate")
+    async def api_consolidate(body: dict):
+        """Run consolidation (sync or async).
+
+        Body:
+            async: bool (default False) — run in background.
+            similarity_threshold: float (default 0.75).
+            merge_content: bool (default False).
+            dry_run: bool (default False).
+        """
+        threshold = body.get("similarity_threshold", 0.75)
+        merge = body.get("merge_content", False)
+        dry = body.get("dry_run", False)
+        is_async = body.get("async", False)
+
+        if is_async:
+            handle = await memos.consolidate_async(
+                similarity_threshold=threshold,
+                merge_content=merge,
+                dry_run=dry,
+            )
+            return {"status": "started", "task_id": handle.task_id}
+        else:
+            result = memos.consolidate(
+                similarity_threshold=threshold,
+                merge_content=merge,
+                dry_run=dry,
+            )
+            return {
+                "status": "completed",
+                "groups_found": result.groups_found,
+                "memories_merged": result.memories_merged,
+                "space_freed": result.space_freed,
+            }
+
+    @app.get("/api/v1/consolidate/{task_id}")
+    async def api_consolidate_status(task_id: str):
+        """Get status of an async consolidation task."""
+        status = memos.consolidation_status(task_id)
+        if not status:
+            return {"status": "not_found", "task_id": task_id}
+        return status
+
+    @app.get("/api/v1/consolidate")
+    async def api_consolidate_list():
+        """List all async consolidation tasks."""
+        return {"tasks": memos.consolidation_tasks()}
 
     return app

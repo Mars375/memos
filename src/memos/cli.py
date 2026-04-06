@@ -199,8 +199,25 @@ def cmd_serve(ns: argparse.Namespace) -> None:
 
 
 def cmd_export(ns: argparse.Namespace) -> None:
-    """Export memories to JSON file."""
+    """Export memories to JSON or Parquet file."""
     mem = _get_memos(ns)
+    fmt = getattr(ns, "format", "json") or "json"
+
+    if fmt == "parquet":
+        out = ns.output
+        if not out:
+            print("Error: --output is required for parquet format", file=sys.stderr)
+            sys.exit(1)
+        result = mem.export_parquet(
+            out,
+            include_metadata=not ns.no_metadata,
+            compression=getattr(ns, "compression", "zstd") or "zstd",
+        )
+        print(f"Exported {result['total']} memories to {out} "
+              f"({result['size_bytes']} bytes, {result['compression']})")
+        return
+
+    # Default: JSON
     data = mem.export_json(include_metadata=not ns.no_metadata)
     out = ns.output or "-"
     text = json.dumps(data, indent=2, ensure_ascii=False)
@@ -212,15 +229,29 @@ def cmd_export(ns: argparse.Namespace) -> None:
 
 
 def cmd_import(ns: argparse.Namespace) -> None:
-    """Import memories from JSON file."""
+    """Import memories from JSON or Parquet file."""
     mem = _get_memos(ns)
     src = ns.input
-    text = Path(src).read_text(encoding="utf-8") if src != "-" else sys.stdin.read()
-    data = json.loads(text)
     tags_prefix = ns.tags.split(",") if ns.tags else None
-    result = mem.import_json(data, merge=ns.merge, tags_prefix=tags_prefix, dry_run=ns.dry_run)
+
+    # Auto-detect format from extension
+    is_parquet = src.endswith(".parquet") if src != "-" else False
+
+    if is_parquet:
+        result = mem.import_parquet(
+            src,
+            merge=ns.merge,
+            tags_prefix=tags_prefix,
+            dry_run=ns.dry_run,
+        )
+    else:
+        text = Path(src).read_text(encoding="utf-8") if src != "-" else sys.stdin.read()
+        data = json.loads(text)
+        result = mem.import_json(data, merge=ns.merge, tags_prefix=tags_prefix, dry_run=ns.dry_run)
+
     label = " (dry-run)" if ns.dry_run else ""
-    print(f"{label}Imported: {result['imported']}, Skipped: {result['skipped']}, "
+    fmt = "parquet" if is_parquet else "json"
+    print(f"{label}[{fmt}] Imported: {result['imported']}, Skipped: {result['skipped']}, "
           f"Overwritten: {result['overwritten']}")
     if result["errors"]:
         for e in result["errors"]:
@@ -321,8 +352,10 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # export
-    exp = sub.add_parser("export", help="Export all memories to JSON")
+    exp = sub.add_parser("export", help="Export all memories to JSON or Parquet")
     exp.add_argument("--output", "-o", help="Output file (default: stdout)")
+    exp.add_argument("--format", "-f", choices=["json", "parquet"], default="json", help="Export format (default: json)")
+    exp.add_argument("--compression", choices=["zstd", "snappy", "gzip", "none"], default="zstd", help="Parquet compression (default: zstd)")
     exp.add_argument("--no-metadata", action="store_true", help="Exclude metadata")
     exp.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 

@@ -1,5 +1,73 @@
 # Changelog
 
+## v0.10.0 (2026-04-06) — Async Consolidation + Parquet Export/Import
+
+### New Features
+
+#### Async Consolidation
+- **`await mem.consolidate_async()`** — Run consolidation in the background without blocking the event loop.
+  - Returns an `AsyncConsolidationHandle` with `task_id`, `status`, and result polling.
+  - Consolidation runs in a thread pool executor for non-blocking operation.
+  - Events: `consolidation_started`, `consolidation_completed`, `consolidation_failed`.
+  - Status polling: `mem.consolidation_status(task_id)` and `mem.consolidation_tasks()`.
+- **`POST /api/v1/consolidate`** — REST endpoint supporting both sync and async modes.
+  - `?async=true` starts background consolidation, returns `task_id`.
+  - `GET /api/v1/consolidate/{task_id}` polls status.
+  - `GET /api/v1/consolidate` lists all tasks.
+
+#### Parquet Export/Import
+- **`mem.export_parquet(path)`** — Export all memories to an Apache Parquet file.
+  - Columnar binary format: 3-10x smaller than JSON, faster to read/write.
+  - Configurable compression: zstd (default), snappy, gzip, none.
+  - Optional metadata column (JSON-encoded).
+- **`mem.import_parquet(path)`** — Import memories from Parquet with merge strategies.
+  - Supports `skip`, `overwrite`, `duplicate` merge modes.
+  - `tags_prefix` for tagging imported batches.
+  - `dry_run` mode for validation without storage.
+- **CLI**: `memos export --format parquet -o file.parquet` and `memos import file.parquet` (auto-detects `.parquet` extension).
+- **REST**: `GET /api/v1/export/parquet` downloads a Parquet file.
+- **Optional dependency**: `pip install memos[parquet]` (requires `pyarrow>=12.0`).
+
+### SDK Usage
+```python
+# Parquet export (binary, compressed)
+result = mem.export_parquet("memories.parquet", compression="zstd")
+# {"total": 150, "size_bytes": 8192, "compression": "zstd"}
+
+# Parquet import with merge
+result = mem.import_parquet("backup.parquet", merge="skip", tags_prefix=["backup"])
+
+# Async consolidation
+handle = await mem.consolidate_async(similarity_threshold=0.7)
+status = mem.consolidation_status(handle.task_id)
+```
+
+### Tests
+- 38 new tests covering:
+  - Parquet export: creates file, metadata, compression, empty store, parent dirs, field preservation (7 tests)
+  - Parquet import: roundtrip count/content/tags/importance, skip, overwrite, tags_prefix, dry_run, file not found, empty (10 tests)
+  - Parquet metadata: roundtrip with/without metadata (2 tests)
+  - Parquet CLI: export/import via CLI (2 tests)
+  - Parquet IO unit: special chars, large export (2 tests)
+  - Async consolidation handle: initial state, to_dict (3 tests)
+  - Async consolidation engine: start+complete, dry_run, get_status, list_tasks, clear_completed, events, empty store (7 tests)
+  - MemOS async integration: consolidate_async, consolidation_status, tasks list (5 tests)
+- Total test suite: **365 tests, all passing**
+
+### Files Added
+- `src/memos/parquet_io.py` — Parquet export/import module
+- `src/memos/consolidation/async_engine.py` — Async consolidation engine
+- `tests/test_parquet.py` — Parquet tests (23 tests)
+- `tests/test_async_consolidation.py` — Async consolidation tests (15 tests)
+
+### Files Modified
+- `src/memos/core.py` — Added `export_parquet()`, `import_parquet()`, `consolidate_async()`, `consolidation_status()`, `consolidation_tasks()`
+- `src/memos/cli.py` — Added `--format`, `--compression` flags; auto-detect `.parquet` on import
+- `src/memos/api/__init__.py` — Added Parquet export endpoint, async consolidation endpoints
+- `pyproject.toml` — Added `parquet` optional dep, bumped to v0.10.0
+
+---
+
 ## v0.9.0 (2026-04-06) — Batch Learn API + Pinecone Backend
 
 ### New Features

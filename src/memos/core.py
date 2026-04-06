@@ -552,3 +552,141 @@ class MemOS:
                 result["errors"].append(str(e))
 
         return result
+
+    # ── Parquet export/import ─────────────────────────────────
+
+    def export_parquet(
+        self,
+        path: str,
+        *,
+        include_metadata: bool = True,
+        compression: str = "zstd",
+    ) -> dict:
+        """Export all memories to a Parquet file.
+
+        Requires pyarrow: ``pip install memos[parquet]``
+
+        Args:
+            path: Output file path.
+            include_metadata: Include metadata as a JSON column.
+            compression: Parquet codec (zstd, snappy, gzip, none).
+
+        Returns:
+            Summary dict with total, path, size_bytes, compression.
+        """
+        from .parquet_io import export_parquet as _export
+        items = self._store.list_all(namespace=self._namespace)
+        result = _export(items, path, include_metadata=include_metadata, compression=compression)
+
+        self._events.emit_sync("exported", {
+            "format": "parquet",
+            "total": result["total"],
+            "path": result["path"],
+            "size_bytes": result["size_bytes"],
+        }, namespace=self._namespace)
+
+        return result
+
+    def import_parquet(
+        self,
+        path: str,
+        *,
+        merge: str = "skip",
+        tags_prefix: list[str] | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """Import memories from a Parquet file.
+
+        Requires pyarrow: ``pip install memos[parquet]``
+
+        Args:
+            path: Input Parquet file path.
+            merge: "skip" (ignore existing), "overwrite" (replace), "duplicate" (always add).
+            tags_prefix: Extra tags to add to all imported items.
+            dry_run: If True, parse but don't store.
+
+        Returns:
+            dict with imported, skipped, overwritten, errors counts.
+        """
+        from .parquet_io import import_parquet as _import
+
+        items = _import(path, tags_prefix=tags_prefix)
+        result = {"imported": 0, "skipped": 0, "overwritten": 0, "errors": []}
+
+        for item in items:
+            try:
+                existing = self._store.get(item.id, namespace=self._namespace)
+
+                if existing and merge == "skip":
+                    result["skipped"] += 1
+                    continue
+
+                if existing and merge == "overwrite":
+                    self._store.delete(item.id, namespace=self._namespace)
+                    result["overwritten"] += 1
+
+                if not dry_run:
+                    self._store.upsert(item, namespace=self._namespace)
+                    self._retrieval.index(item)
+                result["imported"] += 1
+            except Exception as e:
+                result["errors"].append(str(e))
+
+        self._events.emit_sync("imported", {
+            "format": "parquet",
+            "imported": result["imported"],
+            "skipped": result["skipped"],
+        }, namespace=self._namespace)
+
+        return result
+
+    # ── Async consolidation ───────────────────────────────────
+
+    async def consolidate_async(
+        self,
+        *,
+        similarity_threshold: float = 0.75,
+        merge_content: bool = False,
+        dry_run: bool = False,
+    ) -> "AsyncConsolidationHandle":
+        """Start async consolidation in the background.
+
+        Returns a handle that can be polled for progress and result.
+        The consolidation runs in a thread pool so the event loop stays responsive.
+
+        Usage::
+
+            handle = await mem.consolidate_async(similarity_threshold=0.7)
+            # ... do other work ...
+            status = mem.consolidation_status(handle.task_id)
+        """
+        from .consolidation.async_engine import AsyncConsolidationEngine
+
+        if not hasattr(self, "_async_consolidator"):
+            self._async_consolidator = AsyncConsolidationEngine()
+            self._async_consolidator.on_event(
+                lambda etype, data: self._events.emit_sync(etype, data, namespace=self._namespace)
+            )
+
+        return await self._async_consolidator.start(
+            self._store,
+            similarity_threshold=similarity_threshold,
+            merge_content=merge_content,
+            dry_run=dry_run,
+        )
+
+    def consolidation_status(self, task_id: str) -> dict | None:
+        """Get the status of an async consolidation task.
+
+        Returns None if task_id not found, else a status dict.
+        """
+        if not hasattr(self, "_async_consolidator"):
+            return None
+        handle = self._async_consolidator.get_status(task_id)
+        return handle.to_dict() if handle else None
+
+    def consolidation_tasks(self) -> list[dict]:
+        """List all async consolidation tasks."""
+        if not hasattr(self, "_async_consolidator"):
+            return []
+        return [h.to_dict() for h in self._async_consolidator.list_tasks()]
