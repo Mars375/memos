@@ -266,6 +266,67 @@ curl -X POST http://localhost:8100/api/v1/consolidate \
 curl http://localhost:8100/api/v1/consolidate/abc123
 ```
 
+## Memory Versioning & Time-Travel (v0.11.0+)
+
+Every memory write is automatically versioned. Query the past, diff changes, and roll back.
+
+```python
+mem = MemOS()
+
+# Learn and update — each creates a version
+mem.learn("User likes dark mode", tags=["preference"])
+mem.learn("User likes dark mode with blue accents", tags=["preference", "ui"])
+
+item_id = "the-memory-id"
+
+# Version history
+history = mem.history(item_id)
+print(f"Memory has {len(history)} versions")
+for v in history:
+    print(f"  v{v.version_number}: {v.content} ({v.source})")
+
+# Diff between versions
+diff = mem.diff(item_id, version_a=1, version_b=2)
+if diff:
+    print(f"Changed fields: {list(diff.changes.keys())}")
+
+# Diff latest change
+diff = mem.diff_latest(item_id)
+
+# Time-travel: recall as it was 1 hour ago
+import time
+results = mem.recall_at("user preferences", time.time() - 3600)
+
+# Snapshot: all memories at a specific point in time
+snapshot = mem.snapshot_at(time.time() - 86400)  # 1 day ago
+
+# Roll back to a previous version
+restored = mem.rollback(item_id, version_number=1)
+assert restored.tags == ["preference"]  # back to original
+
+# Versioning stats
+stats = mem.versioning_stats()
+# {"total_items": 42, "total_versions": 87, "avg_versions_per_item": 2.07}
+
+# Garbage collect old versions (keep latest 3 per item)
+removed = mem.versioning_gc(max_age_days=90.0, keep_latest=3)
+```
+
+### Version Sources
+
+Each version records what caused it:
+- `learn` — via `mem.learn()`
+- `batch_learn` — via `mem.batch_learn()`
+- `rollback` — via `mem.rollback()`
+- `upsert` — direct storage operations
+
+### Time-Travel Use Cases
+
+- **"What did I know before the meeting?"** — `recall_at(query, meeting_start_time)`
+- **"How has this preference changed?"** — `history(id)` + `diff(id, v1, v2)`
+- **"Restore my config from yesterday"** — `snapshot_at(yesterday_ts)` + `rollback(id, v)`
+- **Audit trail** — every change to any memory is tracked
+
 ## Architecture
 
 ```

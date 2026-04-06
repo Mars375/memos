@@ -17,6 +17,8 @@ from .sanitizer import MemorySanitizer
 from .crypto import MemoryCrypto
 from .storage.encrypted_backend import EncryptedStorageBackend
 from .events import EventBus
+from .versioning.engine import VersioningEngine
+from .versioning.models import MemoryVersion, VersionDiff
 
 
 class MemOS:
@@ -104,6 +106,11 @@ class MemOS:
         # Event bus (real-time subscriptions)
         self._events = EventBus()
 
+        # Versioning (time-travel)
+        self._versioning = VersioningEngine(
+            max_versions_per_item=kwargs.get("max_versions_per_item", 100),
+        )
+
     @property
     def namespace(self) -> str:
         return self._namespace
@@ -143,6 +150,7 @@ class MemOS:
 
         self._store.upsert(item, namespace=self._namespace)
         self._retrieval.index(item)
+        self._versioning.record_version(item, source="learn")
 
         # Emit event
         self._events.emit_sync("learned", {
@@ -234,6 +242,10 @@ class MemOS:
             })
 
         result["learned"] = len(valid_items)
+
+        # Record versions for batch-learned items
+        for item in valid_items:
+            self._versioning.record_version(item, source="batch_learn")
 
         # Emit batch event
         if valid_items:
@@ -690,3 +702,178 @@ class MemOS:
         if not hasattr(self, "_async_consolidator"):
             return []
         return [h.to_dict() for h in self._async_consolidator.list_tasks()]
+
+    # ── Versioning & Time-Travel ────────────────────────────
+
+    @property
+    def versioning(self) -> "VersioningEngine":
+        """Access the versioning engine for time-travel queries."""
+        return self._versioning
+
+    def history(self, item_id: str) -> list["MemoryVersion"]:
+        """Get the full version history of a memory item.
+
+        Returns a list of MemoryVersion snapshots, oldest first.
+        Each snapshot captures content, tags, importance, metadata,
+        and a timestamp of when that version was recorded.
+
+        Args:
+            item_id: The memory item ID to look up.
+
+        Returns:
+            List of MemoryVersion objects, empty if item has no history.
+        """
+        return self._versioning.history(item_id)
+
+    def get_version(self, item_id: str, version_number: int) -> "MemoryVersion | None":
+        """Get a specific version of a memory item.
+
+        Args:
+            item_id: The memory item ID.
+            version_number: Version number (1-based).
+
+        Returns:
+            MemoryVersion or None if not found.
+        """
+        return self._versioning.get_version(item_id, version_number)
+
+    def diff(
+        self,
+        item_id: str,
+        version_a: int,
+        version_b: int,
+    ) -> "VersionDiff | None":
+        """Compare two versions of the same memory.
+
+        Returns a VersionDiff with changed fields, or None if
+        either version doesn't exist.
+
+        Args:
+            item_id: The memory item ID.
+            version_a: First version number.
+            version_b: Second version number.
+        """
+        return self._versioning.diff(item_id, version_a, version_b)
+
+    def diff_latest(self, item_id: str) -> "VersionDiff | None":
+        """Get the diff between the last two versions of a memory.
+
+        Returns None if fewer than 2 versions exist.
+        """
+        return self._versioning.diff_latest(item_id)
+
+    def recall_at(
+        self,
+        query: str,
+        timestamp: float,
+        *,
+        top: int = 5,
+        filter_tags: list[str] | None = None,
+        min_score: float = 0.0,
+    ) -> list[RecallResult]:
+        """Time-travel recall: retrieve memories as they were at a given time.
+
+        First performs a regular recall to find relevant items, then
+        reconstructs each item to its state at the given timestamp.
+        Items that didn't exist at that time are excluded.
+
+        This enables answering questions like:
+        - "What did I know about X before the meeting?"
+        - "What were my preferences last week?"
+
+        Args:
+            query: Search query.
+            timestamp: Unix timestamp for the point in time.
+            top: Maximum results to return.
+            filter_tags: Optional tag filter.
+            min_score: Minimum relevance score.
+
+        Returns:
+            List of RecallResult with items reconstructed to their
+            state at the given timestamp.
+        """
+        # First get current results
+        current_results = self.recall(
+            query, top=top, filter_tags=filter_tags,
+            min_score=min_score,
+        )
+
+        # Reconstruct each result to its state at the given time
+        time_travel_results: list[RecallResult] = []
+        for r in current_results:
+            version = self._versioning.version_at(r.item.id, timestamp)
+            if version is not None:
+                old_item = version.to_memory_item()
+                # Keep the retrieval score from current search
+                time_travel_results.append(RecallResult(
+                    item=old_item,
+                    score=r.score,
+                    match_reason=r.match_reason,
+                ))
+
+        # Emit time-travel event
+        if time_travel_results:
+            self._events.emit_sync("time_traveled", {
+                "query": query,
+                "timestamp": timestamp,
+                "results": len(time_travel_results),
+            }, namespace=self._namespace)
+
+        return sorted(time_travel_results, key=lambda x: x.score, reverse=True)[:top]
+
+    def snapshot_at(self, timestamp: float) -> list["MemoryVersion"]:
+        """Get the state of all memories at a given timestamp.
+
+        Returns one version snapshot per item that existed at that time.
+        Useful for auditing and debugging how memory evolved.
+
+        Args:
+            timestamp: Unix timestamp for the point in time.
+        """
+        return self._versioning.snapshot_at(timestamp)
+
+    def rollback(
+        self,
+        item_id: str,
+        version_number: int,
+    ) -> "MemoryItem | None":
+        """Roll back a memory item to a specific version.
+
+        Restores the item's content, tags, importance, and metadata
+        from the version snapshot. Records a new version with
+        source="rollback".
+
+        Args:
+            item_id: The memory item to roll back.
+            version_number: Target version number to restore.
+
+        Returns:
+            The restored MemoryItem, or None if version not found.
+        """
+        item = self._versioning.rollback(
+            self._store, item_id, version_number,
+            namespace=self._namespace,
+        )
+        if item is not None:
+            self._retrieval.index(item)
+            self._events.emit_sync("rolled_back", {
+                "id": item_id,
+                "to_version": version_number,
+            }, namespace=self._namespace)
+        return item
+
+    def versioning_stats(self) -> dict[str, Any]:
+        """Get versioning statistics.
+
+        Returns total items tracked, total versions, avg versions per item.
+        """
+        return self._versioning.stats()
+
+    def versioning_gc(self, max_age_days: float = 90.0, keep_latest: int = 3) -> int:
+        """Garbage collect old versions.
+
+        Removes versions older than max_age_days, but always keeps
+        at least keep_latest versions per item.
+        """
+        return self._versioning.gc(max_age_days=max_age_days, keep_latest=keep_latest)
+

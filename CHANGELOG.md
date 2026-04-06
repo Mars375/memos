@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.11.0 (2026-04-07) — Memory Versioning & Time-Travel
+
+### New Features
+
+- **Memory Versioning** — every `learn()` and `batch_learn()` automatically creates a version snapshot
+  - Version history: `mem.history(item_id)` lists all versions with timestamps
+  - Get specific version: `mem.get_version(item_id, version_number)`
+  - Version diff: `mem.diff(item_id, v1, v2)` shows changed fields (content, tags, importance, metadata)
+  - Latest diff: `mem.diff_latest(item_id)` compares last two versions
+  - Version sources: `learn`, `batch_learn`, `rollback`, `upsert`
+
+- **Time-Travel Recall** — query memories as they were at any point in time
+  - `mem.recall_at(query, timestamp)` — semantic search reconstructed to past state
+  - `mem.snapshot_at(timestamp)` — all memories at a given moment
+  - Items that didn't exist at that time are automatically excluded
+
+- **Rollback** — restore a memory to a previous version
+  - `mem.rollback(item_id, version_number)` — restores content, tags, importance, metadata
+  - Creates a new version with source="rollback" for full audit trail
+
+- **Version GC** — garbage collect old versions while keeping recent ones
+  - `mem.versioning_gc(max_age_days=90, keep_latest=3)` — removes stale versions
+  - `mem.versioning_stats()` — monitor versioning overhead
+
+- **Versioning Events** — `time_traveled` and `rolled_back` events on the EventBus
+
+### New Module
+
+- `memos.versioning` — `models.py`, `store.py`, `engine.py`
+
+### Tests
+
+- 48 new tests for versioning (models, store, engine, MemOS integration)
+- Total: **413 tests** (365 + 48)
+
+### Bug Fixes
+
+- Fixed potential deadlock in VersionStore (Lock → RLock for reentrant access)
+- Fixed GC logic to correctly keep latest N versions per item
+
 ## v0.10.0 (2026-04-06) — Async Consolidation + Parquet Export/Import
 
 ### New Features
