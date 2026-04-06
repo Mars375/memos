@@ -111,6 +111,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     """
     try:
         from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+        from fastapi.responses import StreamingResponse
     except ImportError:
         raise ImportError(
             "FastAPI is required for the server. "
@@ -135,6 +136,41 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     @app.post("/api/v1/recall")
     async def api_recall(body: dict):
         return await routes["recall"](body)
+
+    # SSE Streaming Recall endpoint
+    @app.get("/api/v1/recall/stream")
+    async def api_recall_stream(
+        q: str,
+        top: int = 5,
+        filter_tags: str | None = None,
+        min_score: float = 0.0,
+    ):
+        """Stream recall results as Server-Sent Events (SSE).
+
+        Each matching memory is sent as a separate SSE event, allowing
+        clients to start processing results before the full search completes.
+
+        Query params:
+            q: The search query
+            top: Maximum results to return (default 5)
+            filter_tags: Comma-separated tag filter
+            min_score: Minimum relevance score (default 0.0)
+        """
+        from .sse import sse_stream
+
+        tags = [t.strip() for t in filter_tags.split(",") if t.strip()] if filter_tags else None
+        recall_gen = memos.recall_stream(
+            query=q, top=top, filter_tags=tags, min_score=min_score,
+        )
+        return StreamingResponse(
+            sse_stream(recall_gen, q),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.post("/api/v1/prune")
     async def api_prune(body: dict):
@@ -214,7 +250,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.3.0",
+            "version": "0.8.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
         }

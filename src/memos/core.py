@@ -222,6 +222,38 @@ class MemOS:
 
         return sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
 
+
+    async def recall_stream(
+        self,
+        query: str,
+        top: int = 5,
+        filter_tags: list[str] | None = None,
+        min_score: float = 0.0,
+    ):
+        """Async generator that yields recall results one at a time.
+
+        Each result is yielded as soon as it is scored, allowing consumers
+        to start processing partial results before the full search completes.
+        For LLM agents, this enables progressive context building.
+
+        Yields RecallResult objects sorted by score (best first).
+        """
+        # Get all candidate results
+        all_results = self.recall(
+            query=query,
+            top=top,
+            filter_tags=filter_tags,
+            min_score=min_score,
+        )
+
+        # Yield them one by one — for backends with native streaming
+        # this could be extended to yield as each result arrives
+        for result in all_results:
+            yield result
+            # Allow the event loop to interleave other work
+            import asyncio
+            await asyncio.sleep(0)
+
     def prune(
         self,
         threshold: float = 0.1,

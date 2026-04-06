@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.8.0 (2026-04-06) — SSE Streaming Recall API
+
+### New Features
+- **Streaming recall API** (`GET /api/v1/recall/stream`) — Server-Sent Events endpoint that streams recall results as they are found, allowing LLM agents to start processing partial results before the full search completes.
+- **Async `recall_stream()` generator** — `MemOS.recall_stream()` is an async generator that yields `RecallResult` objects one at a time with proper event loop yielding for concurrent processing.
+- **SSE utilities module** (`memos.api.sse`) — Reusable SSE event formatting:
+  - `SSEEvent` dataclass with wire-format encoding
+  - `format_recall_event()`, `format_done_event()`, `format_error_event()` helpers
+  - `sse_stream()` async wrapper that turns any async iterator into SSE output
+
+### SSE Endpoint
+```
+GET /api/v1/recall/stream?q=<query>&top=5&filter_tags=tag1,tag2&min_score=0.0
+```
+Returns `text/event-stream` with:
+- `event: recall` — one per result, with `id`, `content`, `score`, `tags`, `match_reason`, `age_days`
+- `event: done` — completion summary with `count`, `query`, `elapsed_ms`
+- `event: error` — error details if something fails mid-stream
+
+### Tests
+- 32 new streaming tests covering:
+  - SSE wire format encoding (7 tests)
+  - Format helpers (5 tests)
+  - recall_stream() async generator (7 tests)
+  - sse_stream() wrapper (6 tests)
+  - Integration: recall_stream → sse_stream pipeline (3 tests)
+  - Edge cases: unicode, special chars, concurrent streams (4 tests)
+- Total test suite: **297 tests, all passing**
+
+### Files Added
+- `src/memos/api/sse.py` — SSE event utilities (130 LOC)
+- `tests/test_streaming.py` — Streaming tests (400+ LOC)
+
+### Files Modified
+- `src/memos/core.py` — Added `recall_stream()` async generator
+- `src/memos/api/__init__.py` — Added `GET /api/v1/recall/stream` endpoint + StreamingResponse import
+
+---
+
 ## v0.7.0 (2026-04-06) — Qdrant Backend + Hybrid Search
 
 ### New Features

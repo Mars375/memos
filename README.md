@@ -78,10 +78,42 @@ stats = mem.stats()
 ```
 POST /api/v1/learn     {content, tags, importance?}
 POST /api/v1/recall    {query, top?, filter?}
+GET  /api/v1/recall/stream  {q, top?, filter_tags?, min_score?}  (SSE)
 POST /api/v1/prune     {threshold, max_age?}
 GET  /api/v1/stats
 GET  /api/v1/search    {q, limit?}
 DELETE /api/v1/memory/{id}
+```
+
+### Streaming Recall (SSE)
+
+Get recall results as a live stream of Server-Sent Events — results arrive one at a time as they are found:
+
+```bash
+curl -N "http://localhost:8100/api/v1/recall/stream?q=python&top=5"
+```
+
+Each event is formatted as:
+```
+event: recall
+data: {"index":1,"id":"abc123","content":"User prefers Python","score":0.94,"tags":["preference"],"match_reason":"semantic","age_days":2.1}
+
+event: done
+data: {"type":"done","count":3,"query":"python","elapsed_ms":45.2}
+```
+
+Python SDK equivalent:
+```python
+import asyncio
+from memos import MemOS
+
+mem = MemOS()
+
+async def stream_recall():
+    async for result in mem.recall_stream("what does the user prefer?", top=5):
+        print(f"[{result.score:.2f}] {result.item.content}")
+
+asyncio.run(stream_recall())
 ```
 
 ## Storage Backends
@@ -148,6 +180,7 @@ MemOS is assembled from battle-tested components:
 | Retrieval Pipeline | skill-retrieval | 108 LOC |
 | ChromaDB Client | chroma-memory-index | 405 LOC |
 | Qdrant Backend + Hybrid Search | v0.7.0 new | 37 tests |
+| SSE Streaming Recall | v0.8.0 new | 32 tests |
 | Security Sanitizer | memory-sanitization-linter | 100% recall |
 
 ## Requirements
