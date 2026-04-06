@@ -26,6 +26,12 @@ DEFAULTS: dict[str, Any] = {
     "backend": "memory",
     "chroma_host": "localhost",
     "chroma_port": 8000,
+    "qdrant_host": "localhost",
+    "qdrant_port": 6333,
+    "qdrant_api_key": "",
+    "qdrant_path": "",
+    "vector_size": 768,
+    "semantic_weight": 0.6,
     "embed_host": "localhost",
     "embed_port": 11434,
     "host": "127.0.0.1",
@@ -42,6 +48,10 @@ ENV_MAP: dict[str, str] = {
     "backend": "MEMOS_BACKEND",
     "chroma_host": "MEMOS_CHROMA_HOST",
     "chroma_port": "MEMOS_CHROMA_PORT",
+    "qdrant_host": "MEMOS_QDRANT_HOST",
+    "qdrant_port": "MEMOS_QDRANT_PORT",
+    "qdrant_api_key": "MEMOS_QDRANT_API_KEY",
+    "qdrant_path": "MEMOS_QDRANT_PATH",
     "embed_host": "MEMOS_EMBED_HOST",
     "host": "MEMOS_HOST",
     "port": "MEMOS_PORT",
@@ -88,7 +98,7 @@ def resolve(cli_args: dict[str, Any] | None = None) -> dict[str, Any]:
         val = os.environ.get(env_var)
         if val is not None:
             # Type coercion for known int/bool keys
-            if key in ("chroma_port", "embed_port", "port") and val:
+            if key in ("chroma_port", "embed_port", "port", "qdrant_port", "vector_size") and val:
                 result[key] = int(val)
             elif key == "sanitize":
                 result[key] = val.lower() not in ("0", "false", "no")

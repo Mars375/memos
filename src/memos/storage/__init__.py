@@ -10,11 +10,16 @@ __all__ = [
     "AsyncStorageBackend",
     "AsyncWrapper",
     "InMemoryBackend",
+    "ChromaBackend",
+    "QdrantBackend",
 ]
 
-# ChromaBackend imported lazily to avoid hard dep on chromadb
+
 def __getattr__(name: str):
     if name == "ChromaBackend":
         from .chroma_backend import ChromaBackend
         return ChromaBackend
+    if name == "QdrantBackend":
+        from .qdrant_backend import QdrantBackend
+        return QdrantBackend
     raise AttributeError(name)

@@ -26,7 +26,13 @@ def _bm25_score(query: str, content: str) -> float:
 
 
 class RetrievalEngine:
-    """Hybrid retrieval combining semantic and keyword search."""
+    """Hybrid retrieval combining semantic and keyword search.
+
+    Supports two modes:
+    - **Default**: In-memory hybrid search using Ollama embeddings + BM25.
+    - **Qdrant-native**: If the store is a QdrantBackend, delegates hybrid
+      scoring to Qdrant's native vector search + local BM25 re-ranking.
+    """
 
     def __init__(
         self,
@@ -53,11 +59,23 @@ class RetrievalEngine:
         query: str,
         top: int = 5,
         filter_tags: Optional[list[str]] = None,
+        *,
+        namespace: str = "",
     ) -> list[RecallResult]:
         """Search memories using hybrid semantic + keyword scoring.
-        
-        Falls back to keyword-only if embedding service is unavailable.
+
+        When the underlying store is QdrantBackend, delegates to native
+        hybrid_search() for optimal vector + BM25 scoring. Otherwise falls
+        back to the in-memory hybrid approach.
         """
+        # Fast path: delegate to Qdrant native hybrid search
+        from ..storage.qdrant_backend import QdrantBackend
+        if isinstance(self._store, QdrantBackend):
+            return self._qdrant_hybrid_search(
+                query, top, filter_tags, namespace=namespace,
+            )
+
+        # Standard in-memory hybrid search
         all_items = self._store.list_all()
 
         # Filter by tags if specified
@@ -122,6 +140,53 @@ class RetrievalEngine:
                     score=min(final_score, 1.0),
                     match_reason=match_reason,
                 ))
+
+        results.sort(key=lambda r: r.score, reverse=True)
+        return results[:top]
+
+    def _qdrant_hybrid_search(
+        self,
+        query: str,
+        top: int,
+        filter_tags: Optional[list[str]],
+        *,
+        namespace: str = "",
+    ) -> list[RecallResult]:
+        """Delegate hybrid search to QdrantBackend.hybrid_search()."""
+        from ..storage.qdrant_backend import QdrantBackend
+        assert isinstance(self._store, QdrantBackend)
+
+        pairs = self._store.hybrid_search(
+            query, limit=top * 2,  # Overfetch for tag filtering
+            namespace=namespace,
+            vector_weight=self._semantic_weight,
+            keyword_weight=self._keyword_weight,
+        )
+
+        results = []
+        for item, score in pairs:
+            # Apply tag filter
+            if filter_tags:
+                tag_set = set(t.lower() for t in filter_tags)
+                if not (tag_set & set(t.lower() for t in item.tags)):
+                    continue
+
+            # Importance boost
+            importance_boost = item.importance * 0.1
+
+            # Recency bonus (fades over 30 days)
+            import time as _time
+            age_days = (_time.time() - item.created_at) / 86400
+            recency_bonus = max(0, 0.1 * (1 - age_days / 30))
+
+            final_score = min(score + importance_boost + recency_bonus, 1.0)
+
+            match_reason = "semantic" if score > 0.5 else "keyword"
+            results.append(RecallResult(
+                item=item,
+                score=final_score,
+                match_reason=match_reason,
+            ))
 
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top]

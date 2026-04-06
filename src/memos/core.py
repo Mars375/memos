@@ -10,6 +10,7 @@ from .retrieval.engine import RetrievalEngine
 from .storage.base import StorageBackend
 from .storage.chroma_backend import ChromaBackend
 from .storage.memory_backend import InMemoryBackend
+from .storage.qdrant_backend import QdrantBackend
 from .decay.engine import DecayEngine
 from .sanitizer import MemorySanitizer
 from .crypto import MemoryCrypto
@@ -40,11 +41,22 @@ class MemOS:
         decay_rate: float = 0.01,
         max_memories: int = 10_000,
         encryption_key: Optional[str] = None,
+        **kwargs,
     ) -> None:
         # Storage
         if backend == "chroma":
             store: StorageBackend = ChromaBackend(
                 host=chroma_host, port=chroma_port
+            )
+        elif backend == "qdrant":
+            store = QdrantBackend(
+                host=kwargs.get("qdrant_host", "localhost"),
+                port=kwargs.get("qdrant_port", 6333),
+                api_key=kwargs.get("qdrant_api_key"),
+                path=kwargs.get("qdrant_path"),
+                embed_host=embed_host,
+                embed_model=embed_model,
+                vector_size=kwargs.get("vector_size", 768),
             )
         else:
             store = InMemoryBackend()
@@ -61,6 +73,7 @@ class MemOS:
             store=self._store,
             embed_host=embed_host,
             embed_model=embed_model,
+            semantic_weight=kwargs.get("semantic_weight", 0.6),
         )
 
         # Decay
@@ -136,6 +149,33 @@ class MemOS:
         min_score: float = 0.0,
     ) -> list[RecallResult]:
         """Retrieve memories relevant to a query."""
+        # Try retrieval engine for hybrid search (supports Qdrant native)
+        engine_results = self._retrieval.search(
+            query, top=top, filter_tags=filter_tags,
+            namespace=self._namespace,
+        )
+
+        if engine_results:
+            # Touch recalled items and emit events
+            for r in engine_results[:top]:
+                r.item.touch()
+                self._store.upsert(r.item, namespace=self._namespace)
+                self._events.emit_sync("recalled", {
+                    "id": r.item.id,
+                    "query": query,
+                    "score": r.score,
+                }, namespace=self._namespace)
+
+            # Apply decay
+            adjusted = []
+            for r in engine_results[:top]:
+                decayed = self._decay.adjusted_score(r.score, r.item)
+                if decayed >= min_score:
+                    r.score = decayed
+                    adjusted.append(r)
+            return sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
+
+        # Fallback: basic keyword search
         all_items = self._store.list_all(namespace=self._namespace)
 
         if filter_tags:
