@@ -38,11 +38,19 @@ def create_api(memos: MemOS) -> dict[str, Any]:
             return {"status": "error", "message": str(e)}
 
     async def recall(body: dict) -> dict:
+        # Parse date filters
+        _after = body.get("filter_after")
+        _before = body.get("filter_before")
+        from datetime import datetime as _dt
+        filter_after = _dt.fromisoformat(_after).timestamp() if _after else None
+        filter_before = _dt.fromisoformat(_before).timestamp() if _before else None
         results = memos.recall(
             query=body["query"],
             top=body.get("top", 5),
             filter_tags=body.get("filter_tags"),
             min_score=body.get("min_score", 0.0),
+            filter_after=filter_after,
+            filter_before=filter_before,
         )
         return {
             "status": "ok",

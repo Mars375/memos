@@ -358,6 +358,8 @@ class MemOS:
         top: int = 5,
         filter_tags: Optional[list[str]] = None,
         min_score: float = 0.0,
+        filter_after: Optional[float] = None,
+        filter_before: Optional[float] = None,
     ) -> list[RecallResult]:
         """Retrieve memories relevant to a query."""
         self._check_acl("read")
@@ -381,6 +383,12 @@ class MemOS:
 
             # Filter out expired memories
             engine_results = [r for r in engine_results if not r.item.is_expired]
+
+            # Filter by date range
+            if filter_after is not None:
+                engine_results = [r for r in engine_results if r.item.created_at >= filter_after]
+            if filter_before is not None:
+                engine_results = [r for r in engine_results if r.item.created_at <= filter_before]
 
             # Apply decay
             adjusted = []
@@ -418,6 +426,12 @@ class MemOS:
 
         # Filter out expired memories
         results = [r for r in results if not r.item.is_expired]
+
+        # Filter by date range
+        if filter_after is not None:
+            results = [r for r in results if r.item.created_at >= filter_after]
+        if filter_before is not None:
+            results = [r for r in results if r.item.created_at <= filter_before]
 
         # Touch recalled items
         for r in results[:top]:

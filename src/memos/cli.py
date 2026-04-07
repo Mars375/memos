@@ -164,8 +164,31 @@ def cmd_batch_learn(ns: argparse.Namespace) -> None:
 
 def cmd_recall(ns: argparse.Namespace) -> None:
     """Recall memories matching a query."""
+    from datetime import datetime as _dt
     memos = _get_memos(ns)
-    results = memos.recall(ns.query, top=ns.top, min_score=ns.min_score)
+    # Parse tag filter
+    filter_tags = None
+    if ns.tags:
+        filter_tags = [t.strip() for t in ns.tags.split(",") if t.strip()]
+    # Parse date filters
+    filter_after = None
+    filter_before = None
+    if ns.after:
+        try:
+            filter_after = _dt.fromisoformat(ns.after).timestamp()
+        except ValueError:
+            print(f"Error: Invalid --after date format: {ns.after!r}. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM")
+            return
+    if ns.before:
+        try:
+            filter_before = _dt.fromisoformat(ns.before).timestamp()
+        except ValueError:
+            print(f"Error: Invalid --before date format: {ns.before!r}. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM")
+            return
+    results = memos.recall(
+        ns.query, top=ns.top, min_score=ns.min_score,
+        filter_tags=filter_tags, filter_after=filter_after, filter_before=filter_before,
+    )
     if not results:
         print("No memories found.")
         return
@@ -513,6 +536,9 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("query", help="Search query")
     recall.add_argument("--top", "-n", type=int, default=5)
     recall.add_argument("--min-score", type=float, default=0.0)
+    recall.add_argument("--tags", help="Comma-separated tags to filter by")
+    recall.add_argument("--after", help="Only memories created after this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
+    recall.add_argument("--before", help="Only memories created before this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # stats
