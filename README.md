@@ -526,6 +526,64 @@ pip install -e ".[dev]"
 pytest
 ```
 
+## Compaction & Garbage Collection (v0.14.0)
+
+Memos includes a full-lifecycle compaction engine to keep memory stores healthy as they grow:
+
+```python
+# Run compaction (dry-run first to preview)
+report = memos.compact(dry_run=True)
+print(f"Would archive {report['archived']} memories")
+print(f"Would merge {report['stale_merged']} stale memories")
+
+# Run for real
+report = memos.compact(
+    archive_age_days=90,      # Archive memories older than 90 days
+    importance_floor=0.3,     # Never archive above this importance
+    stale_threshold=0.25,     # Decay score below which a memory is "stale"
+    max_per_run=200,          # Cap modifications per run
+)
+```
+
+Compaction pipeline:
+1. **Dedup** — Remove exact/near-duplicates
+2. **Archive** — Tag old low-relevance memories as `archived`
+3. **Stale merge** — Group and merge semantically similar stale memories
+4. **Cluster compact** — Compress large clusters into summaries
+
+CLI:
+```bash
+memos compact --dry-run           # Preview
+memos compact --archive-age 60    # Run with custom thresholds
+memos compact --json              # JSON output
+```
+
+## Embedding Cache (v0.14.0)
+
+Persistent disk-backed embedding cache avoids recomputing embeddings across sessions:
+
+```python
+mem = MemOS(cache_enabled=True)  # Enable persistent cache
+
+# Or with custom settings
+mem = MemOS(
+    cache_enabled=True,
+    cache_path="~/.memos/embeddings.db",
+    cache_max_size=50_000,
+    cache_ttl=0,  # 0 = no expiry
+)
+
+# Check cache performance
+stats = mem.cache_stats()  # {'hits': 42, 'misses': 5, 'hit_rate': 0.894, ...}
+mem.cache_clear()  # Clear all cached embeddings
+```
+
+CLI:
+```bash
+memos cache-stats          # Show cache statistics
+memos cache-stats --clear  # Clear the cache
+```
+
 ## License
 
 MIT

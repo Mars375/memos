@@ -468,6 +468,22 @@ def build_parser() -> argparse.ArgumentParser:
     ns_stats.add_argument("--json", action="store_true", help="JSON output")
     ns_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # compact
+    compact_p = sub.add_parser("compact", help="Run memory compaction (dedup + archive + merge)")
+    compact_p.add_argument("--dry-run", action="store_true", help="Preview only, don't modify")
+    compact_p.add_argument("--archive-age", type=float, default=90.0, help="Min age (days) for archival")
+    compact_p.add_argument("--importance-floor", type=float, default=0.3, help="Never archive above this importance")
+    compact_p.add_argument("--stale-threshold", type=float, default=0.25, help="Decay score threshold for stale")
+    compact_p.add_argument("--max-per-run", type=int, default=200, help="Max modifications per run")
+    compact_p.add_argument("--json", action="store_true", help="JSON output")
+    compact_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # cache-stats
+    cache_p = sub.add_parser("cache-stats", help="Show embedding cache statistics")
+    cache_p.add_argument("--json", action="store_true", help="JSON output")
+    cache_p.add_argument("--clear", action="store_true", help="Clear the cache")
+    cache_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
     return p
 
 
@@ -726,6 +742,54 @@ def cmd_ns_stats(ns: argparse.Namespace) -> None:
         for role, count in stats['role_distribution'].items():
             print(f"    {role}: {count}")
 
+
+def cmd_compact(ns: argparse.Namespace) -> None:
+    """Run memory compaction."""
+    memos = _get_memos(ns)
+    report = memos.compact(
+        archive_age_days=ns.archive_age,
+        archive_importance_floor=ns.importance_floor,
+        stale_score_threshold=ns.stale_threshold,
+        max_compact_per_run=ns.max_per_run,
+        dry_run=ns.dry_run,
+    )
+    if getattr(ns, 'json', False):
+        print(json.dumps(report, indent=2))
+        return
+    prefix = "[DRY RUN] " if ns.dry_run else ""
+    print(f"{prefix}Compaction complete:")
+    print(f"  Dedup groups:    {report['dedup_groups']} ({report['dedup_merged']} merged)")
+    print(f"  Archived:        {report['archived']}")
+    print(f"  Stale merged:    {report['stale_merged']} in {report['stale_groups']} groups")
+    print(f"  Clusters:        {report['clusters_compacted']} compacted")
+    print(f"  Net delta:       {report['net_delta']:+d} memories")
+    print(f"  Duration:        {report['duration_seconds']:.3f}s")
+
+
+def cmd_cache_stats(ns: argparse.Namespace) -> None:
+    """Show embedding cache statistics."""
+    memos = _get_memos(ns)
+    if getattr(ns, 'clear', False):
+        cleared = memos.cache_clear()
+        if cleared < 0:
+            print("Cache is not enabled")
+        else:
+            print(f"Cleared {cleared} entries")
+        return
+    stats = memos.cache_stats()
+    if stats is None:
+        print("Cache is not enabled. Use cache_enabled=True to enable.")
+        return
+    if getattr(ns, 'json', False):
+        print(json.dumps(stats, indent=2))
+        return
+    print(f"  Cache entries:   {stats['size']}/{stats['max_size']}")
+    print(f"  Hits:            {stats['hits']}")
+    print(f"  Misses:          {stats['misses']}")
+    print(f"  Hit rate:        {stats['hit_rate']:.1%}")
+    print(f"  Evictions:       {stats['evictions']}")
+
+
 def cmd_config(ns: argparse.Namespace) -> None:
     """Manage CLI configuration."""
     action = getattr(ns, "config_action", None)
@@ -815,6 +879,8 @@ def main(argv: list[str] | None = None) -> None:
         "ns-revoke": cmd_ns_revoke,
         "ns-policies": cmd_ns_policies,
         "ns-stats": cmd_ns_stats,
+        "compact": cmd_compact,
+        "cache-stats": cmd_cache_stats,
     }
     commands[ns.command](ns)
 

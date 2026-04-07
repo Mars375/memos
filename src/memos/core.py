@@ -20,6 +20,8 @@ from .events import EventBus
 from .versioning.engine import VersioningEngine
 from .versioning.models import MemoryVersion, VersionDiff
 from .namespaces.acl import NamespaceACL, Role
+from .cache.embedding_cache import EmbeddingCache
+from .cache.embedding_cache import EmbeddingCache
 
 
 class MemOS:
@@ -115,6 +117,18 @@ class MemOS:
             max_versions_per_item=kwargs.get("max_versions_per_item", 100),
             persistent_path=kwargs.get("versioning_path"),
         )
+
+        # Embedding cache (persistent disk-backed)
+        cache_enabled = kwargs.get("cache_enabled", False)
+        if cache_enabled:
+            self._embedding_cache = EmbeddingCache(
+                path=kwargs.get("cache_path", "~/.memos/embeddings.db"),
+                max_size=kwargs.get("cache_max_size", 50_000),
+                ttl_seconds=kwargs.get("cache_ttl", 0),
+            )
+            self._retrieval.set_cache(self._embedding_cache)
+        else:
+            self._embedding_cache = None
 
     @property
     def namespace(self) -> str:
@@ -806,6 +820,63 @@ class MemOS:
         if not hasattr(self, "_async_consolidator"):
             return []
         return [h.to_dict() for h in self._async_consolidator.list_tasks()]
+
+    # ── Compaction ────────────────────────────────────────────
+
+    def compact(
+        self,
+        *,
+        archive_age_days: float = 90.0,
+        archive_importance_floor: float = 0.3,
+        stale_score_threshold: float = 0.25,
+        merge_similarity_threshold: float = 0.6,
+        cluster_min_size: int = 3,
+        dry_run: bool = False,
+        max_compact_per_run: int = 200,
+    ) -> dict[str, Any]:
+        """Run memory compaction: dedup + archive + merge stale + compress clusters.
+
+        Safe to run periodically (e.g., daily cron). Use dry_run=True to preview.
+
+        Returns:
+            dict with detailed compaction report.
+        """
+        from .compaction.engine import CompactionEngine, CompactionConfig
+
+        config = CompactionConfig(
+            archive_age_days=archive_age_days,
+            archive_importance_floor=archive_importance_floor,
+            stale_score_threshold=stale_score_threshold,
+            merge_similarity_threshold=merge_similarity_threshold,
+            cluster_min_size=cluster_min_size,
+            dry_run=dry_run,
+            max_compact_per_run=max_compact_per_run,
+        )
+        engine = CompactionEngine(config=config)
+        report = engine.compact(self._store)
+
+        if not dry_run and report.total_removed > 0:
+            self._events.emit_sync("compacted", {
+                "total_removed": report.total_removed,
+                "archived": report.archived,
+                "dedup_merged": report.dedup_merged,
+                "stale_merged": report.stale_merged,
+                "clusters_compacted": report.clusters_compacted,
+            }, namespace=self._namespace)
+
+        return report.to_dict()
+
+    def cache_stats(self) -> dict[str, Any] | None:
+        """Get embedding cache statistics. Returns None if caching disabled."""
+        if self._embedding_cache is None:
+            return None
+        return self._embedding_cache.stats().to_dict()
+
+    def cache_clear(self) -> int:
+        """Clear the embedding cache. Returns -1 if cache is disabled."""
+        if self._embedding_cache is None:
+            return -1
+        return self._embedding_cache.clear()
 
     # ── Versioning & Time-Travel ────────────────────────────
 

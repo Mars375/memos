@@ -8,6 +8,10 @@ from typing import Optional
 
 from ..models import MemoryItem, RecallResult
 from ..storage.base import StorageBackend
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..cache.embedding_cache import EmbeddingCache
 
 
 def _bm25_score(query: str, content: str) -> float:
@@ -48,6 +52,12 @@ class RetrievalEngine:
         self._keyword_weight = 1.0 - semantic_weight
         # Local embedding cache for small stores
         self._embed_cache: dict[str, list[float]] = {}
+        # Optional persistent cache (set via set_cache)
+        self._persistent_cache: "EmbeddingCache | None" = None
+
+    def set_cache(self, cache: "EmbeddingCache") -> None:
+        """Wire a persistent embedding cache for cross-session reuse."""
+        self._persistent_cache = cache
 
     def index(self, item: MemoryItem) -> None:
         """Index a memory item for retrieval."""
@@ -192,9 +202,17 @@ class RetrievalEngine:
         return results[:top]
 
     def _get_embedding(self, text: str) -> Optional[list[float]]:
-        """Get embedding from Ollama, with caching."""
+        """Get embedding from Ollama, with L1 (memory) + L2 (disk) caching."""
+        # L1: in-memory cache (fastest)
         if text in self._embed_cache:
             return self._embed_cache[text]
+
+        # L2: persistent disk cache
+        if self._persistent_cache is not None:
+            cached = self._persistent_cache.get(text, model=self._embed_model)
+            if cached is not None:
+                self._embed_cache[text] = cached  # Promote to L1
+                return cached
 
         try:
             import httpx
@@ -210,7 +228,10 @@ class RetrievalEngine:
             if embeddings:
                 vec = embeddings[0]
                 self._embed_cache[text] = vec
-                # Limit cache size
+                # Store in persistent cache
+                if self._persistent_cache is not None:
+                    self._persistent_cache.put(text, vec, model=self._embed_model)
+                # Limit L1 cache size
                 if len(self._embed_cache) > 5000:
                     keys = list(self._embed_cache.keys())[:2500]
                     for k in keys:

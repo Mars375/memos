@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.14.0 (2026-04-07) — Memory Compaction + Embedding Cache
+
+### New Features
+
+- **Memory Compaction Engine** (`memos.compaction`)
+  - 4-phase pipeline: dedup → archive → stale merge → cluster compact
+  - `MemOS.compact()` with configurable thresholds and dry-run mode
+  - Archive old low-relevance memories (tag-based, recoverable)
+  - Merge semantically similar stale memories into summaries
+  - Cluster compaction for large tag-based groups
+  - Budget-per-run limit for safe periodic execution
+  - CLI: `memos compact --dry-run --json`
+
+- **Persistent Embedding Cache** (`memos.cache`)
+  - SQLite-backed LRU cache for vector embeddings
+  - Avoids recomputing embeddings across sessions
+  - L1 (in-memory) + L2 (disk) two-tier caching
+  - Configurable TTL and max size with eviction
+  - Cache hit/miss statistics
+  - CLI: `memos cache-stats --clear`
+
+### Tests
+- 23 tests for embedding cache (basic, TTL, eviction, stats, persistence)
+- 23 tests for compaction engine (archive, stale groups, pipeline, integration)
+- Total: **569 tests**
+
+---
+
 ## v0.13.0 (2026-04-07) — Persistent Versioning + Namespace Access Control
 
 ### New Features
