@@ -285,7 +285,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.15.0",
+            "version": "0.16.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
             "rate_limiting": True,
@@ -543,5 +543,104 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def api_acl_stats():
         """Get namespace ACL statistics."""
         return memos.namespace_acl_stats()
+
+
+    # ── Multi-Agent Sharing API ─────────────────────────────
+
+    @app.post("/api/v1/share/offer")
+    async def api_share_offer(body: dict):
+        """Offer to share memories with another agent.
+
+        Body: {"target_agent": "...", "scope": "items|tag|namespace",
+               "scope_key": "", "permission": "read|read_write|admin",
+               "expires_at": null}
+        """
+        from ..sharing.models import ShareScope, SharePermission
+        try:
+            scope = ShareScope(body.get("scope", "items"))
+            permission = SharePermission(body.get("permission", "read"))
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+        try:
+            req = memos.share_with(
+                body["target_agent"],
+                scope=scope,
+                scope_key=body.get("scope_key", ""),
+                permission=permission,
+                expires_at=body.get("expires_at"),
+            )
+            return {"status": "ok", "share": req.to_dict()}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/share/{share_id}/accept")
+    async def api_share_accept(share_id: str):
+        """Accept a pending share."""
+        try:
+            req = memos.accept_share(share_id)
+            return {"status": "ok", "share": req.to_dict()}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/share/{share_id}/reject")
+    async def api_share_reject(share_id: str):
+        """Reject a pending share."""
+        try:
+            req = memos.reject_share(share_id)
+            return {"status": "ok", "share": req.to_dict()}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/share/{share_id}/revoke")
+    async def api_share_revoke(share_id: str):
+        """Revoke a share."""
+        try:
+            req = memos.revoke_share(share_id)
+            return {"status": "ok", "share": req.to_dict()}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.get("/api/v1/share/{share_id}/export")
+    async def api_share_export(share_id: str):
+        """Export memories for an accepted share as a JSON envelope."""
+        try:
+            envelope = memos.export_shared(share_id)
+            return {"status": "ok", "envelope": envelope.to_dict()}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/share/import")
+    async def api_share_import(body: dict):
+        """Import memories from a received envelope.
+
+        Body: {"envelope": {"source_agent": "...", "target_agent": "...", "memories": [...]}}
+        """
+        from ..sharing.models import MemoryEnvelope
+        try:
+            envelope = MemoryEnvelope.from_dict(body["envelope"])
+            learned = memos.import_shared(envelope)
+            return {
+                "status": "ok",
+                "imported": len(learned),
+                "ids": [i.id for i in learned],
+            }
+        except (ValueError, KeyError) as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.get("/api/v1/shares")
+    async def api_shares_list(agent: str | None = None, status: str | None = None):
+        """List shares, optionally filtered."""
+        from ..sharing.models import ShareStatus as SS
+        st = SS(status) if status else None
+        shares = memos.list_shares(agent=agent, status=st)
+        return {
+            "shares": [s.to_dict() for s in shares],
+            "total": len(shares),
+        }
+
+    @app.get("/api/v1/sharing/stats")
+    async def api_sharing_stats():
+        """Get sharing statistics."""
+        return memos.sharing_stats()
 
     return app

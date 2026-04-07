@@ -1,6 +1,6 @@
 """MemOS — Memory Operating System for LLM Agents."""
 
-__version__ = "0.15.0"
+__version__ = "0.16.0"
 
 from .core import MemOS
 from .models import MemoryItem, RecallResult, MemoryStats

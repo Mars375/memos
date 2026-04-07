@@ -493,6 +493,47 @@ def build_parser() -> argparse.ArgumentParser:
     cache_p.add_argument("--clear", action="store_true", help="Clear the cache")
     cache_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+
+    # ── Sharing commands ──────────────────────────────────────
+    share_offer = sub.add_parser("share-offer", help="Offer to share memories with another agent")
+    share_offer.add_argument("--target", required=True, help="Target agent ID")
+    share_offer.add_argument("--scope", default="items", choices=["items", "tag", "namespace"], help="Share scope")
+    share_offer.add_argument("--scope-key", default="", help="IDs (comma-sep), tag name, or namespace")
+    share_offer.add_argument("--permission", default="read", choices=["read", "read_write", "admin"], help="Permission level")
+    share_offer.add_argument("--expires", type=float, default=None, help="TTL in seconds from now")
+    share_offer.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_accept = sub.add_parser("share-accept", help="Accept a pending share")
+    share_accept.add_argument("share_id", help="Share request ID")
+    share_accept.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_reject = sub.add_parser("share-reject", help="Reject a pending share")
+    share_reject.add_argument("share_id", help="Share request ID")
+    share_reject.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_revoke = sub.add_parser("share-revoke", help="Revoke a share you offered")
+    share_revoke.add_argument("share_id", help="Share request ID")
+    share_revoke.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_export = sub.add_parser("share-export", help="Export memories for an accepted share")
+    share_export.add_argument("share_id", help="Share request ID")
+    share_export.add_argument("--output", default=None, help="Output file path (default: stdout)")
+    share_export.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_import = sub.add_parser("share-import", help="Import memories from an envelope file")
+    share_import.add_argument("input_file", help="Envelope JSON file to import")
+    share_import.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_list = sub.add_parser("share-list", help="List shares")
+    share_list.add_argument("--agent", default=None, help="Filter by agent ID")
+    share_list.add_argument("--status", default=None, choices=["pending", "accepted", "rejected", "revoked", "expired"], help="Filter by status")
+    share_list.add_argument("--json", action="store_true", help="JSON output")
+    share_list.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    share_stats = sub.add_parser("share-stats", help="Show sharing statistics")
+    share_stats.add_argument("--json", action="store_true", help="JSON output")
+    share_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
     return p
 
 
@@ -874,6 +915,114 @@ def cmd_config(ns: argparse.Namespace) -> None:
         print(f"✓ Default config created at {p}")
 
 
+
+
+def cmd_share_offer(ns: argparse.Namespace) -> None:
+    """Offer to share memories with another agent."""
+    from .sharing.models import ShareScope, SharePermission
+    memos = _get_memos(ns)
+    import time as _time
+    expires = ns.expires
+    if expires is not None:
+        expires = _time.time() + expires
+    req = memos.share_with(
+        ns.target,
+        scope=ShareScope(ns.scope),
+        scope_key=ns.scope_key,
+        permission=SharePermission(ns.permission),
+        expires_at=expires,
+    )
+    print(f"Share offer created: {req.id}")
+    print(f"  Source:  {req.source_agent}")
+    print(f"  Target:  {req.target_agent}")
+    print(f"  Scope:   {req.scope.value} ({req.scope_key})")
+    print(f"  Perm:    {req.permission.value}")
+    print(f"  Status:  {req.status.value}")
+
+
+def cmd_share_accept(ns: argparse.Namespace) -> None:
+    """Accept a pending share."""
+    memos = _get_memos(ns)
+    req = memos.accept_share(ns.share_id)
+    print(f"Share accepted: {req.id}")
+    print(f"  {req.source_agent} → {req.target_agent} ({req.scope.value})")
+
+
+def cmd_share_reject(ns: argparse.Namespace) -> None:
+    """Reject a pending share."""
+    memos = _get_memos(ns)
+    req = memos.reject_share(ns.share_id)
+    print(f"Share rejected: {req.id}")
+
+
+def cmd_share_revoke(ns: argparse.Namespace) -> None:
+    """Revoke a share."""
+    memos = _get_memos(ns)
+    req = memos.revoke_share(ns.share_id)
+    print(f"Share revoked: {req.id}")
+
+
+def cmd_share_export(ns: argparse.Namespace) -> None:
+    """Export memories for a share."""
+    memos = _get_memos(ns)
+    envelope = memos.export_shared(ns.share_id)
+    data = envelope.to_dict()
+    output = json.dumps(data, indent=2, default=str)
+    if ns.output:
+        with open(ns.output, "w") as f:
+            f.write(output)
+        print(f"Exported {len(envelope.memories)} memories to {ns.output}")
+    else:
+        print(output)
+
+
+def cmd_share_import(ns: argparse.Namespace) -> None:
+    """Import memories from an envelope file."""
+    from .sharing.models import MemoryEnvelope
+    with open(ns.input_file, "r") as f:
+        data = json.load(f)
+    envelope = MemoryEnvelope.from_dict(data)
+    memos = _get_memos(ns)
+    learned = memos.import_shared(envelope)
+    print(f"Imported {len(learned)} memories from {envelope.source_agent}")
+    for item in learned[:10]:
+        print(f"  {item.id}: {item.content[:60]}...")
+    if len(learned) > 10:
+        print(f"  ... and {len(learned) - 10} more")
+
+
+def cmd_share_list(ns: argparse.Namespace) -> None:
+    """List shares."""
+    from .sharing.models import ShareStatus
+    memos = _get_memos(ns)
+    status = ShareStatus(ns.status) if ns.status else None
+    shares = memos.list_shares(agent=ns.agent, status=status)
+    if getattr(ns, 'json', False):
+        print(json.dumps([s.to_dict() for s in shares], indent=2, default=str))
+        return
+    if not shares:
+        print("No shares found")
+        return
+    print(f"Shares ({len(shares)}):")
+    for s in shares:
+        print(f"  {s.id}  {s.source_agent} → {s.target_agent}  [{s.status.value}]  scope={s.scope.value}({s.scope_key})")
+
+
+def cmd_share_stats(ns: argparse.Namespace) -> None:
+    """Show sharing statistics."""
+    memos = _get_memos(ns)
+    stats = memos.sharing_stats()
+    if getattr(ns, 'json', False):
+        print(json.dumps(stats, indent=2))
+        return
+    print(f"  Total shares:     {stats['total_shares']}")
+    print(f"  Active shares:    {stats['active_shares']}")
+    print(f"  Pending shares:   {stats['pending_shares']}")
+    print(f"  Total agents:     {stats['total_agents']}")
+    for status, count in stats.get('status_distribution', {}).items():
+        print(f"    {status}: {count}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -909,6 +1058,14 @@ def main(argv: list[str] | None = None) -> None:
         "compact": cmd_compact,
         "cache-stats": cmd_cache_stats,
         "benchmark": cmd_benchmark,
+        "share-offer": cmd_share_offer,
+        "share-accept": cmd_share_accept,
+        "share-reject": cmd_share_reject,
+        "share-revoke": cmd_share_revoke,
+        "share-export": cmd_share_export,
+        "share-import": cmd_share_import,
+        "share-list": cmd_share_list,
+        "share-stats": cmd_share_stats,
     }
     commands[ns.command](ns)
 

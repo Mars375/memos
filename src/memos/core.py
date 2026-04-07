@@ -22,6 +22,8 @@ from .versioning.models import MemoryVersion, VersionDiff
 from .namespaces.acl import NamespaceACL, Role
 from .cache.embedding_cache import EmbeddingCache
 from .cache.embedding_cache import EmbeddingCache
+from .sharing.engine import SharingEngine
+from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 
 
 class MemOS:
@@ -129,6 +131,9 @@ class MemOS:
             self._retrieval.set_cache(self._embedding_cache)
         else:
             self._embedding_cache = None
+
+        # Sharing engine (multi-agent memory exchange)
+        self._sharing = SharingEngine()
 
     @property
     def namespace(self) -> str:
@@ -1052,3 +1057,136 @@ class MemOS:
         """
         return self._versioning.gc(max_age_days=max_age_days, keep_latest=keep_latest)
 
+
+    # ── Multi-Agent Sharing ──────────────────────────────────
+
+    def sharing(self) -> SharingEngine:
+        """Access the sharing engine for multi-agent memory exchange."""
+        return self._sharing
+
+    def share_with(
+        self,
+        target_agent: str,
+        *,
+        scope: ShareScope = ShareScope.ITEMS,
+        scope_key: str = "",
+        permission: SharePermission = SharePermission.READ,
+        expires_at: Optional[float] = None,
+    ) -> ShareRequest:
+        """Offer to share memories with another agent.
+
+        Args:
+            target_agent: ID of the agent to share with.
+            scope: What to share (items, tag, or full namespace).
+            scope_key: IDs (comma-sep), tag name, or namespace name.
+            permission: READ, READ_WRITE, or ADMIN.
+            expires_at: Optional TTL as Unix timestamp.
+
+        Returns:
+            The ShareRequest (PENDING status until accepted).
+        """
+        source = getattr(self, "_agent_id", "") or "default"
+        return self._sharing.offer(
+            source,
+            target_agent,
+            scope=scope,
+            scope_key=scope_key,
+            permission=permission,
+            expires_at=expires_at,
+        )
+
+    def accept_share(self, share_id: str) -> ShareRequest:
+        """Accept a pending share addressed to this agent.
+
+        Args:
+            share_id: The share request ID.
+
+        Returns:
+            The updated ShareRequest (ACCEPTED status).
+        """
+        agent = getattr(self, "_agent_id", "") or "default"
+        return self._sharing.accept(share_id, agent)
+
+    def reject_share(self, share_id: str) -> ShareRequest:
+        """Reject a pending share addressed to this agent."""
+        agent = getattr(self, "_agent_id", "") or "default"
+        return self._sharing.reject(share_id, agent)
+
+    def revoke_share(self, share_id: str) -> ShareRequest:
+        """Revoke a share previously offered by this agent."""
+        agent = getattr(self, "_agent_id", "") or "default"
+        return self._sharing.revoke(share_id, agent)
+
+    def export_shared(self, share_id: str) -> MemoryEnvelope:
+        """Export memories for an accepted share as a portable envelope.
+
+        The envelope contains the matching memories and can be
+        transmitted over HTTP, files, or message queues.
+
+        Args:
+            share_id: An accepted share request ID.
+
+        Returns:
+            MemoryEnvelope with matching memories and checksum.
+        """
+        req = self._sharing.get(share_id)
+        if req is None or req.status != ShareStatus.ACCEPTED:
+            raise ValueError("Share not found or not accepted")
+
+        # Resolve matching items
+        items = self._resolve_share_scope(req)
+        return self._sharing.export_envelope(share_id, items)
+
+    def import_shared(self, envelope: MemoryEnvelope) -> list[MemoryItem]:
+        """Import memories from a received envelope.
+
+        Validates the envelope checksum, then learns each memory
+        into the current namespace.
+
+        Args:
+            envelope: The received MemoryEnvelope.
+
+        Returns:
+            List of newly learned MemoryItems.
+        """
+        mem_dicts = SharingEngine.import_envelope(envelope)
+        learned = []
+        for md in mem_dicts:
+            tags = md.get("tags", [])
+            if isinstance(tags, str):
+                tags = [t.strip() for t in tags.split(",") if t.strip()]
+            importance = md.get("importance", 0.5)
+            item = self.learn(
+                md.get("content", ""),
+                tags=tags,
+                importance=float(importance),
+            )
+            learned.append(item)
+        return learned
+
+    def list_shares(
+        self, agent: Optional[str] = None, status: Optional[ShareStatus] = None
+    ) -> list[ShareRequest]:
+        """List shares, optionally filtered by agent and status."""
+        return self._sharing.list_shares(agent=agent, status=status)
+
+    def sharing_stats(self) -> dict[str, Any]:
+        """Get sharing statistics."""
+        return self._sharing.stats()
+
+    def _resolve_share_scope(self, req: ShareRequest) -> list[MemoryItem]:
+        """Resolve memory items matching a share scope."""
+        if req.scope == ShareScope.ITEMS:
+            ids = [i.strip() for i in req.scope_key.split(",") if i.strip()]
+            results = []
+            for mid in ids:
+                item = self._store.get(mid, namespace=self._namespace)
+                if item is not None:
+                    results.append(item)
+            return results
+        elif req.scope == ShareScope.TAG:
+            all_items = self._store.list_all(namespace=self._namespace)
+            return [i for i in all_items if req.scope_key in i.tags]
+        elif req.scope == ShareScope.NAMESPACE:
+            return self._store.list_all(namespace=self._namespace or req.scope_key)
+        return []
