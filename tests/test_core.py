@@ -78,6 +78,11 @@ class TestMemOSInMemory:
         self.mem.learn("unique content to forget")
         assert self.mem.forget("unique content to forget")
 
+    def test_forget_by_tag(self):
+        self.mem.learn("tagged note", tags=["test"])
+        assert self.mem.forget_tag("test") == 1
+        assert self.mem.stats().total_memories == 0
+
     def test_prune_dry_run(self):
         # Low importance, old-ish memory
         old_time = time.time() - 100 * 86400  # 100 days ago

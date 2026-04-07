@@ -123,6 +123,17 @@ class TestCLIFunctional:
         out = capsys.readouterr().out
         assert "Not found" in out
 
+    def test_forget_by_tag(self, capsys):
+        class FakeMemOS:
+            def forget_tag(self, tag: str) -> int:
+                assert tag == "test"
+                return 1
+
+        with patch("memos.cli._get_memos", return_value=FakeMemOS()):
+            main(["forget", "--tag", "test"])
+        out = capsys.readouterr().out
+        assert "Forgotten" in out
+
     def test_prune_dry_run(self, capsys):
         main(["prune", "--dry-run"])
         out = capsys.readouterr().out

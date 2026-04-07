@@ -487,6 +487,22 @@ class MemOS:
 
         return candidates
 
+    def forget_tag(self, tag: str) -> int:
+        """Delete all memories carrying a given tag."""
+        self._check_acl("delete")
+        removed = 0
+        for item in self._store.list_all(namespace=self._namespace):
+            if tag not in item.tags:
+                continue
+            if self._store.delete(item.id, namespace=self._namespace):
+                self._events.emit_sync("forgotten", {
+                    "id": item.id,
+                    "content": item.content[:200],
+                    "tags": item.tags,
+                }, namespace=self._namespace)
+                removed += 1
+        return removed
+
     def forget(self, content_or_id: str) -> bool:
         """Delete a specific memory by content or ID."""
         self._check_acl("delete")

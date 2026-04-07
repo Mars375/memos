@@ -128,8 +128,15 @@ def cmd_stats(ns: argparse.Namespace) -> None:
 
 
 def cmd_forget(ns: argparse.Namespace) -> None:
-    """Forget (delete) a memory by ID or content."""
+    """Forget (delete) a memory by ID/content or by tag."""
     memos = _get_memos(ns)
+    if ns.tag:
+        removed = memos.forget_tag(ns.tag)
+        print(f"✓ Forgotten {removed} memory(s) with tag '{ns.tag}'" if removed else "✗ Not found")
+        return
+    if not ns.target:
+        print("Error: target or --tag required", file=sys.stderr)
+        sys.exit(1)
     ok = memos.forget(ns.target)
     print("✓ Forgotten" if ok else "✗ Not found")
 
@@ -387,7 +394,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # forget
     forget = sub.add_parser("forget", help="Delete a memory")
-    forget.add_argument("target", help="Memory ID or content")
+    forget.add_argument("target", nargs="?", help="Memory ID or content")
+    forget.add_argument("--tag", help="Delete all memories with this tag")
     forget.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # prune
