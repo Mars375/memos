@@ -32,6 +32,9 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         kwargs["embed_host"] = cfg["embed_host"]
     if not cfg.get("sanitize", True):
         kwargs["sanitize"] = False
+    # Default "memory" backend auto-persists to .memos/store.json
+    if cfg["backend"] == "memory" and "persist_path" not in kwargs:
+        kwargs["persist_path"] = str(Path(".memos") / "store.json")
     return MemOS(**kwargs)
 
 

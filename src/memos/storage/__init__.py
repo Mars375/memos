@@ -4,12 +4,14 @@ from .base import StorageBackend
 from .async_base import AsyncStorageBackend
 from .async_wrapper import AsyncWrapper
 from .memory_backend import InMemoryBackend
+from .json_backend import JsonFileBackend
 
 __all__ = [
     "StorageBackend",
     "AsyncStorageBackend",
     "AsyncWrapper",
     "InMemoryBackend",
+    "JsonFileBackend",
     "ChromaBackend",
     "QdrantBackend",
 ]

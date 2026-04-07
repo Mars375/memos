@@ -10,6 +10,7 @@ from .retrieval.engine import RetrievalEngine
 from .storage.base import StorageBackend
 from .storage.chroma_backend import ChromaBackend
 from .storage.memory_backend import InMemoryBackend
+from .storage.json_backend import JsonFileBackend
 from .storage.qdrant_backend import QdrantBackend
 from .storage.pinecone_backend import PineconeBackend
 from .decay.engine import DecayEngine
@@ -78,8 +79,14 @@ class MemOS:
                 region=kwargs.get("pinecone_region", "us-east-1"),
                 serverless=kwargs.get("pinecone_serverless", True),
             )
+        elif backend == "json":
+            p = persist_path or ".memos/store.json"
+            store = JsonFileBackend(path=p)
         else:
-            store = InMemoryBackend()
+            if persist_path:
+                store = JsonFileBackend(path=persist_path)
+            else:
+                store = InMemoryBackend()
 
         # Encryption wrapper
         if encryption_key:
