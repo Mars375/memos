@@ -20,7 +20,20 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         "backend": getattr(ns, "backend", None),
         "chroma_host": getattr(ns, "chroma_host", None),
         "chroma_port": getattr(ns, "chroma_port", None),
+        "persist_path": getattr(ns, "persist_path", None),
+        "qdrant_host": getattr(ns, "qdrant_host", None),
+        "qdrant_port": getattr(ns, "qdrant_port", None),
+        "qdrant_api_key": getattr(ns, "qdrant_api_key", None),
+        "qdrant_path": getattr(ns, "qdrant_path", None),
+        "pinecone_api_key": getattr(ns, "pinecone_api_key", None),
+        "pinecone_environment": getattr(ns, "pinecone_environment", None),
+        "pinecone_index_name": getattr(ns, "pinecone_index_name", None),
+        "pinecone_cloud": getattr(ns, "pinecone_cloud", None),
+        "pinecone_region": getattr(ns, "pinecone_region", None),
+        "pinecone_serverless": getattr(ns, "pinecone_serverless", None),
+        "vector_size": getattr(ns, "vector_size", None),
         "embed_host": getattr(ns, "embed_host", None),
+        "embed_model": getattr(ns, "embed_model", None),
         "sanitize": not getattr(ns, "no_sanitize", False) or None,
     }
     cfg = resolve({k: v for k, v in cli_overrides.items() if v is not None})
@@ -28,14 +41,64 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
     if cfg["backend"] == "chroma":
         kwargs["chroma_host"] = cfg["chroma_host"]
         kwargs["chroma_port"] = cfg["chroma_port"]
+    if cfg["backend"] == "qdrant":
+        kwargs["qdrant_host"] = cfg["qdrant_host"]
+        kwargs["qdrant_port"] = cfg["qdrant_port"]
+        if cfg.get("qdrant_api_key"):
+            kwargs["qdrant_api_key"] = cfg["qdrant_api_key"]
+        if cfg.get("qdrant_path"):
+            kwargs["qdrant_path"] = cfg["qdrant_path"]
+        if cfg.get("vector_size"):
+            kwargs["vector_size"] = cfg["vector_size"]
+    if cfg["backend"] == "pinecone":
+        if cfg.get("pinecone_api_key"):
+            kwargs["pinecone_api_key"] = cfg["pinecone_api_key"]
+        if cfg.get("pinecone_environment"):
+            kwargs["pinecone_environment"] = cfg["pinecone_environment"]
+        if cfg.get("pinecone_index_name"):
+            kwargs["pinecone_index_name"] = cfg["pinecone_index_name"]
+        if cfg.get("pinecone_cloud"):
+            kwargs["pinecone_cloud"] = cfg["pinecone_cloud"]
+        if cfg.get("pinecone_region"):
+            kwargs["pinecone_region"] = cfg["pinecone_region"]
+        if cfg.get("pinecone_serverless") is not None:
+            kwargs["pinecone_serverless"] = cfg["pinecone_serverless"]
+        if cfg.get("vector_size"):
+            kwargs["vector_size"] = cfg["vector_size"]
     if cfg.get("embed_host"):
         kwargs["embed_host"] = cfg["embed_host"]
+    if cfg.get("embed_model"):
+        kwargs["embed_model"] = cfg["embed_model"]
+    if cfg.get("persist_path"):
+        kwargs["persist_path"] = cfg["persist_path"]
     if not cfg.get("sanitize", True):
         kwargs["sanitize"] = False
     # Default "memory" backend auto-persists to .memos/store.json
     if cfg["backend"] == "memory" and "persist_path" not in kwargs:
         kwargs["persist_path"] = str(Path(".memos") / "store.json")
     return MemOS(**kwargs)
+
+
+def _coerce_cli_value(value: str):
+    lowered = value.lower()
+    if lowered in {"true", "false"}:
+        return lowered == "true"
+    try:
+        if "." in value:
+            return float(value)
+        return int(value)
+    except ValueError:
+        return value
+
+
+def _parse_kv_options(values: list[str] | None) -> dict[str, object]:
+    parsed: dict[str, object] = {}
+    for entry in values or []:
+        if "=" not in entry:
+            raise ValueError(f"Expected KEY=VALUE, got {entry!r}")
+        key, raw = entry.split("=", 1)
+        parsed[key] = _coerce_cli_value(raw)
+    return parsed
 
 
 def cmd_init(ns: argparse.Namespace) -> None:
@@ -352,6 +415,47 @@ def cmd_ingest(ns: argparse.Namespace) -> None:
                 print(f"  ⚠ {err}", file=sys.stderr)
 
 
+def cmd_migrate(ns: argparse.Namespace) -> None:
+    """Migrate memories to a different backend."""
+    memos = _get_memos(ns)
+    namespaces = ns.namespaces.split(",") if ns.namespaces else None
+    try:
+        dest_kwargs = _parse_kv_options(ns.dest_option)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    report = memos.migrate_to(
+        ns.dest,
+        namespaces=namespaces,
+        merge=ns.merge,
+        dry_run=ns.dry_run,
+        batch_size=ns.batch_size,
+        **dest_kwargs,
+    )
+
+    if getattr(ns, "json", False):
+        print(json.dumps({
+            "source_backend": report.source_backend,
+            "dest_backend": report.dest_backend,
+            "total_items": report.total_items,
+            "migrated": report.migrated,
+            "skipped": report.skipped,
+            "errors": report.errors,
+            "namespaces_migrated": report.namespaces_migrated,
+            "duration_seconds": report.duration_seconds,
+            "dry_run": report.dry_run,
+        }, indent=2))
+    else:
+        print(report.summary())
+        if report.errors:
+            for err in report.errors[:10]:
+                print(f"  ⚠ {err}", file=sys.stderr)
+
+    if report.errors and not ns.dry_run:
+        sys.exit(1)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="memos",
@@ -441,6 +545,31 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--tags", "-t", help="Extra tags to add to imported memories")
     imp.add_argument("--dry-run", action="store_true", help="Preview only")
     imp.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # migrate
+    mig = sub.add_parser("migrate", help="Migrate memories to another backend")
+    mig.add_argument("--dest", required=True, choices=["memory", "json", "chroma", "qdrant", "pinecone"])
+    mig.add_argument("--namespaces", help="Comma-separated namespaces to migrate")
+    mig.add_argument("--merge", default="skip", choices=["skip", "overwrite", "error"])
+    mig.add_argument("--dry-run", action="store_true", help="Preview only")
+    mig.add_argument("--json", action="store_true", help="JSON output")
+    mig.add_argument("--batch-size", type=int, default=100, help="Progress callback interval")
+    mig.add_argument("--dest-option", action="append", default=[], metavar="KEY=VALUE", help="Destination backend option (repeatable)")
+    mig.add_argument("--persist-path", help="Source memory backend file path")
+    mig.add_argument("--qdrant-host", default="localhost")
+    mig.add_argument("--qdrant-port", type=int, default=6333)
+    mig.add_argument("--qdrant-api-key")
+    mig.add_argument("--qdrant-path")
+    mig.add_argument("--pinecone-api-key")
+    mig.add_argument("--pinecone-environment")
+    mig.add_argument("--pinecone-index-name")
+    mig.add_argument("--pinecone-cloud")
+    mig.add_argument("--pinecone-region")
+    mig.add_argument("--pinecone-serverless", action="store_true", default=None)
+    mig.add_argument("--vector-size", type=int)
+    mig.add_argument("--embed-host")
+    mig.add_argument("--embed-model")
+    mig.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # serve
     serve = sub.add_parser("serve", help="Start REST API server")
@@ -1135,6 +1264,7 @@ def main(argv: list[str] | None = None) -> None:
         "ingest": cmd_ingest,
         "export": cmd_export,
         "import": cmd_import,
+        "migrate": cmd_migrate,
         "config": cmd_config,
         "history": cmd_history,
         "diff": cmd_diff,

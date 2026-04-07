@@ -25,6 +25,7 @@ from .cache.embedding_cache import EmbeddingCache
 from .cache.embedding_cache import EmbeddingCache
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
+from .migration import MigrationEngine, MigrationReport, _create_backend
 
 
 class MemOS:
@@ -52,6 +53,7 @@ class MemOS:
         encryption_key: Optional[str] = None,
         **kwargs,
     ) -> None:
+        self._backend_name = backend
         # Storage
         if backend == "chroma":
             store: StorageBackend = ChromaBackend(
@@ -839,6 +841,45 @@ class MemOS:
         }, namespace=self._namespace)
 
         return result
+
+    def migrate_to(
+        self,
+        dest_backend: str,
+        *,
+        namespaces: list[str] | None = None,
+        tags_filter: list[str] | None = None,
+        merge: str = "skip",
+        dry_run: bool = False,
+        batch_size: int = 100,
+        **backend_kwargs,
+    ) -> MigrationReport:
+        """Migrate memories from this backend to another backend.
+
+        Args:
+            dest_backend: Target backend name.
+            namespaces: Optional namespace filter.
+            tags_filter: Optional tag filter.
+            merge: "skip", "overwrite", or "error" for existing items.
+            dry_run: If True, report without writing.
+            batch_size: Progress callback interval.
+            backend_kwargs: Destination backend constructor args.
+        """
+        dest = _create_backend(dest_backend, **backend_kwargs)
+        source_namespaces = namespaces
+        if source_namespaces is None and self._namespace:
+            source_namespaces = [self._namespace]
+        engine = MigrationEngine()
+        return engine.migrate(
+            self._store,
+            self._backend_name,
+            dest,
+            dest_backend,
+            namespaces=source_namespaces,
+            tags_filter=tags_filter,
+            merge=merge,
+            dry_run=dry_run,
+            batch_size=batch_size,
+        )
 
     # ── Async consolidation ───────────────────────────────────
 

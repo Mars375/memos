@@ -33,7 +33,15 @@ DEFAULTS: dict[str, Any] = {
     "vector_size": 768,
     "semantic_weight": 0.6,
     "embed_host": "localhost",
+    "embed_model": "nomic-embed-text",
     "embed_port": 11434,
+    "persist_path": "",
+    "pinecone_api_key": "",
+    "pinecone_environment": "",
+    "pinecone_index_name": "memos",
+    "pinecone_cloud": "aws",
+    "pinecone_region": "us-east-1",
+    "pinecone_serverless": True,
     "host": "127.0.0.1",
     "port": 8000,
     "sanitize": True,
@@ -53,6 +61,14 @@ ENV_MAP: dict[str, str] = {
     "qdrant_api_key": "MEMOS_QDRANT_API_KEY",
     "qdrant_path": "MEMOS_QDRANT_PATH",
     "embed_host": "MEMOS_EMBED_HOST",
+    "embed_model": "MEMOS_EMBED_MODEL",
+    "persist_path": "MEMOS_PERSIST_PATH",
+    "pinecone_api_key": "MEMOS_PINECONE_API_KEY",
+    "pinecone_environment": "MEMOS_PINECONE_ENVIRONMENT",
+    "pinecone_index_name": "MEMOS_PINECONE_INDEX_NAME",
+    "pinecone_cloud": "MEMOS_PINECONE_CLOUD",
+    "pinecone_region": "MEMOS_PINECONE_REGION",
+    "pinecone_serverless": "MEMOS_PINECONE_SERVERLESS",
     "host": "MEMOS_HOST",
     "port": "MEMOS_PORT",
     "api_key": "MEMOS_API_KEY",
@@ -100,7 +116,7 @@ def resolve(cli_args: dict[str, Any] | None = None) -> dict[str, Any]:
             # Type coercion for known int/bool keys
             if key in ("chroma_port", "embed_port", "port", "qdrant_port", "vector_size") and val:
                 result[key] = int(val)
-            elif key == "sanitize":
+            elif key in ("sanitize", "pinecone_serverless"):
                 result[key] = val.lower() not in ("0", "false", "no")
             else:
                 result[key] = val
