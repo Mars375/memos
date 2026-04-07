@@ -327,6 +327,75 @@ Each version records what caused it:
 - **"Restore my config from yesterday"** — `snapshot_at(yesterday_ts)` + `rollback(id, v)`
 - **Audit trail** — every change to any memory is tracked
 
+### CLI Versioning Commands (v0.12.0+)
+
+All versioning operations are available from the command line:
+
+```bash
+# View version history
+memos history <item_id>
+memos history <item_id> --json
+
+# Diff between versions
+memos diff <item_id> --v1 1 --v2 3
+memos diff <item_id> --latest
+
+# Roll back to a previous version
+memos rollback <item_id> --version 1 --dry-run
+memos rollback <item_id> --version 1 --yes
+
+# Time-travel: see all memories at a past time
+memos snapshot-at 2026-04-06
+memos snapshot-at 1d          # 1 day ago
+memos snapshot-at 2h          # 2 hours ago
+
+# Time-travel recall: search memories as they were
+memos recall-at "user preferences" --at 1h
+memos recall-at "project decisions" --at 2026-04-06T12:00:00
+
+# Versioning maintenance
+memos version-stats
+memos version-gc --max-age-days 90 --keep-latest 3 --dry-run
+```
+
+Timestamps accept: epoch (`1712457600`), ISO 8601 (`2026-04-07T12:00:00`), or relative (`1h`, `30m`, `2d`, `1w`).
+
+### REST Versioning API (v0.12.0+)
+
+```bash
+# Version history
+curl http://localhost:8100/api/v1/memory/{id}/history
+
+# Get specific version
+curl http://localhost:8100/api/v1/memory/{id}/version/1
+
+# Diff between versions
+curl "http://localhost:8100/api/v1/memory/{id}/diff?v1=1&v2=3"
+curl "http://localhost:8100/api/v1/memory/{id}/diff?latest=true"
+
+# Rollback
+curl -X POST http://localhost:8100/api/v1/memory/{id}/rollback \
+  -H 'Content-Type: application/json' \
+  -d '{"version": 1}'
+
+# Time-travel snapshot
+curl "http://localhost:8100/api/v1/snapshot?at=1712457600"
+
+# Time-travel recall
+curl "http://localhost:8100/api/v1/recall/at?q=AI&at=1712457600"
+
+# Streaming time-travel recall (SSE)
+curl "http://localhost:8100/api/v1/recall/at/stream?q=AI&at=1712457600"
+
+# Versioning stats
+curl http://localhost:8100/api/v1/versioning/stats
+
+# Garbage collect old versions
+curl -X POST http://localhost:8100/api/v1/versioning/gc \
+  -H 'Content-Type: application/json' \
+  -d '{"max_age_days": 90, "keep_latest": 3}'
+```
+
 ## Architecture
 
 ```
