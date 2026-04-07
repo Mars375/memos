@@ -124,8 +124,10 @@ def cmd_learn(ns: argparse.Namespace) -> None:
     content = ns.content
     if ns.file:
         content = Path(ns.file).read_text().strip()
+    elif getattr(ns, 'stdin', False):
+        content = sys.stdin.read().strip()
     if not content:
-        print("Error: no content provided (use positional arg or --file)", file=sys.stderr)
+        print("Error: no content provided (use positional arg, --file, or --stdin)", file=sys.stderr)
         sys.exit(1)
     tags = ns.tags.split(",") if ns.tags else []
     ttl = None
@@ -636,6 +638,7 @@ def build_parser() -> argparse.ArgumentParser:
     learn = sub.add_parser("learn", help="Store a new memory")
     learn.add_argument("content", nargs="?", help="Memory content")
     learn.add_argument("--file", "-f", help="Read content from file")
+    learn.add_argument("--stdin", action="store_true", help="Read content from stdin (pipe support)")
     learn.add_argument("--tags", "-t", help="Comma-separated tags")
     learn.add_argument("--importance", "-i", type=float, default=0.5)
     learn.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])

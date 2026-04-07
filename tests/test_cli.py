@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
@@ -138,3 +139,33 @@ class TestCLIFunctional:
         main(["prune", "--dry-run"])
         out = capsys.readouterr().out
         assert "would be pruned" in out
+    def test_learn_stdin_parsing(self):
+        """Test --stdin flag is parsed correctly."""
+        p = build_parser()
+        ns = p.parse_args(["learn", "--stdin", "--tags", "pipe"])
+        assert ns.stdin is True
+        assert ns.tags == "pipe"
+
+    def test_learn_from_stdin(self, capsys):
+        """Test memos learn --stdin reads from stdin."""
+        fake_stdin = io.StringIO("Piped memory content from CLI")
+        with patch("sys.stdin", fake_stdin):
+            main(["learn", "--stdin", "--tags", "piped"])
+        out = capsys.readouterr().out
+        assert "Learned" in out
+
+    def test_learn_stdin_empty_fails(self):
+        """Test that empty stdin content fails gracefully."""
+        fake_stdin = io.StringIO("   ")
+        with patch("sys.stdin", fake_stdin):
+            with pytest.raises(SystemExit):
+                main(["learn", "--stdin"])
+
+    def test_learn_stdin_with_importance(self, capsys):
+        """Test --stdin with importance and TTL."""
+        fake_stdin = io.StringIO("Important piped note")
+        with patch("sys.stdin", fake_stdin):
+            main(["learn", "--stdin", "--importance", "0.9", "--ttl", "1h"])
+        out = capsys.readouterr().out
+        assert "Learned" in out
+        assert "ttl=1h" in out
