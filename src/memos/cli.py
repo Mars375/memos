@@ -189,8 +189,29 @@ def cmd_recall(ns: argparse.Namespace) -> None:
         ns.query, top=ns.top, min_score=ns.min_score,
         filter_tags=filter_tags, filter_after=filter_after, filter_before=filter_before,
     )
+    fmt = getattr(ns, "format", "text") or "text"
     if not results:
-        print("No memories found.")
+        if fmt == "json":
+            print(json.dumps({"results": [], "total": 0}))
+        else:
+            print("No memories found.")
+        return
+    if fmt == "json":
+        print(json.dumps({
+            "results": [
+                {
+                    "id": r.item.id,
+                    "content": r.item.content,
+                    "score": round(r.score, 4),
+                    "tags": r.item.tags,
+                    "match_reason": r.match_reason,
+                    "importance": r.item.importance,
+                    "created_at": r.item.created_at,
+                }
+                for r in results
+            ],
+            "total": len(results),
+        }, indent=2))
         return
     for r in results:
         tags_str = f" [{', '.join(r.item.tags)}]" if r.item.tags else ""
@@ -499,6 +520,57 @@ def cmd_migrate(ns: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+
+def cmd_feedback(ns: argparse.Namespace) -> None:
+    """Record relevance feedback for a recalled memory."""
+    memos = _get_memos(ns)
+    try:
+        entry = memos.record_feedback(
+            item_id=ns.item_id,
+            feedback=ns.rating,
+            query=getattr(ns, 'query', '') or '',
+            score_at_recall=getattr(ns, 'score', 0.0),
+            agent_id=getattr(ns, 'agent', '') or '',
+        )
+        if getattr(ns, 'json', False):
+            print(json.dumps(entry.to_dict(), indent=2))
+        else:
+            print(f"✓ Feedback recorded: {ns.item_id[:12]}... → {ns.rating}")
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_feedback_list(ns: argparse.Namespace) -> None:
+    """List feedback entries."""
+    memos = _get_memos(ns)
+    entries = memos.get_feedback(item_id=getattr(ns, 'item_id', None), limit=ns.limit)
+    if getattr(ns, 'json', False):
+        print(json.dumps([e.to_dict() for e in entries], indent=2))
+        return
+    if not entries:
+        print("No feedback entries.")
+        return
+    for e in entries:
+        ts = datetime.fromtimestamp(e.created_at).strftime("%Y-%m-%d %H:%M")
+        print(f"  {ts}  [{e.item_id[:8]}]  {e.feedback}  q={e.query[:40]}  score={e.score_at_recall:.3f}")
+    print(f"\n{len(entries)} entries")
+
+
+def cmd_feedback_stats(ns: argparse.Namespace) -> None:
+    """Show feedback statistics."""
+    memos = _get_memos(ns)
+    stats = memos.feedback_stats()
+    if getattr(ns, 'json', False):
+        print(json.dumps(stats.to_dict(), indent=2))
+        return
+    print(f"  Total feedback:      {stats.total_feedback}")
+    print(f"  Relevant:            {stats.relevant_count}")
+    print(f"  Not relevant:        {stats.not_relevant_count}")
+    print(f"  Items with feedback: {stats.items_with_feedback}")
+    print(f"  Avg feedback score:  {stats.avg_feedback_score:.3f}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="memos",
@@ -539,6 +611,7 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--tags", help="Comma-separated tags to filter by")
     recall.add_argument("--after", help="Only memories created after this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--before", help="Only memories created before this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
+    recall.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text)")
     recall.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # stats
@@ -803,6 +876,29 @@ def build_parser() -> argparse.ArgumentParser:
     share_stats = sub.add_parser("share-stats", help="Show sharing statistics")
     share_stats.add_argument("--json", action="store_true", help="JSON output")
     share_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+
+    # feedback
+    fb = sub.add_parser("feedback", help="Record relevance feedback for a memory")
+    fb.add_argument("item_id", help="Memory item ID")
+    fb.add_argument("rating", choices=["relevant", "not-relevant"], help="Feedback rating")
+    fb.add_argument("--query", "-q", help="The query that triggered the recall")
+    fb.add_argument("--score", type=float, default=0.0, help="Recall score at feedback time")
+    fb.add_argument("--agent", help="Agent ID providing feedback")
+    fb.add_argument("--json", action="store_true", help="JSON output")
+    fb.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # feedback-list
+    fb_list = sub.add_parser("feedback-list", help="List feedback entries")
+    fb_list.add_argument("--item-id", dest="item_id", help="Filter by memory item ID")
+    fb_list.add_argument("--limit", type=int, default=50, help="Max entries to show")
+    fb_list.add_argument("--json", action="store_true", help="JSON output")
+    fb_list.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # feedback-stats
+    fb_stats = sub.add_parser("feedback-stats", help="Show feedback statistics")
+    fb_stats.add_argument("--json", action="store_true", help="JSON output")
+    fb_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     return p
 
@@ -1340,6 +1436,9 @@ def main(argv: list[str] | None = None) -> None:
         "share-import": cmd_share_import,
         "share-list": cmd_share_list,
         "share-stats": cmd_share_stats,
+        "feedback": cmd_feedback,
+        "feedback-list": cmd_feedback_list,
+        "feedback-stats": cmd_feedback_stats,
     }
     commands[ns.command](ns)
 

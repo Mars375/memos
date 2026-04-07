@@ -123,3 +123,47 @@ def parse_ttl(value: str) -> float:
         raise ValueError(f"TTL must be positive, got {amount}")
 
     return amount * units[suffix]
+
+
+@dataclass
+class FeedbackEntry:
+    """A single relevance feedback entry for a memory item."""
+    item_id: str
+    feedback: str  # "relevant" or "not-relevant"
+    query: str = ""  # the query that triggered the recall
+    score_at_recall: float = 0.0  # score when the item was recalled
+    agent_id: str = ""
+    created_at: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "item_id": self.item_id,
+            "feedback": self.feedback,
+            "query": self.query,
+            "score_at_recall": self.score_at_recall,
+            "agent_id": self.agent_id,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "FeedbackEntry":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+@dataclass
+class FeedbackStats:
+    """Statistics about feedback collected."""
+    total_feedback: int = 0
+    relevant_count: int = 0
+    not_relevant_count: int = 0
+    items_with_feedback: int = 0
+    avg_feedback_score: float = 0.0  # +1 for relevant, -1 for not-relevant
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_feedback": self.total_feedback,
+            "relevant_count": self.relevant_count,
+            "not_relevant_count": self.not_relevant_count,
+            "items_with_feedback": self.items_with_feedback,
+            "avg_feedback_score": round(self.avg_feedback_score, 3),
+        }

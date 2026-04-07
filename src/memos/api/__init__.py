@@ -739,4 +739,45 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         """Get sharing statistics."""
         return memos.sharing_stats()
 
+
+    # ── Relevance Feedback API ──────────────────────────────
+
+    @app.post("/api/v1/feedback")
+    async def api_record_feedback(body: dict):
+        """Record relevance feedback for a recalled memory.
+
+        Body: {"item_id": "...", "feedback": "relevant|not-relevant",
+               "query": "", "score_at_recall": 0.0, "agent_id": ""}
+        """
+        item_id = body.get("item_id")
+        feedback = body.get("feedback")
+        if not item_id or not feedback:
+            return {"status": "error", "message": "item_id and feedback are required"}
+        try:
+            entry = memos.record_feedback(
+                item_id=item_id,
+                feedback=feedback,
+                query=body.get("query", ""),
+                score_at_recall=body.get("score_at_recall", 0.0),
+                agent_id=body.get("agent_id", ""),
+            )
+            return {"status": "ok", "feedback": entry.to_dict()}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.get("/api/v1/feedback")
+    async def api_list_feedback(item_id: str | None = None, limit: int = 100):
+        """List feedback entries, optionally filtered by item_id."""
+        entries = memos.get_feedback(item_id=item_id, limit=limit)
+        return {
+            "feedback": [e.to_dict() for e in entries],
+            "total": len(entries),
+        }
+
+    @app.get("/api/v1/feedback/stats")
+    async def api_feedback_stats():
+        """Get aggregate feedback statistics."""
+        stats = memos.feedback_stats()
+        return stats.to_dict()
+
     return app
