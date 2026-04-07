@@ -396,6 +396,81 @@ curl -X POST http://localhost:8100/api/v1/versioning/gc \
   -d '{"max_age_days": 90, "keep_latest": 3}'
 ```
 
+### Persistent Versioning (v0.13.0)
+
+Version snapshots can be persisted to SQLite so they survive restarts:
+
+```python
+from memos import MemOS
+
+# Enable persistent versioning
+mem = MemOS(backend="memory", versioning_path="./versions.db")
+mem.learn("This version history survives restarts")
+```
+
+Or via REST:
+```bash
+# Persistent versioning auto-enabled when versioning_path is set
+memos serve --backend memory --versioning-path ./data/versions.db
+```
+
+CLI:
+```bash
+# Version-stats shows backend type
+memos version-stats --json
+```
+
+### Namespace Access Control (v0.13.0)
+
+RBAC for multi-agent memory isolation:
+
+```python
+from memos import MemOS
+from memos.namespaces import Role
+
+mem = MemOS(backend="memory")
+
+# Grant roles
+mem.grant_namespace_access("agent-alpha", "production", "owner")
+mem.grant_namespace_access("agent-beta", "production", "writer")
+mem.grant_namespace_access("agent-gamma", "production", "reader")
+
+# Set agent identity for enforcement
+mem.set_agent_id("agent-beta")
+mem.namespace = "production"
+
+mem.learn("Can write")       # OK — writer
+mem.recall("something")       # OK — read+write
+mem.forget("some-id")          # OK — writer has delete
+```
+
+REST API:
+```bash
+# Grant access
+curl -X POST http://localhost:8100/api/v1/namespaces/production/grant \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_id": "agent-1", "role": "writer"}'
+
+# Revoke access
+curl -X POST http://localhost:8100/api/v1/namespaces/production/revoke \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_id": "agent-1"}'
+
+# List policies
+curl http://localhost:8100/api/v1/namespaces/production/policies
+
+# ACL stats
+curl http://localhost:8100/api/v1/namespaces/acl/stats
+```
+
+CLI:
+```bash
+memos ns-grant production --agent agent-1 --role writer
+memos ns-revoke production --agent agent-1
+memos ns-policies --namespace production
+memos ns-stats
+```
+
 ## Architecture
 
 ```
