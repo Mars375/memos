@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.12.0 (2026-04-07) — CLI Versioning Commands + HTTP Versioning API
+
+### New Features
+
+#### CLI Versioning Commands (7 new commands)
+- **`memos history <item_id>`** — show full version history for a memory item
+  - `--json` for structured output
+- **`memos diff <item_id>`** — show diff between two versions
+  - `--v1 N --v2 M` for specific versions, `--latest` for last two
+  - Shows content, tags, importance, and metadata changes
+- **`memos rollback <item_id> --version N`** — roll back a memory to a previous version
+  - `--dry-run` to preview, `--yes` to confirm
+- **`memos snapshot-at <timestamp>`** — view all memories as they were at a point in time
+  - Supports epoch, ISO 8601, and relative timestamps (e.g. `1h`, `2d`, `1w`)
+- **`memos recall-at <query> --at <timestamp>`** — time-travel semantic search
+  - Query memories as they existed at any past point
+- **`memos version-stats`** — show versioning statistics
+  - `--json` for structured output
+- **`memos version-gc`** — garbage collect old memory versions
+  - `--max-age-days N` and `--keep-latest N` controls
+  - `--dry-run` to preview
+
+#### HTTP Versioning API (9 new endpoints)
+- `GET /api/v1/memory/{id}/history` — version history for an item
+- `GET /api/v1/memory/{id}/version/{n}` — get a specific version
+- `GET /api/v1/memory/{id}/diff?v1=N&v2=M` — diff between versions
+- `POST /api/v1/memory/{id}/rollback` — roll back to a version
+- `GET /api/v1/snapshot?at=<epoch>` — snapshot of all memories at a timestamp
+- `GET /api/v1/recall/at?q=<query>&at=<epoch>` — time-travel recall
+- `GET /api/v1/recall/at/stream?q=<query>&at=<epoch>` — SSE streaming time-travel recall
+- `GET /api/v1/versioning/stats` — versioning statistics
+- `POST /api/v1/versioning/gc` — garbage collect old versions
+
+#### Flexible Timestamp Parsing
+- Epoch (float/int): `1712457600`
+- ISO 8601: `2026-04-07T12:00:00`, `2026-04-07`
+- Relative: `1h` (1 hour ago), `30m`, `2d`, `1w`
+
+### Tests
+- 53 new tests (34 CLI + 19 API)
+- Total: **466 tests** (413 + 53)
+
+
 ## v0.11.0 (2026-04-07) — Memory Versioning & Time-Travel
 
 ### New Features

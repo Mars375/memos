@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Optional
 
 from ..core import MemOS, MemoryStats
@@ -279,7 +280,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.10.0",
+            "version": "0.12.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
         }
@@ -352,5 +353,132 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def api_consolidate_list():
         """List all async consolidation tasks."""
         return {"tasks": memos.consolidation_tasks()}
+
+
+    # ── Versioning API ───────────────────────────────────────
+
+    @app.get("/api/v1/memory/{item_id}/history")
+    async def api_version_history(item_id: str):
+        """Get version history for a memory item."""
+        versions = memos.history(item_id)
+        return {
+            "item_id": item_id,
+            "versions": [v.to_dict() for v in versions],
+            "total": len(versions),
+        }
+
+    @app.get("/api/v1/memory/{item_id}/version/{version_number}")
+    async def api_version_get(item_id: str, version_number: int):
+        """Get a specific version of a memory item."""
+        v = memos.get_version(item_id, version_number)
+        if v is None:
+            return {"status": "not_found", "item_id": item_id, "version": version_number}
+        return {"status": "ok", "version": v.to_dict()}
+
+    @app.get("/api/v1/memory/{item_id}/diff")
+    async def api_version_diff(item_id: str, v1: int, v2: int | None = None, latest: bool = False):
+        """Diff between two versions. Use ?latest=true for last two versions."""
+        if latest:
+            result = memos.diff_latest(item_id)
+        else:
+            if v2 is None:
+                return {"status": "error", "message": "Provide v2 or use ?latest=true"}
+            result = memos.diff(item_id, v1, v2)
+        if result is None:
+            return {"status": "not_found", "item_id": item_id}
+        return {"status": "ok", "diff": result.to_dict()}
+
+    @app.post("/api/v1/memory/{item_id}/rollback")
+    async def api_version_rollback(item_id: str, body: dict):
+        """Roll back a memory to a specific version.
+
+        Body: {"version": <int>}
+        """
+        version = body.get("version")
+        if version is None:
+            return {"status": "error", "message": "version is required"}
+        result = memos.rollback(item_id, version)
+        if result is None:
+            return {"status": "not_found", "item_id": item_id, "version": version}
+        return {
+            "status": "ok",
+            "item_id": result.id,
+            "content": result.content[:200],
+            "tags": result.tags,
+            "rolled_back_to": version,
+        }
+
+    @app.get("/api/v1/snapshot")
+    async def api_snapshot(at: float):
+        """Get a snapshot of all memories at a given timestamp (epoch)."""
+        versions = memos.snapshot_at(at)
+        return {
+            "timestamp": at,
+            "total": len(versions),
+            "memories": [v.to_dict() for v in versions[:200]],
+        }
+
+    @app.get("/api/v1/recall/at")
+    async def api_recall_at(q: str, at: float, top: int = 5, min_score: float = 0.0):
+        """Time-travel recall: query memories as they were at a given timestamp."""
+        results = memos.recall_at(q, at, top=top, min_score=min_score)
+        return {
+            "query": q,
+            "timestamp": at,
+            "total": len(results),
+            "results": [
+                {
+                    "id": r.item.id,
+                    "content": r.item.content,
+                    "score": round(r.score, 4),
+                    "tags": r.item.tags,
+                    "match_reason": r.match_reason,
+                }
+                for r in results
+            ],
+        }
+
+    @app.get("/api/v1/versioning/stats")
+    async def api_versioning_stats():
+        """Get versioning statistics."""
+        return memos.versioning_stats()
+
+    @app.post("/api/v1/versioning/gc")
+    async def api_versioning_gc(body: dict = None):
+        """Garbage collect old versions.
+
+        Body: {"max_age_days": 90, "keep_latest": 3}
+        """
+        body = body or {}
+        removed = memos.versioning_gc(
+            max_age_days=body.get("max_age_days", 90.0),
+            keep_latest=body.get("keep_latest", 3),
+        )
+        return {"status": "ok", "removed": removed}
+
+    # ── Streaming time-travel recall ──────────────────────────
+
+    @app.get("/api/v1/recall/at/stream")
+    async def api_recall_at_stream(q: str, at: float, top: int = 5, min_score: float = 0.0):
+        """Stream time-travel recall results as SSE events."""
+        from .sse import sse_stream, SSEEvent, format_recall_event, format_done_event
+        import asyncio as _asyncio
+
+        results = memos.recall_at(q, at, top=top, min_score=min_score)
+
+        async def _gen():
+            for r in results:
+                yield r
+                await _asyncio.sleep(0)
+
+        return StreamingResponse(
+            sse_stream(_gen(), q),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return app
