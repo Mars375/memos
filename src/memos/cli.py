@@ -13,6 +13,7 @@ from pathlib import Path
 from . import __version__
 from .config import config_path, load_config, resolve, write_config, DEFAULTS, ENV_MAP
 from .core import MemOS
+from .models import parse_ttl
 
 
 def _get_memos(ns: argparse.Namespace) -> MemOS:
@@ -127,8 +128,12 @@ def cmd_learn(ns: argparse.Namespace) -> None:
         print("Error: no content provided (use positional arg or --file)", file=sys.stderr)
         sys.exit(1)
     tags = ns.tags.split(",") if ns.tags else []
-    item = memos.learn(content, tags=tags, importance=ns.importance)
-    print(f"✓ Learned [{item.id[:8]}...] ({len(item.content)} chars, tags={item.tags})")
+    ttl = None
+    if hasattr(ns, 'ttl') and ns.ttl:
+        ttl = parse_ttl(ns.ttl)
+    item = memos.learn(content, tags=tags, importance=ns.importance, ttl=ttl)
+    ttl_str = f", ttl={ns.ttl}" if ns.ttl else ""
+    print(f"✓ Learned [{item.id[:8]}...] ({len(item.content)} chars, tags={item.tags}{ttl_str})")
 
 
 def cmd_batch_learn(ns: argparse.Namespace) -> None:
@@ -220,6 +225,21 @@ def cmd_prune(ns: argparse.Namespace) -> None:
     if ns.verbose:
         for c in candidates[:10]:
             print(f"  - [{c.id[:8]}] {c.content[:80]}")
+
+
+def cmd_prune_expired(ns: argparse.Namespace) -> None:
+    """Remove expired memories."""
+    memos = _get_memos(ns)
+    expired = memos.prune_expired(dry_run=ns.dry_run)
+    if not expired:
+        print("No expired memories.")
+        return
+    label = " (dry-run)" if ns.dry_run else ""
+    print(f"{'Would remove' if ns.dry_run else 'Removed'} {len(expired)} expired memories{label}:")
+    for item in expired[:10]:
+        print(f"  [{item.id[:8]}] {item.content[:80]}")
+    if len(expired) > 10:
+        print(f"  ... and {len(expired) - 10} more")
 
 
 def cmd_consolidate(ns: argparse.Namespace) -> None:
@@ -478,6 +498,7 @@ def build_parser() -> argparse.ArgumentParser:
     learn.add_argument("--importance", "-i", type=float, default=0.5)
     learn.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
     learn.add_argument("--no-sanitize", action="store_true")
+    learn.add_argument("--ttl", help="Time-to-live (e.g., 30m, 2h, 7d, 3600)")
 
     # batch-learn
     batch_learn = sub.add_parser("batch-learn", help="Store multiple memories from JSON")
@@ -688,6 +709,10 @@ def build_parser() -> argparse.ArgumentParser:
     ns_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # compact
+    # prune-expired
+    pe = sub.add_parser("prune-expired", help="Remove expired memories (past their TTL)")
+    pe.add_argument("--dry-run", action="store_true", help="Preview only")
+    pe.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
     compact_p = sub.add_parser("compact", help="Run memory compaction (dedup + archive + merge)")
     compact_p.add_argument("--dry-run", action="store_true", help="Preview only, don't modify")
     compact_p.add_argument("--archive-age", type=float, default=90.0, help="Min age (days) for archival")
@@ -1256,6 +1281,7 @@ def main(argv: list[str] | None = None) -> None:
         "recall": cmd_recall,
         "stats": cmd_stats,
         "forget": cmd_forget,
+        "prune-expired": cmd_prune_expired,
         "prune": cmd_prune,
         "serve": cmd_serve,
         "watch": cmd_watch,

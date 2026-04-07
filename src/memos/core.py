@@ -217,6 +217,7 @@ class MemOS:
         tags: Optional[list[str]] = None,
         importance: float = 0.5,
         metadata: Optional[dict[str, Any]] = None,
+        ttl: Optional[float] = None,
     ) -> MemoryItem:
         """Store a new memory."""
         self._check_acl("write")
@@ -235,6 +236,7 @@ class MemOS:
             tags=tags or [],
             importance=max(0.0, min(1.0, importance)),
             metadata=metadata or {},
+            ttl=ttl,
         )
 
         self._store.upsert(item, namespace=self._namespace)
@@ -247,6 +249,7 @@ class MemOS:
             "content": item.content[:200],
             "tags": item.tags,
             "importance": item.importance,
+            "ttl": item.ttl,
         }, namespace=self._namespace)
 
         return item
@@ -376,6 +379,9 @@ class MemOS:
                     "tags": r.item.tags,
                 }, namespace=self._namespace)
 
+            # Filter out expired memories
+            engine_results = [r for r in engine_results if not r.item.is_expired]
+
             # Apply decay
             adjusted = []
             for r in engine_results[:top]:
@@ -409,6 +415,9 @@ class MemOS:
                 ))
 
         results.sort(key=lambda r: r.score, reverse=True)
+
+        # Filter out expired memories
+        results = [r for r in results if not r.item.is_expired]
 
         # Touch recalled items
         for r in results[:top]:
@@ -496,6 +505,29 @@ class MemOS:
 
         return candidates
 
+    def prune_expired(self, *, dry_run: bool = False) -> list[MemoryItem]:
+        """Remove all expired memories (past their TTL).
+
+        Args:
+            dry_run: If True, return candidates without deleting.
+
+        Returns:
+            List of expired MemoryItems that were removed.
+        """
+        all_items = self._store.list_all(namespace=self._namespace)
+        expired = [item for item in all_items if item.is_expired]
+
+        if not dry_run:
+            for item in expired:
+                self._store.delete(item.id, namespace=self._namespace)
+            if expired:
+                self._events.emit_sync("expired_pruned", {
+                    "count": len(expired),
+                    "ids": [i.id for i in expired],
+                }, namespace=self._namespace)
+
+        return expired
+
     def forget_tag(self, tag: str) -> int:
         """Delete all memories carrying a given tag."""
         self._check_acl("delete")
@@ -560,6 +592,7 @@ class MemOS:
             oldest_memory_days=(now - min(i.created_at for i in items)) / 86400,
             newest_memory_days=(now - max(i.created_at for i in items)) / 86400,
             decay_candidates=decay_candidates,
+            expired_memories=sum(1 for i in items if i.is_expired),
             top_tags=top_tags,
         )
 
