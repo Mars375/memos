@@ -220,10 +220,15 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # Auth & rate limiting
     from .auth import APIKeyManager, create_auth_middleware
+    from .ratelimit import RateLimiter, create_rate_limit_middleware, DEFAULT_RULES
     key_manager = APIKeyManager(keys=api_keys)
     key_manager.rate_limiter.max_requests = rate_limit
     if key_manager.auth_enabled:
         app.middleware("http")(create_auth_middleware(key_manager))
+
+    # Standalone per-endpoint rate limiter (works with or without auth)
+    rate_limiter = RateLimiter(default_max=rate_limit, rules=DEFAULT_RULES)
+    app.middleware("http")(create_rate_limit_middleware(rate_limiter))
 
     # Dashboard
     from ..web import DASHBOARD_HTML
@@ -280,10 +285,16 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.13.0",
+            "version": "0.15.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
+            "rate_limiting": True,
         }
+
+    @app.get("/api/v1/rate-limit/status")
+    async def api_rate_limit_status(request):
+        """Get current rate limit status for the requesting client."""
+        return rate_limiter.get_status(request)
 
     # Parquet export
     @app.get("/api/v1/export/parquet")

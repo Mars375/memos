@@ -584,6 +584,67 @@ memos cache-stats          # Show cache statistics
 memos cache-stats --clear  # Clear the cache
 ```
 
+## Rate Limiting (v0.15.0)
+
+MemOS includes per-endpoint rate limiting using a token bucket algorithm:
+
+```python
+from memos.api.ratelimit import RateLimiter, EndpointRule, create_rate_limit_middleware
+
+# Custom rules per endpoint
+rules = [
+    EndpointRule(pattern="/api/v1/learn", max_requests=30, window_seconds=60),
+    EndpointRule(pattern="/api/v1/recall", max_requests=120, window_seconds=60),
+    EndpointRule(pattern="/api/v1/export", max_requests=10, window_seconds=60),
+]
+limiter = RateLimiter(default_max=100, rules=rules)
+
+# Apply to your FastAPI app
+app.middleware("http")(create_rate_limit_middleware(limiter))
+```
+
+Default rules are applied automatically when using `create_fastapi_app()`.
+All responses include rate limit headers:
+- `X-RateLimit-Limit` — maximum requests in the window
+- `X-RateLimit-Remaining` — remaining tokens
+- `X-RateLimit-Window` — window in seconds
+- `X-RateLimit-Policy` — matched endpoint rule
+
+Check current status: `GET /api/v1/rate-limit/status`
+
+## Performance Benchmarking (v0.15.0)
+
+Measure throughput and latency of core operations:
+
+```bash
+# Quick benchmark
+memos benchmark
+
+# Custom size with JSON output
+memos benchmark --size 5000 --recall-queries 200 --json
+```
+
+Programmatic API:
+
+```python
+from memos.benchmark import run_benchmark
+from memos import MemOS
+
+memos = MemOS(backend="memory")
+report = run_benchmark(memos=memos, memories=1000)
+
+# Access results
+for result in report.results:
+    print(f"{result.operation}: {result.ops_per_second:.0f} ops/s, p50={result.latency_p50_ms:.1f}ms")
+
+# JSON export
+import json
+print(json.dumps(report.to_dict(), indent=2))
+```
+
+Output includes learn, recall, search, stats, and prune benchmarks with
+latency percentiles (p50, p95, p99).
+
 ## License
 
 MIT

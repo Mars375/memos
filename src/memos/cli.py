@@ -478,6 +478,15 @@ def build_parser() -> argparse.ArgumentParser:
     compact_p.add_argument("--json", action="store_true", help="JSON output")
     compact_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # benchmark
+    bench = sub.add_parser("benchmark", help="Run performance benchmarks")
+    bench.add_argument("--size", type=int, default=1000, help="Number of memories to insert (default: 1000)")
+    bench.add_argument("--recall-queries", type=int, default=100, help="Number of recall queries (default: 100)")
+    bench.add_argument("--search-queries", type=int, default=100, help="Number of search queries (default: 100)")
+    bench.add_argument("--warmup", type=int, default=50, help="Warmup operations (default: 50)")
+    bench.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+    bench.add_argument("--json", action="store_true", help="JSON output")
+
     # cache-stats
     cache_p = sub.add_parser("cache-stats", help="Show embedding cache statistics")
     cache_p.add_argument("--json", action="store_true", help="JSON output")
@@ -766,6 +775,24 @@ def cmd_compact(ns: argparse.Namespace) -> None:
     print(f"  Duration:        {report['duration_seconds']:.3f}s")
 
 
+def cmd_benchmark(ns: argparse.Namespace) -> None:
+    """Run performance benchmarks."""
+    from .benchmark import run_benchmark
+
+    memos = _get_memos(ns)
+    report = run_benchmark(
+        memos=memos,
+        memories=ns.size,
+        recall_queries=ns.recall_queries,
+        search_queries=ns.search_queries,
+        warmup=ns.warmup,
+    )
+    if getattr(ns, 'json', False):
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(report.to_text())
+
+
 def cmd_cache_stats(ns: argparse.Namespace) -> None:
     """Show embedding cache statistics."""
     memos = _get_memos(ns)
@@ -881,6 +908,7 @@ def main(argv: list[str] | None = None) -> None:
         "ns-stats": cmd_ns_stats,
         "compact": cmd_compact,
         "cache-stats": cmd_cache_stats,
+        "benchmark": cmd_benchmark,
     }
     commands[ns.command](ns)
 
