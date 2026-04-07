@@ -113,6 +113,31 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         success = memos.forget(item_id)
         return {"status": "deleted" if success else "not_found"}
 
+    async def get_memory(item_id: str) -> dict:
+        item = memos.get(item_id)
+        if item is None:
+            return {"status": "not_found", "message": f"Memory {item_id} not found"}
+        result = {
+            "id": item.id,
+            "content": item.content,
+            "tags": item.tags,
+            "importance": item.importance,
+            "created_at": item.created_at,
+            "accessed_at": item.accessed_at,
+            "access_count": item.access_count,
+            "relevance_score": item.relevance_score,
+        }
+        if item.ttl is not None:
+            result["ttl"] = item.ttl
+            result["expires_at"] = item.expires_at
+            result["is_expired"] = item.is_expired
+        if item.metadata:
+            # Exclude internal metadata keys
+            public_meta = {k: v for k, v in item.metadata.items() if not k.startswith("_")}
+            if public_meta:
+                result["metadata"] = public_meta
+        return {"status": "ok", "item": result}
+
     async def batch_learn(body: dict) -> dict:
         items = body.get("items", [])
         if not items:
@@ -136,6 +161,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         "stats": stats,
         "search": search,
         "delete_memory": delete_memory,
+        "get_memory": get_memory,
     }
 
 
@@ -234,6 +260,10 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     @app.delete("/api/v1/memory/{item_id}")
     async def api_delete(item_id: str):
         return await routes["delete_memory"](item_id)
+
+    @app.get("/api/v1/memory/{item_id}")
+    async def api_get_memory(item_id: str):
+        return await routes["get_memory"](item_id)
 
     # Auth & rate limiting
     from .auth import APIKeyManager, create_auth_middleware

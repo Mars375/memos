@@ -74,7 +74,7 @@ class JsonFileBackend(StorageBackend):
 
     @staticmethod
     def _item_to_dict(item: MemoryItem) -> dict:
-        return {
+        d = {
             "id": item.id,
             "content": item.content,
             "tags": item.tags,
@@ -85,6 +85,9 @@ class JsonFileBackend(StorageBackend):
             "relevance_score": item.relevance_score,
             "metadata": item.metadata,
         }
+        if item.ttl is not None:
+            d["ttl"] = item.ttl
+        return d
 
     @staticmethod
     def _dict_to_item(d: dict) -> MemoryItem:
@@ -98,6 +101,7 @@ class JsonFileBackend(StorageBackend):
             access_count=d.get("access_count", 0),
             relevance_score=d.get("relevance_score", 0.0),
             metadata=d.get("metadata", {}),
+            ttl=d.get("ttl"),
         )
 
     def _bucket(self, namespace: str) -> dict[str, dict]:

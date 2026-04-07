@@ -617,6 +617,18 @@ class MemOS:
         self._check_acl("read")
         return self._store.search(q, limit=limit, namespace=self._namespace)
 
+    def get(self, item_id: str) -> Optional["MemoryItem"]:
+        """Retrieve a single memory item by ID.
+
+        Args:
+            item_id: The unique identifier of the memory item.
+
+        Returns:
+            The MemoryItem if found, or None.
+        """
+        self._check_acl("read")
+        return self._store.get(item_id, namespace=self._namespace)
+
     def list_namespaces(self) -> list[str]:
         """List all non-default namespaces."""
         return self._store.list_namespaces()

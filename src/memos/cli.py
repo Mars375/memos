@@ -256,6 +256,53 @@ def cmd_forget(ns: argparse.Namespace) -> None:
     print("✓ Forgotten" if ok else "✗ Not found")
 
 
+def cmd_get(ns: argparse.Namespace) -> None:
+    """Retrieve and display a single memory by ID."""
+    memos = _get_memos(ns)
+    item = memos.get(ns.item_id)
+    if item is None:
+        print(f"✗ Memory not found: {ns.item_id}", file=sys.stderr)
+        sys.exit(1)
+    if getattr(ns, "json", False):
+        out = {
+            "id": item.id,
+            "content": item.content,
+            "tags": item.tags,
+            "importance": item.importance,
+            "created_at": item.created_at,
+            "accessed_at": item.accessed_at,
+            "access_count": item.access_count,
+            "relevance_score": item.relevance_score,
+        }
+        if item.ttl is not None:
+            out["ttl"] = item.ttl
+            out["expires_at"] = item.expires_at
+            out["is_expired"] = item.is_expired
+        public_meta = {k: v for k, v in item.metadata.items() if not k.startswith("_")}
+        if public_meta:
+            out["metadata"] = public_meta
+        print(json.dumps(out, indent=2))
+        return
+    # Human-readable output
+    age_days = (time.time() - item.created_at) / 86400
+    print(f"  ID:           {item.id}")
+    print(f"  Content:      {item.content}")
+    print(f"  Tags:         {', '.join(item.tags) if item.tags else '(none)'}")
+    print(f"  Importance:   {item.importance:.2f}")
+    print(f"  Relevance:    {item.relevance_score:.3f}")
+    print(f"  Created:      {_fmt_ts(item.created_at)}  ({age_days:.1f} days ago)")
+    print(f"  Last access:  {_fmt_ts(item.accessed_at)}")
+    print(f"  Access count: {item.access_count}")
+    if item.ttl is not None:
+        print(f"  TTL:          {item.ttl:.0f}s")
+        if item.expires_at:
+            print(f"  Expires at:   {_fmt_ts(item.expires_at)}")
+        print(f"  Expired:      {'Yes' if item.is_expired else 'No'}")
+    public_meta = {k: v for k, v in item.metadata.items() if not k.startswith("_")}
+    if public_meta:
+        print(f"  Metadata:     {json.dumps(public_meta)}")
+
+
 def cmd_prune(ns: argparse.Namespace) -> None:
     """Prune decayed memories."""
     memos = _get_memos(ns)
@@ -623,6 +670,11 @@ def build_parser() -> argparse.ArgumentParser:
     forget = sub.add_parser("forget", help="Delete a memory")
     forget.add_argument("target", nargs="?", help="Memory ID or content")
     forget.add_argument("--tag", help="Delete all memories with this tag")
+
+    get_cmd = sub.add_parser("get", help="Show details of a single memory by ID")
+    get_cmd.add_argument("item_id", help="Memory item ID")
+    get_cmd.add_argument("--json", action="store_true", help="JSON output")
+    get_cmd.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
     forget.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # prune
@@ -1403,6 +1455,7 @@ def main(argv: list[str] | None = None) -> None:
         "recall": cmd_recall,
         "stats": cmd_stats,
         "forget": cmd_forget,
+        "get": cmd_get,
         "prune-expired": cmd_prune_expired,
         "prune": cmd_prune,
         "serve": cmd_serve,
