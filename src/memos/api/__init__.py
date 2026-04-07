@@ -280,7 +280,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.12.0",
+            "version": "0.13.0",
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
         }
@@ -480,5 +480,57 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                 "X-Accel-Buffering": "no",
             },
         )
+
+    # ── Namespace ACL API ───────────────────────────────────
+
+    @app.post("/api/v1/namespaces/{namespace}/grant")
+    async def api_acl_grant(namespace: str, body: dict):
+        """Grant an agent access to a namespace.
+
+        Body: {"agent_id": "...", "role": "owner|writer|reader|denied",
+               "expires_at": null}
+        """
+        agent_id = body.get("agent_id")
+        role = body.get("role")
+        if not agent_id or not role:
+            return {"status": "error", "message": "agent_id and role are required"}
+        try:
+            policy = memos.grant_namespace_access(
+                agent_id, namespace, role,
+                granted_by=body.get("granted_by", ""),
+                expires_at=body.get("expires_at"),
+            )
+            return {"status": "ok", "policy": policy}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/namespaces/{namespace}/revoke")
+    async def api_acl_revoke(namespace: str, body: dict):
+        """Revoke an agent's access to a namespace.
+
+        Body: {"agent_id": "..."}
+        """
+        agent_id = body.get("agent_id")
+        if not agent_id:
+            return {"status": "error", "message": "agent_id is required"}
+        success = memos.revoke_namespace_access(agent_id, namespace)
+        return {"status": "revoked" if success else "not_found"}
+
+    @app.get("/api/v1/namespaces/{namespace}/policies")
+    async def api_acl_list(namespace: str):
+        """List all ACL policies for a namespace."""
+        policies = memos.list_namespace_policies(namespace=namespace)
+        return {"namespace": namespace, "policies": policies, "total": len(policies)}
+
+    @app.get("/api/v1/namespaces")
+    async def api_acl_all_policies():
+        """List all ACL policies across all namespaces."""
+        policies = memos.list_namespace_policies()
+        return {"policies": policies, "total": len(policies)}
+
+    @app.get("/api/v1/namespaces/acl/stats")
+    async def api_acl_stats():
+        """Get namespace ACL statistics."""
+        return memos.namespace_acl_stats()
 
     return app

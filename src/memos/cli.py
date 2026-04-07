@@ -441,6 +441,33 @@ def build_parser() -> argparse.ArgumentParser:
     vgc.add_argument("--dry-run", action="store_true", help="Preview only")
     vgc.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # ── Namespace ACL commands ──────────────────────────────────
+
+    # namespace grant
+    ns_grant = sub.add_parser("ns-grant", help="Grant an agent access to a namespace")
+    ns_grant.add_argument("namespace", help="Target namespace")
+    ns_grant.add_argument("--agent", required=True, help="Agent ID")
+    ns_grant.add_argument("--role", required=True, choices=["owner", "writer", "reader", "denied"], help="Access role")
+    ns_grant.add_argument("--expires", type=float, default=None, help="Expires at (epoch timestamp)")
+    ns_grant.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # namespace revoke
+    ns_revoke = sub.add_parser("ns-revoke", help="Revoke an agent's namespace access")
+    ns_revoke.add_argument("namespace", help="Target namespace")
+    ns_revoke.add_argument("--agent", required=True, help="Agent ID")
+    ns_revoke.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # namespace policies
+    ns_list = sub.add_parser("ns-policies", help="List namespace ACL policies")
+    ns_list.add_argument("--namespace", help="Filter by namespace")
+    ns_list.add_argument("--json", action="store_true", help="JSON output")
+    ns_list.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # namespace stats
+    ns_stats = sub.add_parser("ns-stats", help="Show namespace ACL statistics")
+    ns_stats.add_argument("--json", action="store_true", help="JSON output")
+    ns_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
     return p
 
 
@@ -644,6 +671,61 @@ def cmd_version_gc(ns: argparse.Namespace) -> None:
     removed = memos.versioning_gc(max_age_days=ns.max_age_days, keep_latest=ns.keep_latest)
     print(f"OK Garbage collected {removed} old versions")
 
+
+def cmd_ns_grant(ns: argparse.Namespace) -> None:
+    """Grant an agent access to a namespace."""
+    memos = _get_memos(ns)
+    policy = memos.grant_namespace_access(
+        agent_id=ns.agent,
+        namespace=ns.namespace,
+        role=ns.role,
+        expires_at=ns.expires,
+    )
+    print(f"✓ Granted {ns.role} access to '{ns.namespace}' for agent '{ns.agent}'")
+    if ns.json if hasattr(ns, 'json') else False:
+        print(json.dumps(policy, indent=2))
+
+
+def cmd_ns_revoke(ns: argparse.Namespace) -> None:
+    """Revoke an agent's namespace access."""
+    memos = _get_memos(ns)
+    success = memos.revoke_namespace_access(
+        agent_id=ns.agent,
+        namespace=ns.namespace,
+    )
+    print(f"✓ Revoked access to '{ns.namespace}' for agent '{ns.agent}'" if success else "✗ No policy found")
+
+
+def cmd_ns_policies(ns: argparse.Namespace) -> None:
+    """List namespace ACL policies."""
+    memos = _get_memos(ns)
+    policies = memos.list_namespace_policies(namespace=getattr(ns, 'namespace', None))
+    if getattr(ns, 'json', False):
+        print(json.dumps(policies, indent=2))
+        return
+    if not policies:
+        print("No policies found")
+        return
+    for p in policies:
+        expires = f" (expires: {p['expires_at']})" if p.get('expires_at') else ""
+        print(f"  {p['agent_id']}  {p['namespace']}  {p['role']}{expires}")
+    print(f"\n{len(policies)} policy(ies)")
+
+
+def cmd_ns_stats(ns: argparse.Namespace) -> None:
+    """Show namespace ACL statistics."""
+    memos = _get_memos(ns)
+    stats = memos.namespace_acl_stats()
+    if getattr(ns, 'json', False):
+        print(json.dumps(stats, indent=2))
+        return
+    print(f"  Total policies:  {stats['total_policies']}")
+    print(f"  Total agents:    {stats['total_agents']}")
+    print(f"  Total namespaces:{stats['total_namespaces']}")
+    if stats.get('role_distribution'):
+        for role, count in stats['role_distribution'].items():
+            print(f"    {role}: {count}")
+
 def cmd_config(ns: argparse.Namespace) -> None:
     """Manage CLI configuration."""
     action = getattr(ns, "config_action", None)
@@ -729,6 +811,10 @@ def main(argv: list[str] | None = None) -> None:
         "recall-at": cmd_recall_at,
         "version-stats": cmd_version_stats,
         "version-gc": cmd_version_gc,
+        "ns-grant": cmd_ns_grant,
+        "ns-revoke": cmd_ns_revoke,
+        "ns-policies": cmd_ns_policies,
+        "ns-stats": cmd_ns_stats,
     }
     commands[ns.command](ns)
 

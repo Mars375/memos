@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.13.0 (2026-04-07) — Persistent Versioning + Namespace Access Control
+
+### New Features
+
+**Persistent Versioning (SQLite)**
+- `SqliteVersionStore` — persistent version storage backend using SQLite (zero external deps, Python stdlib)
+- `PersistentVersionStore` — abstract interface for pluggable persistent version stores
+- `VersioningEngine` now supports `persistent_path` parameter for automatic SQLite persistence
+- Version history survives restarts — critical for production deployments
+- WAL mode + thread-safe connection-per-thread pattern for concurrency
+- `versioning_path` parameter on `MemOS()` constructor
+- Auto-GC when max versions per item exceeded
+
+**Namespace Access Control (RBAC)**
+- `NamespaceACL` — role-based access control manager for multi-agent memory isolation
+- Four roles: `owner` (full control), `writer` (read+write+delete), `reader` (read-only), `denied` (explicit block)
+- `MemOS.set_agent_id()` — sets agent identity for ACL enforcement
+- ACL checks on `learn()`, `recall()`, `forget()`, `batch_learn()`, `search()`
+- Empty namespace or no agent_id → ACL bypassed (backward compatible)
+- Policy expiration support (auto-cleanup)
+- REST API: `POST /namespaces/{ns}/grant`, `POST /namespaces/{ns}/revoke`, `GET /namespaces/{ns}/policies`
+- CLI: `memos ns-grant`, `memos ns-revoke`, `memos ns-policies`, `memos ns-stats`
+
+### Tests
+- 58 new tests (SqliteVersionStore: 14, VersioningEngine persistent: 4, MemOS persistent: 2, ACL: 25, ACL integration: 13)
+- **524 total tests, all passing**
+
 ## v0.12.0 (2026-04-07) — CLI Versioning Commands + HTTP Versioning API
 
 ### New Features

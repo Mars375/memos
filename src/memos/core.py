@@ -19,6 +19,7 @@ from .storage.encrypted_backend import EncryptedStorageBackend
 from .events import EventBus
 from .versioning.engine import VersioningEngine
 from .versioning.models import MemoryVersion, VersionDiff
+from .namespaces.acl import NamespaceACL, Role
 
 
 class MemOS:
@@ -103,12 +104,16 @@ class MemOS:
         # Namespace (multi-agent isolation)
         self._namespace: str = ""
 
+        # Namespace ACL (access control)
+        self._acl = NamespaceACL()
+
         # Event bus (real-time subscriptions)
         self._events = EventBus()
 
         # Versioning (time-travel)
         self._versioning = VersioningEngine(
             max_versions_per_item=kwargs.get("max_versions_per_item", 100),
+            persistent_path=kwargs.get("versioning_path"),
         )
 
     @property
@@ -118,6 +123,34 @@ class MemOS:
     @namespace.setter
     def namespace(self, value: str) -> None:
         self._namespace = value or ""
+
+    @property
+    def acl(self) -> NamespaceACL:
+        """Access the namespace ACL for managing access control."""
+        return self._acl
+
+    # ── ACL Guard ──────────────────────────────────────────
+
+    def _check_acl(self, permission: str) -> None:
+        """Check ACL permission for the current agent on the current namespace.
+
+        Only enforces if agent_id is set via set_agent_id().
+        Empty namespace bypasses ACL checks.
+        """
+        if not self._namespace or not hasattr(self, "_agent_id") or not self._agent_id:
+            return
+        self._acl.check(self._agent_id, self._namespace, permission)
+
+    def set_agent_id(self, agent_id: str) -> None:
+        """Set the agent identity for ACL checks.
+
+        When set, all operations on namespaced memories will enforce
+        the ACL permissions for this agent.
+
+        Args:
+            agent_id: Unique identifier for the agent.
+        """
+        self._agent_id: str = agent_id
 
     @property
     def events(self) -> EventBus:
@@ -132,6 +165,8 @@ class MemOS:
         metadata: Optional[dict[str, Any]] = None,
     ) -> MemoryItem:
         """Store a new memory."""
+        self._check_acl("write")
+
         if not content or not content.strip():
             raise ValueError("Memory content cannot be empty")
 
@@ -180,6 +215,7 @@ class MemOS:
         Returns:
             dict with learned, skipped, errors counts and details.
         """
+        self._check_acl("write")
         result = {
             "learned": 0,
             "skipped": 0,
@@ -265,6 +301,7 @@ class MemOS:
         min_score: float = 0.0,
     ) -> list[RecallResult]:
         """Retrieve memories relevant to a query."""
+        self._check_acl("read")
         # Try retrieval engine for hybrid search (supports Qdrant native)
         engine_results = self._retrieval.search(
             query, top=top, filter_tags=filter_tags,
@@ -401,6 +438,7 @@ class MemOS:
 
     def forget(self, content_or_id: str) -> bool:
         """Delete a specific memory by content or ID."""
+        self._check_acl("delete")
         if self._store.delete(content_or_id, namespace=self._namespace):
             self._events.emit_sync("forgotten", {"id": content_or_id}, namespace=self._namespace)
             return True
@@ -441,11 +479,77 @@ class MemOS:
 
     def search(self, q: str, limit: int = 20) -> list[MemoryItem]:
         """Simple keyword search across all memories."""
+        self._check_acl("read")
         return self._store.search(q, limit=limit, namespace=self._namespace)
 
     def list_namespaces(self) -> list[str]:
         """List all non-default namespaces."""
         return self._store.list_namespaces()
+
+    # ── Namespace ACL Management ───────────────────────────
+
+    def grant_namespace_access(
+        self,
+        agent_id: str,
+        namespace: str,
+        role: str | Role,
+        *,
+        granted_by: str = "",
+        expires_at: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """Grant an agent access to a namespace.
+
+        Args:
+            agent_id: Unique identifier for the agent.
+            namespace: Target namespace.
+            role: Access role ("owner", "writer", "reader", "denied").
+            granted_by: ID of the agent performing the grant.
+            expires_at: Optional Unix timestamp when access expires.
+
+        Returns:
+            The created policy as a dict.
+        """
+        if isinstance(role, str):
+            role = Role(role)
+        policy = self._acl.grant(
+            agent_id, namespace, role,
+            granted_by=granted_by, expires_at=expires_at,
+        )
+        self._events.emit_sync("acl_granted", {
+            "agent_id": agent_id,
+            "namespace": namespace,
+            "role": role.value,
+        }, namespace=namespace)
+        return policy.to_dict()
+
+    def revoke_namespace_access(
+        self,
+        agent_id: str,
+        namespace: str,
+    ) -> bool:
+        """Revoke an agent's access to a namespace.
+
+        Returns True if a policy was revoked, False if none existed.
+        """
+        removed = self._acl.revoke(agent_id, namespace)
+        if removed:
+            self._events.emit_sync("acl_revoked", {
+                "agent_id": agent_id,
+                "namespace": namespace,
+            }, namespace=namespace)
+            return True
+        return False
+
+    def list_namespace_policies(
+        self,
+        namespace: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """List ACL policies, optionally filtered by namespace."""
+        return [p.to_dict() for p in self._acl.list_policies(namespace=namespace)]
+
+    def namespace_acl_stats(self) -> dict[str, Any]:
+        """Get namespace ACL statistics."""
+        return self._acl.stats()
 
     def consolidate(
         self,

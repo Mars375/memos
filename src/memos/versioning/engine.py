@@ -6,17 +6,20 @@ Provides the VersioningEngine that wraps a VersionStore and offers:
   - Version diff between two versions
   - Time-travel: recall memories as they were at a given timestamp
   - Version rollback
+
+Supports both in-memory and persistent (SQLite) version stores.
 """
 
 from __future__ import annotations
 
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from ..models import MemoryItem, RecallResult, generate_id
 from ..storage.base import StorageBackend
 from .models import MemoryVersion, VersionDiff
 from .store import VersionStore
+from .persistent_store import PersistentVersionStore, SqliteVersionStore
 
 
 class VersioningEngine:
@@ -25,9 +28,16 @@ class VersioningEngine:
     Wraps a StorageBackend and a VersionStore to provide transparent
     version tracking on every write, and time-travel queries.
 
+    Supports both in-memory (default) and persistent (SQLite) backends.
+
     Usage::
 
-        engine = VersioningEngine(storage_backend)
+        # In-memory (default)
+        engine = VersioningEngine()
+
+        # Persistent SQLite
+        engine = VersioningEngine(persistent_path="/data/versions.db")
+
         engine.record_version(item, source="learn")
 
         # Time-travel: what memories existed 1 hour ago?
@@ -42,16 +52,30 @@ class VersioningEngine:
 
     def __init__(
         self,
-        store: Optional[VersionStore] = None,
+        store: Optional[Union[VersionStore, PersistentVersionStore]] = None,
         *,
+        persistent_path: Optional[str] = None,
         max_versions_per_item: int = 100,
     ) -> None:
-        self._vstore = store or VersionStore(max_versions_per_item=max_versions_per_item)
+        if store is not None:
+            self._vstore = store
+        elif persistent_path is not None:
+            self._vstore = SqliteVersionStore(
+                persistent_path,
+                max_versions_per_item=max_versions_per_item,
+            )
+        else:
+            self._vstore = VersionStore(max_versions_per_item=max_versions_per_item)
 
     @property
-    def version_store(self) -> VersionStore:
+    def version_store(self) -> Union[VersionStore, PersistentVersionStore]:
         """Access the underlying version store."""
         return self._vstore
+
+    @property
+    def is_persistent(self) -> bool:
+        """Whether the version store is persistent (survives restarts)."""
+        return isinstance(self._vstore, PersistentVersionStore)
 
     # ── Recording ───────────────────────────────────────────
 
