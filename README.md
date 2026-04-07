@@ -88,6 +88,9 @@ POST /api/v1/consolidate    {similarity_threshold?, async?, dry_run?}  Sync or a
 GET  /api/v1/consolidate    {}                                         List tasks
 GET  /api/v1/consolidate/:id {}                                         Task status
 GET  /api/v1/export/parquet {include_metadata?, compression?}          Download .parquet
+GET  /api/v1/events/stream  {event_types?, tags?, namespace?}          Live SSE event stream
+GET  /api/v1/subscriptions  {}                                         List active subscriptions
+DELETE /api/v1/subscriptions/:id {}                                     Remove a subscription
 GET  /health
 ```
 
@@ -120,6 +123,27 @@ async def stream_recall():
         print(f"[{result.score:.2f}] {result.item.content}")
 
 asyncio.run(stream_recall())
+```
+
+### Live Event Subscriptions
+
+Watch memory changes in real time, filtered by event type, tag, or namespace.
+
+```bash
+curl -N "http://localhost:8100/api/v1/events/stream?tags=infra&namespace=agent-a"
+```
+
+WebSocket clients can subscribe dynamically:
+
+```json
+{"action":"subscribe","event_types":["learned"],"tags":["preference"]}
+```
+
+CLI tailing:
+
+```bash
+memos watch --server http://localhost:8100 --tags infra
+memos subscribe --server http://localhost:8100 --namespace agent-a
 ```
 
 ## Storage Backends

@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Optional
 
+from .. import __version__ as MEMOS_VERSION
 from ..core import MemOS, MemoryStats
+
+try:
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi.responses import StreamingResponse, HTMLResponse
+except ImportError:  # pragma: no cover - optional server dependency
+    FastAPI = None  # type: ignore[assignment]
+    WebSocket = None  # type: ignore[assignment]
+    WebSocketDisconnect = None  # type: ignore[assignment]
+    StreamingResponse = None  # type: ignore[assignment]
+    HTMLResponse = None  # type: ignore[assignment]
 
 
 def create_api(memos: MemOS) -> dict[str, Any]:
@@ -126,10 +138,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         api_keys: List of valid API keys. If None/empty, auth is disabled.
         rate_limit: Max requests per minute per key (default 100).
     """
-    try:
-        from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-        from fastapi.responses import StreamingResponse
-    except ImportError:
+    if FastAPI is None:
         raise ImportError(
             "FastAPI is required for the server. "
             "Install with: pip install memos[server]"
@@ -141,7 +150,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     app = FastAPI(
         title="MemOS",
         description="Memory Operating System for LLM Agents",
-        version="0.1.0",
+        version=MEMOS_VERSION,
     )
 
     routes = create_api(memos)
@@ -232,7 +241,6 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # Dashboard
     from ..web import DASHBOARD_HTML
-    from fastapi.responses import HTMLResponse
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard():
@@ -261,18 +269,98 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                 data = await websocket.receive_text()
                 if data == "ping":
                     await websocket.send_json({"type": "pong"})
-                elif data.startswith("filter:"):
-                    pass
+                    continue
+
+                try:
+                    payload = json.loads(data)
+                except Exception:
+                    await websocket.send_json({"type": "error", "message": "send JSON subscribe/unsubscribe commands or ping"})
+                    continue
+
+                action = payload.get("action")
+                event_types = payload.get("event_types")
+                tags = payload.get("tags")
+                namespace = payload.get("namespace")
+
+                if action in {"subscribe", "update"}:
+                    memos.events.update_ws_client(
+                        queue,
+                        event_types=event_types,
+                        namespaces=[namespace] if namespace else None,
+                        tags=tags,
+                        active=True,
+                        label=payload.get("label", ""),
+                    )
+                    await websocket.send_json({"type": "subscribed", "subscription": memos.events.get_ws_client_subscription(queue)})
+                elif action == "unsubscribe":
+                    memos.events.update_ws_client(queue, active=False)
+                    await websocket.send_json({"type": "unsubscribed", "subscription": memos.events.get_ws_client_subscription(queue)})
+                elif action == "list":
+                    await websocket.send_json({"type": "subscriptions", "current": memos.events.get_ws_client_subscription(queue), "all": memos.events.list_subscriptions()})
+                else:
+                    await websocket.send_json({"type": "error", "message": f"unknown action: {action}"})
         except WebSocketDisconnect:
             pass
         finally:
             sender_task.cancel()
             memos.events.remove_ws_client(queue)
 
+    @app.get("/api/v1/events/stream")
+    async def event_stream(
+        event_types: str | None = None,
+        tags: str | None = None,
+        namespace: str | None = None,
+    ):
+        """Stream memory events as SSE with optional filters."""
+        from .sse import SSEEvent
+        from fastapi.responses import StreamingResponse
+        import asyncio as _asyncio
+
+        event_type_list = [t.strip() for t in event_types.split(",") if t.strip()] if event_types else None
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+        ns_list = [namespace] if namespace else None
+        queue = memos.events.add_ws_client(event_types=event_type_list, namespaces=ns_list, tags=tag_list)
+
+        async def _gen():
+            try:
+                while True:
+                    event = await queue.get()
+                    payload = event.to_dict()
+                    yield SSEEvent(event=event.type, data=json.dumps(payload), id=str(int(event.timestamp * 1000))).encode()
+                    await _asyncio.sleep(0)
+            finally:
+                memos.events.remove_ws_client(queue)
+
+        return StreamingResponse(
+            _gen(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     @app.get("/api/v1/events")
-    async def event_history(event_type: str | None = None, limit: int = 50, namespace: str | None = None):
-        events = memos.events.get_history(event_type=event_type, limit=limit, namespace=namespace)
+    async def event_history(
+        event_type: str | None = None,
+        limit: int = 50,
+        namespace: str | None = None,
+        tags: str | None = None,
+    ):
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+        events = memos.events.get_history(event_type=event_type, limit=limit, namespace=namespace, tags=tag_list)
         return {"events": [e.to_dict() for e in events]}
+
+    @app.get("/api/v1/subscriptions")
+    async def list_subscriptions():
+        subscriptions = memos.events.list_subscriptions()
+        return {"subscriptions": subscriptions, "total": len(subscriptions)}
+
+    @app.delete("/api/v1/subscriptions/{subscription_id}")
+    async def delete_subscription(subscription_id: str):
+        ok = memos.events.unsubscribe_subscription(subscription_id)
+        return {"status": "deleted" if ok else "not_found", "subscription_id": subscription_id}
 
     @app.get("/api/v1/events/stats")
     async def event_stats():
@@ -285,7 +373,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def health():
         return {
             "status": "ok",
-            "version": "0.16.0",
+            "version": MEMOS_VERSION,
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
             "rate_limiting": True,

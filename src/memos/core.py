@@ -176,6 +176,32 @@ class MemOS:
         """Access the event bus for subscriptions."""
         return self._events
 
+    def subscribe(
+        self,
+        callback,
+        *,
+        event_types: list[str] | None = None,
+        namespaces: list[str] | None = None,
+        tags: list[str] | None = None,
+        label: str = "",
+    ) -> str:
+        """Subscribe to memory events with optional filters."""
+        return self._events.subscribe_filtered(
+            callback,
+            event_types=event_types,
+            namespaces=namespaces,
+            tags=tags,
+            label=label,
+        )
+
+    def unsubscribe(self, subscription_id: str) -> bool:
+        """Unsubscribe from memory events by subscription ID."""
+        return self._events.unsubscribe_subscription(subscription_id)
+
+    def list_subscriptions(self) -> list[dict[str, Any]]:
+        """List active event subscriptions."""
+        return self._events.list_subscriptions()
+
     def learn(
         self,
         content: str,
@@ -304,10 +330,12 @@ class MemOS:
 
         # Emit batch event
         if valid_items:
+            tag_union = sorted({tag for item in valid_items for tag in item.tags})
             self._events.emit_sync("batch_learned", {
                 "count": len(valid_items),
                 "skipped": result["skipped"],
                 "errors": len(result["errors"]),
+                "tags": tag_union,
             }, namespace=self._namespace)
 
         return result
@@ -336,6 +364,7 @@ class MemOS:
                     "id": r.item.id,
                     "query": query,
                     "score": r.score,
+                    "tags": r.item.tags,
                 }, namespace=self._namespace)
 
             # Apply decay
@@ -382,6 +411,7 @@ class MemOS:
                 "id": r.item.id,
                 "query": query,
                 "score": r.score,
+                "tags": r.item.tags,
             }, namespace=self._namespace)
 
         # Apply decay
@@ -441,6 +471,7 @@ class MemOS:
         )
 
         if not dry_run:
+            tag_union = sorted({tag for item in candidates for tag in item.tags})
             for item in candidates:
                 self._store.delete(item.id, namespace=self._namespace)
 
@@ -451,6 +482,7 @@ class MemOS:
                     "ids": [c.id for c in candidates],
                     "threshold": threshold,
                     "max_age_days": max_age_days,
+                    "tags": tag_union,
                 }, namespace=self._namespace)
 
         return candidates
@@ -458,12 +490,22 @@ class MemOS:
     def forget(self, content_or_id: str) -> bool:
         """Delete a specific memory by content or ID."""
         self._check_acl("delete")
+        item = self._store.get(content_or_id, namespace=self._namespace)
         if self._store.delete(content_or_id, namespace=self._namespace):
-            self._events.emit_sync("forgotten", {"id": content_or_id}, namespace=self._namespace)
+            self._events.emit_sync("forgotten", {
+                "id": content_or_id,
+                "content": item.content[:200] if item else "",
+                "tags": item.tags if item else [],
+            }, namespace=self._namespace)
             return True
         content_id = generate_id(content_or_id)
+        item = self._store.get(content_id, namespace=self._namespace)
         if self._store.delete(content_id, namespace=self._namespace):
-            self._events.emit_sync("forgotten", {"id": content_id}, namespace=self._namespace)
+            self._events.emit_sync("forgotten", {
+                "id": content_id,
+                "content": item.content[:200] if item else "",
+                "tags": item.tags if item else [],
+            }, namespace=self._namespace)
             return True
         return False
 

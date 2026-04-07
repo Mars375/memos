@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine
 import logging
 
+from .subscriptions import SubscriptionFilter, SubscriptionRegistry
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +60,7 @@ class EventBus:
     def __init__(self, max_history: int = 200) -> None:
         self._subscribers: dict[str, list[EventHandler]] = defaultdict(list)
         self._ws_clients: list[asyncio.Queue[MemoryEvent]] = []
+        self._subscriptions = SubscriptionRegistry()
         self._history: list[MemoryEvent] = []
         self._max_history = max_history
 
@@ -67,24 +70,97 @@ class EventBus:
         """Register an async handler for a specific event type (or '*' for all)."""
         self._subscribers[event_type].append(handler)
 
+    def subscribe_filtered(
+        self,
+        handler: EventHandler,
+        *,
+        event_types: list[str] | None = None,
+        namespaces: list[str] | None = None,
+        tags: list[str] | None = None,
+        label: str = "",
+    ) -> str:
+        """Register an async handler with rich filters."""
+        record = self._subscriptions.register_callback(
+            handler,
+            filters=SubscriptionFilter.from_options(
+                event_types=event_types,
+                namespaces=namespaces,
+                tags=tags,
+            ),
+            label=label,
+        )
+        return record.id
+
     def unsubscribe(self, event_type: str, handler: EventHandler) -> None:
         """Remove a previously registered handler."""
         handlers = self._subscribers.get(event_type, [])
         if handler in handlers:
             handlers.remove(handler)
 
+    def unsubscribe_subscription(self, subscription_id: str) -> bool:
+        """Remove a rich subscription by ID."""
+        return self._subscriptions.remove(subscription_id)
+
     # ── WebSocket client management ──────────────────────────
 
-    def add_ws_client(self) -> asyncio.Queue[MemoryEvent]:
+    def add_ws_client(
+        self,
+        *,
+        event_types: list[str] | None = None,
+        namespaces: list[str] | None = None,
+        tags: list[str] | None = None,
+        label: str = "",
+    ) -> asyncio.Queue[MemoryEvent]:
         """Create a queue for a new WebSocket client. Returns the queue."""
         q: asyncio.Queue[MemoryEvent] = asyncio.Queue(maxsize=500)
         self._ws_clients.append(q)
+        self._subscriptions.register_queue(
+            q,
+            filters=SubscriptionFilter.from_options(
+                event_types=event_types,
+                namespaces=namespaces,
+                tags=tags,
+            ),
+            label=label,
+        )
         return q
 
     def remove_ws_client(self, q: asyncio.Queue[MemoryEvent]) -> None:
         """Remove a client queue when it disconnects."""
         if q in self._ws_clients:
             self._ws_clients.remove(q)
+        self._subscriptions.remove_queue(q)
+
+    def update_ws_client(
+        self,
+        q: asyncio.Queue[MemoryEvent],
+        *,
+        event_types: list[str] | None = None,
+        namespaces: list[str] | None = None,
+        tags: list[str] | None = None,
+        active: bool | None = None,
+        label: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Update an existing WebSocket subscription."""
+        record = self._subscriptions.update_queue(
+            q,
+            filters=SubscriptionFilter.from_options(
+                event_types=event_types,
+                namespaces=namespaces,
+                tags=tags,
+            ) if any(v is not None for v in (event_types, namespaces, tags)) else None,
+            active=active,
+            label=label,
+        )
+        return record.to_dict() if record else None
+
+    def list_subscriptions(self) -> list[dict[str, Any]]:
+        """List all active subscription records."""
+        return [record.to_dict() for record in self._subscriptions.list()]
+
+    def get_ws_client_subscription(self, q: asyncio.Queue[MemoryEvent]) -> dict[str, Any] | None:
+        record = self._subscriptions.get_queue_record(q)
+        return record.to_dict() if record else None
 
     # ── Emit ─────────────────────────────────────────────────
 
@@ -110,16 +186,21 @@ class EventBus:
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history:]
 
-        # Push to all WebSocket queues
-        dead_queues: list[asyncio.Queue[MemoryEvent]] = []
-        for q in self._ws_clients:
-            try:
-                q.put_nowait(event)
-            except asyncio.QueueFull:
-                dead_queues.append(q)
-        for q in dead_queues:
-            self.remove_ws_client(q)
-            logger.warning("Dropped slow WebSocket client (queue full)")
+        # Push to rich subscriptions (queues + callbacks)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        for record in self._subscriptions.matching(event):
+            if record.kind == "queue" and record.queue is not None:
+                try:
+                    record.queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    self.remove_ws_client(record.queue)
+                    logger.warning("Dropped slow subscribed WebSocket client (queue full)")
+            elif record.kind == "callback" and record.handler is not None and loop is not None:
+                loop.create_task(record.handler(event))
 
         # Schedule async handlers if there's a running loop
         try:
@@ -149,15 +230,17 @@ class EventBus:
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history:]
 
-        # Push to WebSocket queues
-        dead_queues: list[asyncio.Queue[MemoryEvent]] = []
-        for q in self._ws_clients:
-            try:
-                q.put_nowait(event)
-            except asyncio.QueueFull:
-                dead_queues.append(q)
-        for q in dead_queues:
-            self.remove_ws_client(q)
+        for record in self._subscriptions.matching(event):
+            if record.kind == "queue" and record.queue is not None:
+                try:
+                    record.queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    self.remove_ws_client(record.queue)
+            elif record.kind == "callback" and record.handler is not None:
+                try:
+                    await record.handler(event)
+                except Exception:
+                    logger.exception("Event handler error for filtered subscription")
 
         # Await all matching handlers
         for handler in self._subscribers.get(event_type, []):
@@ -178,6 +261,7 @@ class EventBus:
         event_type: str | None = None,
         limit: int = 50,
         namespace: str | None = None,
+        tags: list[str] | None = None,
     ) -> list[MemoryEvent]:
         """Return recent events, optionally filtered by type and namespace."""
         events = list(self._history)
@@ -185,12 +269,15 @@ class EventBus:
             events = [e for e in events if e.type == event_type]
         if namespace is not None:
             events = [e for e in events if e.namespace == namespace]
+        if tags:
+            tag_filter = SubscriptionFilter.from_options(tags=tags)
+            events = [e for e in events if tag_filter.matches(e)]
         return events[-limit:]
 
     @property
     def client_count(self) -> int:
         """Number of connected WebSocket clients."""
-        return len(self._ws_clients)
+        return self._subscriptions.queue_count()
 
     @property
     def total_events_emitted(self) -> int:
@@ -202,3 +289,4 @@ class EventBus:
         self._history.clear()
         self._subscribers.clear()
         self._ws_clients.clear()
+        self._subscriptions.clear()
