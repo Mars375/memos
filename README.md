@@ -1,7 +1,7 @@
 # MemOS — Memory Operating System for AI Agents
 
-> Persistent, structured, self-organizing memory for any LLM agent.
-> Local-first. Framework-agnostic. Connects via MCP to Claude Code, OpenClaw, Cursor, or any HTTP client.
+> The memory layer every agent should have by default.
+> Persistent, structured, self-maintaining. Local-first. Connects to any agent via MCP.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -10,24 +10,47 @@
 
 ---
 
-## What it is
+## The problem
 
-MemOS gives any LLM agent a memory layer that behaves like a second brain — memories age and fade, important ones persist, everything is searchable, and the whole thing is visible as a knowledge graph.
+LLM agents forget everything between sessions. Solutions today are either too simple (flat vector store), too heavy (full RAG pipeline), or require an external cloud service. None of them give an agent a *brain* — something that learns, organizes, ages, and surfaces the right memory at the right time.
+
+MemOS solves this. It synthesizes the best ideas from current memory research into one coherent system:
+
+| Research insight | Source | What MemOS does with it |
+|---|---|---|
+| Verbatim storage beats LLM extraction — 96.6% recall accuracy | mempalace | Store content as-is, no summarization on write |
+| Community-first wiki reduces context by 71× | Karpathy LLM wiki | Living wiki organized by entity + community, not just tags |
+| Confidence labels make knowledge trustworthy | graphify | EXTRACTED / INFERRED / AMBIGUOUS on every KG fact |
+| Graph navigation makes memory explorable | Obsidian graph model | D3.js force graph, click-through to entity pages, backlinks |
+
+The result is not a clone of any of these — it's the memory system you'd build if you read all of them and started from scratch.
+
+---
+
+## What it does
 
 ```
-Agent → learn() / recall() / forget()
-           ↓
-    ┌──────────────────────────────────────────┐
-    │  MemOS                                   │
-    │  ├── Memory store  (semantic search)     │
-    │  ├── Decay engine  (importance drift)    │
-    │  ├── Knowledge Graph (entity facts)      │
-    │  ├── Living Wiki  (auto-compiled pages)  │
-    │  └── Second Brain (D3.js dashboard)      │
-    └──────────────────────────────────────────┘
-           ↓
-    MCP  ·  REST API  ·  CLI  ·  Python SDK
+                         ┌─────────────────────────────────────┐
+                         │  MemOS                              │
+                         │                                     │
+  Agent writes ───────►  │  Memory store   ◄──► KG facts      │
+  Agent recalls ◄──────  │  Decay engine        Confidence     │
+  Agent browses ───────►  │  Living wiki    ◄──► Backlinks     │
+                         │  Hybrid search       Communities    │
+                         └─────────────────────────────────────┘
+                                       │
+              ┌────────────────────────┼────────────────────────┐
+              ▼                        ▼                        ▼
+          MCP HTTP              REST API (83 endpoints)      CLI / SDK
+    (Claude Code, OpenClaw,     (Docker, self-hosted)      (local use)
+     Cursor, any agent)
 ```
+
+**Memories age.** Importance drifts down over time. Accessed memories are reinforced. Forgotten ones compress. The agent's memory reflects what actually matters.
+
+**Knowledge is structured.** Facts between entities live in a temporal Knowledge Graph — not just embeddings. You can query "what was true about Project X in March?" or "how are Alice and Bob connected?".
+
+**Context is token-efficient.** The living wiki compiles memories into entity pages with backlinks. Agents inject a community index, not a raw dump. 71× fewer tokens than naive retrieval.
 
 ---
 
@@ -38,53 +61,37 @@ pip install memos
 
 memos learn "FastAPI is better than Flask for async workloads" --tags python
 memos recall "which web framework should I use?"
-memos serve --port 8100   # API + dashboard at http://localhost:8100
+memos serve --port 8100   # API + dashboard → http://localhost:8100
 ```
 
 ---
 
 ## Connect via MCP
 
-MemOS exposes a universal MCP endpoint — any agent that speaks MCP can use it.
+MemOS exposes a universal MCP endpoint compatible with any MCP 2025-03-26 client.
 
-**Claude Code** — add to `~/.claude.json`:
+**Claude Code** — `~/.claude.json`:
 ```json
 "mcpServers": {
   "memos": { "type": "http", "url": "http://localhost:8100/mcp" }
 }
 ```
 
-**OpenClaw** — add to `~/.openclaw/openclaw.json`:
+**OpenClaw** — `~/.openclaw/openclaw.json`:
 ```json
 "mcp": {
-  "servers": {
-    "memos": { "type": "http", "url": "http://localhost:8100/mcp" }
-  }
+  "servers": { "memos": { "type": "http", "url": "http://localhost:8100/mcp" } }
 }
 ```
 
-**Cursor / any MCP client** — `POST http://localhost:8100/mcp` (JSON-RPC 2.0)
-
+**Any HTTP client** — `POST http://localhost:8100/mcp` (JSON-RPC 2.0)
 **Discovery** — `GET http://localhost:8100/.well-known/mcp.json`
 
-**Tools exposed:**
+MCP tools available: `memory_search`, `memory_save`, `memory_forget`, `memory_stats`,
+`memory_wake_up`, `memory_context_for`, `memory_decay`, `memory_reinforce`,
+`kg_add_fact`, `kg_query_entity`, `kg_timeline`, `memory_recall_enriched`
 
-| Tool | What it does |
-|------|-------------|
-| `memory_search` | Semantic search — `query`, `top_k`, `tags` |
-| `memory_save` | Store memory — `content`, `tags`, `importance` |
-| `memory_forget` | Delete by `id` or `tag` |
-| `memory_stats` | Counts, avg importance, decay candidates |
-| `memory_wake_up` | Identity + top memories — inject at session start |
-| `memory_context_for` | Optimised context for a specific query |
-| `memory_decay` | Apply importance decay (dry-run by default) |
-| `memory_reinforce` | Boost a memory's importance |
-| `kg_add_fact` | Add temporal triple to Knowledge Graph |
-| `kg_query_entity` | All active facts about an entity |
-| `kg_timeline` | Chronological fact history for an entity |
-| `memory_recall_enriched` | Memories + KG facts in one call |
-
-**Stdio mode** (for local Claude Code integration):
+**Stdio mode** (Claude Code local):
 ```json
 "mcpServers": {
   "memos": { "command": "memos", "args": ["mcp-stdio"] }
@@ -99,20 +106,20 @@ MemOS exposes a universal MCP endpoint — any agent that speaks MCP can use it.
 |---------|----------|---------|
 | **Memory** | Tests, single session | `pip install memos` |
 | **JSON** | Local persistence, CLI | `pip install memos` |
-| **ChromaDB** | Local dev, Pi5 + Ollama embeddings | `pip install memos[chroma]` |
+| **ChromaDB** | Local dev, edge devices (Pi5 + Ollama) | `pip install memos[chroma]` |
 | **Qdrant** | Production, large datasets | `pip install memos[qdrant]` |
 | **Pinecone** | Cloud-native, managed | `pip install memos[pinecone]` |
 
 ```bash
-# env-based config (no code changes)
+# Configure via env — no code changes needed
 MEMOS_BACKEND=chroma
-MEMOS_EMBED_HOST=http://localhost:11434
+MEMOS_EMBED_HOST=http://localhost:11434   # Ollama — bypasses ONNX, ~1s on ARM64
 MEMOS_EMBED_MODEL=nomic-embed-text
 ```
 
 ---
 
-## Docker (recommended for production)
+## Docker
 
 ```bash
 docker run -p 8100:8000 \
@@ -123,22 +130,14 @@ docker run -p 8100:8000 \
   ghcr.io/mars375/memos:latest
 ```
 
-Full stack (with ChromaDB + Qdrant):
-```bash
-git clone https://github.com/Mars375/memos
-docker compose up -d
-# API on http://localhost:8100
-# Dashboard on http://localhost:8100/dashboard
-```
+Full stack: `git clone https://github.com/Mars375/memos && docker compose up -d`
 
 ---
 
-## Mine conversations
-
-Import Claude, ChatGPT, Discord, Telegram, Slack, OpenClaw conversations directly:
+## Import conversations
 
 ```bash
-memos mine conversations.json          # auto-detects format
+memos mine conversations.json          # auto-detects Claude / ChatGPT / Discord / Telegram
 memos mine ~/.openclaw/workspace-labs/ --format openclaw
 memos mine ~/notes/ --dry-run          # preview without importing
 ```
@@ -150,65 +149,77 @@ memos mine ~/notes/ --dry-run          # preview without importing
 ```python
 from memos import MemOS
 
-mem = MemOS()                          # in-memory, no deps
+mem = MemOS()                          # in-memory, zero deps
 mem = MemOS(backend="chroma", embed_host="http://localhost:11434")
 
 mem.learn("User prefers dark mode", tags=["preference"], importance=0.8)
 results = mem.recall("UI preferences", top=5)
-mem.prune(threshold=0.2)              # decay-based cleanup
+mem.prune(threshold=0.2)
 ```
 
 ---
 
 ## Roadmap to v1.0.0
 
-MemOS is being built toward a single coherent goal: **a production-ready second brain for AI agents**, accessible from any agent via MCP, with Obsidian-quality knowledge navigation.
+MemOS is being built toward one goal: **the best agent memory system that exists** — usable by any agent, production-safe, with the kind of recall quality that makes a real difference.
 
-The roadmap is organized in three phases. An autonomous cron agent works through open items continuously.
+An autonomous cron agent works through open items continuously. Phases are sequential — each one makes the next possible.
+
+---
 
 ### Phase 1 — Foundation ✅
-*Core memory layer, all interfaces, production infrastructure.*
+*A solid, tested core that works today.*
 
-- [x] Memory store — learn, recall, forget, decay, versioning
-- [x] Multi-backend — memory / JSON / ChromaDB / Qdrant / Pinecone
+- [x] Memory store — learn, recall, forget, decay, reinforcement, versioning
+- [x] Five backends — memory / JSON / ChromaDB / Qdrant / Pinecone
 - [x] Full CLI + REST API (83 endpoints) + Python SDK
-- [x] MCP server — stdio + universal HTTP (Streamable HTTP 2025-03-26)
+- [x] Universal MCP endpoint — stdio + Streamable HTTP 2025-03-26
 - [x] Second Brain dashboard — D3.js force-directed graph
-- [x] Knowledge Graph — temporal facts, multi-hop path queries
-- [x] Living Wiki — entity pages, backlinks, auto-updated on ingest
+- [x] Temporal Knowledge Graph — facts, multi-hop path queries
+- [x] Living Wiki — entity pages, backlinks, auto-updated on ingest (Karpathy-inspired)
 - [x] Smart Miner — 6 conversation formats, semantic chunking
-- [x] Memory decay & reinforcement engine
+- [x] Memory decay engine — importance drift + reinforcement
 - [x] Hierarchical Palace — wings, rooms, namespace isolation
 - [x] Benchmark suite — Recall@K, MRR, NDCG@K, 34 reproducible tests
-- [x] Memory conflict resolution — multi-instance sync with merge strategies
+- [x] Multi-instance conflict resolution — sync with merge strategies
 
-### Phase 2 — Intelligence 🔄
-*Smarter memory: richer metadata, better retrieval, autonomous maintenance.*
+---
 
-- [ ] Auto-tagger — zero-LLM type tags (decision / preference / milestone / problem)
-- [ ] KG confidence labels — EXTRACTED / INFERRED / AMBIGUOUS on every fact
+### Phase 2 — Memory Quality 🔄
+*Make the memory smarter, without LLM extraction on every write.*
+
+The core insight from mempalace: verbatim storage + good retrieval beats complex extraction pipelines. This phase pushes recall quality to match that benchmark.
+
+- [ ] Zero-LLM auto-tagger — classify `decision / preference / milestone / problem` via regex patterns
+- [ ] KG confidence labels — tag every fact `EXTRACTED / INFERRED / AMBIGUOUS` (graphify approach)
 - [ ] Incremental miner — SHA-256 cache, skip already-mined files
-- [ ] Hybrid retrieval — BM25 + semantic reranking, −30% recall noise
-- [ ] Community wiki — Leiden graph clustering, navigable community index
-- [ ] URL ingest — arXiv, tweets, PDF, any webpage → `memos ingest-url <url>`
+- [ ] Hybrid BM25 + semantic reranking — top-50 semantic → BM25 rerank → −30% noise
+- [ ] Community wiki — Leiden graph clustering → community index → god nodes (Karpathy approach)
+- [ ] URL ingest — `memos ingest-url <url>` for arXiv, tweets, PDFs, web pages
 - [ ] Speaker attribution — per-speaker namespace in conversation miner
-- [ ] Memory compression — aggregate decayed memories, free storage
+- [ ] Memory compression — aggregate heavily decayed memories to free storage
 
-### Phase 3 — Second Brain 🔮
-*Unified experience: memories, wiki, and graph as one navigable knowledge space.*
+---
 
-- [ ] **Unified Brain Search** — one query spans memories + wiki pages + KG facts
-- [ ] **Graph ↔ Wiki Bridge** — click a D3.js node → open its wiki page + KG neighbors
-- [ ] **Obsidian Vault Export** — `memos export --format obsidian` → `[[wikilinks]]` vault
+### Phase 3 — Unified Knowledge Layer 🔮
+*Memories, KG facts, and wiki pages become one queryable brain — not three separate systems.*
+
+The synthesis: take mempalace's storage quality + Karpathy's community navigation + graphify's confidence model + graph-based entity traversal, and expose them through a single interface. An agent should not need to know whether the answer lives in a memory, a KG fact, or a wiki page.
+
+- [ ] **Unified Brain Search** — `POST /api/v1/brain/search` returns memories + wiki hits + KG facts ranked together, entities detected automatically
+- [ ] **Entity Detail API** — `GET /api/v1/brain/entity/{name}` → wiki page + top memories + KG facts + graph neighbors + backlinks in one response
+- [ ] **Graph ↔ Wiki Bridge** — D3.js node click opens entity detail panel inline; wiki pages auto-link to graph neighbors; backlinks surface related entities
+
+---
 
 ### Phase 4 — Production v1 🚀
 *What's needed before tagging v1.0.0 and publishing to PyPI.*
 
-- [ ] **API Authentication** — bearer token + per-namespace keys, zero breaking change
-- [ ] **Memory Deduplication** — exact + near-duplicate (Jaccard) detection on every write
-- [ ] **Namespace Management API** — REST CRUD for agent isolation
-- [ ] **Advanced Recall Filters** — date range, importance range, tag AND/OR logic
-- [ ] **PyPI release** — `pip install memos-agent`, proper classifiers, CI publish workflow
+- [ ] **API Authentication** — bearer token + per-namespace keys; no-auth mode for local use (backward compat)
+- [ ] **Memory Deduplication** — exact-match (SHA-256) + near-duplicate (Jaccard trigrams) on every write; `allow_duplicate=True` escape hatch
+- [ ] **Namespace Management API** — REST CRUD for agent isolation; today namespaces exist in CLI only
+- [ ] **Advanced Recall Filters** — date range, importance range, tag AND/OR logic in `POST /api/v1/recall`
+- [ ] **PyPI release** — `pip install memos-agent`, classifiers, CI publish on `v1.*` tag
 
 > When Phase 4 is complete → `git tag v1.0.0`.
 
@@ -217,29 +228,26 @@ The roadmap is organized in three phases. An autonomous cron agent works through
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Interfaces                                                 │
-│  CLI  ·  REST API (FastAPI)  ·  MCP HTTP  ·  Python SDK    │
-├─────────────────────────────────────────────────────────────┤
-│  Ingest Layer                                               │
-│  Miner (Claude / ChatGPT / Discord / Telegram / Slack / OC)│
-│  URL ingestor · Smart chunking · SHA-256 dedup             │
-├─────────────────────────────────────────────────────────────┤
-│  Memory Core                                                │
-│  Learn · Recall · Forget · Decay · Reinforce · Prune       │
-│  Versioning (time-travel) · Namespace ACL · Sharing        │
-├─────────────────────────────────────────────────────────────┤
-│  Knowledge Layer                                            │
-│  Knowledge Graph (temporal facts, multi-hop paths)         │
-│  Living Wiki (entity pages, backlinks, community index)    │
-│  Hybrid Retrieval (semantic + BM25)                        │
-├─────────────────────────────────────────────────────────────┤
-│  Storage Backends                                           │
-│  ChromaDB  ·  Qdrant  ·  Pinecone  ·  JSON  ·  In-memory  │
-├─────────────────────────────────────────────────────────────┤
-│  Presentation                                               │
-│  D3.js Second Brain Dashboard · Swagger /docs              │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│  Interfaces                                                    │
+│  CLI  ·  REST API (FastAPI)  ·  MCP HTTP  ·  Python SDK       │
+├────────────────────────────────────────────────────────────────┤
+│  Ingest                                                        │
+│  Miner (Claude/ChatGPT/Discord/Telegram/Slack/OpenClaw)       │
+│  URL ingestor · Semantic chunking · SHA-256 dedup             │
+├────────────────────────────────────────────────────────────────┤
+│  Memory Core                                                   │
+│  Learn · Recall · Forget · Decay · Reinforce · Versions       │
+│  Namespace ACL · Multi-instance sync · Conflict resolution    │
+├────────────────────────────────────────────────────────────────┤
+│  Knowledge Layer                                               │
+│  Knowledge Graph — temporal facts, confidence labels, paths   │
+│  Living Wiki — entity pages, community index, backlinks       │
+│  Hybrid Retrieval — BM25 + semantic, zero-LLM auto-tagging    │
+├────────────────────────────────────────────────────────────────┤
+│  Storage                                                       │
+│  ChromaDB  ·  Qdrant  ·  Pinecone  ·  JSON  ·  In-memory     │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---

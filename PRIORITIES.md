@@ -543,106 +543,98 @@ Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes 
 - Cron : auto-compression hebdomadaire si mémoires décayées > 100
 
 ---
-# ═══════════════════════════════════════════════════════
-#  FUSION — Second Brain style Obsidian (mempalace + Karpathy + graphify)
-#  Ces 3 priorités transforment les features séparées en un cerveau unifié.
-# ═══════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
+#  COUCHE KNOWLEDGE UNIFIÉE
+#  Synthèse de mempalace + Karpathy + graphify + navigation par graphe.
+#  Objectif : un agent fait UN appel, MemOS décide où chercher.
+#  Ces 3 priorités transforment les features séparées en cerveau unique.
+# ═══════════════════════════════════════════════════════════════════════
 
-## [ ] P25 — Unified Brain Search (Memories + Wiki + KG en une requête)
-**Objectif :** Une seule requête cherche dans les 3 couches simultanément, résultats rankés par pertinence avec source label.
+## [ ] P25 — Unified Brain Search (une requête → tout le savoir)
+**Objectif :** Un agent ne doit pas savoir si la réponse est dans une mémoire, un fait KG, ou une page wiki. MemOS cherche dans les 3 et retourne un résultat fusionné.
 
-Actuellement : `recall` cherche dans les mémoires, `wiki-living search` cherche dans les pages wiki, le KG est interrogé séparément. Un agent doit faire 3 appels pour tout voir.
+Problème actuel : `recall` cherche dans les mémoires, `wiki-living search` cherche dans les pages wiki, le KG est interrogé séparément. 3 appels distincts pour avoir la vue complète.
 
 À implémenter dans `src/memos/brain.py` :
-- `BrainSearch` classe
+- `BrainSearch` classe — orchestrateur des 3 couches
 - `search(query: str, top_k=10) -> BrainSearchResult`
   ```python
-  BrainSearchResult:
-    memories: list[ScoredMemory]      # semantic recall
-    wiki_pages: list[WikiHit]         # living wiki fulltext
-    kg_facts: list[KGFact]            # facts liés aux entités détectées
-    entities: list[str]               # entités extraites de la query
+  @dataclass
+  class BrainSearchResult:
+    memories: list[ScoredMemory]   # mempalace: verbatim + hybrid BM25
+    wiki_pages: list[WikiHit]      # Karpathy: community pages, entity pages
+    kg_facts: list[KGFact]         # graphify: EXTRACTED/INFERRED/AMBIGUOUS
+    entities: list[str]            # entités détectées dans la query
+    context: str                   # contexte prêt-à-injecter (token-efficient)
   ```
-- Ranking fusionné : score normalisé par source, interleaving intelligent
+- Détection d'entités sur la query → pull KG facts automatique (graphify approach)
+- `context` = résumé formaté prêt à injecter dans un prompt (Karpathy: 71× token reduction)
+- Score fusion : normalisé par source, interleaving par pertinence
 - REST : `POST /api/v1/brain/search` body `{"query": "...", "top_k": 10}`
-- MCP tool : `brain_search` — remplace les appels séparés `memory_search` + wiki + KG pour les agents
-- CLI : `memos brain-search "<query>"` — output structuré (memories | wiki | kg sections)
-- Dashboard : barre de recherche globale en haut du dashboard D3.js connectée à ce endpoint
-
-Inspiré de :
-- **graphify** : subgraph extraction par entité détectée
-- **Karpathy** : index.md comme point d'entrée unique
-- **mempalace** : hybrid retrieval (semantic + keyword)
+- **Nouveau MCP tool** : `brain_search` — le seul outil dont un agent a besoin pour tout rappeler
+- CLI : `memos brain-search "<query>"`
 
 ---
 
-## [ ] P26 — Graph ↔ Wiki Bridge (Dashboard cliquable → Wiki pages)
-**Objectif :** Connecter le dashboard D3.js et le wiki vivant — cliquer un nœud ouvre sa page wiki ; les pages wiki montrent leurs voisins de graphe.
+## [ ] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+**Objectif :** Chaque entité connue de MemOS a une vue unifiée — mémoires + faits KG + page wiki + voisins de graphe. Le dashboard D3.js devient navigable, pas juste visuel.
 
-Actuellement : le dashboard D3.js affiche les nœuds/arêtes du KG mais ils sont "morts" (pas de lien). Les pages wiki existent mais sont inaccessibles depuis le graphe.
+Actuellement : les nœuds D3.js sont des points morts. Les pages wiki existent mais ne sont pas connectées au graphe. Les faits KG ne sont pas liés aux mémoires qui les mentionnent.
 
 À implémenter :
-**Côté API :**
-- `GET /api/v1/brain/entity/{name}` — page complète d'une entité :
+**API :**
+- `GET /api/v1/brain/entity/{name}` — vue complète :
   ```json
   {
     "entity": "Alice",
-    "wiki_page": "...",          // contenu markdown du wiki vivant
-    "memories": [...],           // top-5 mémoires liées
-    "kg_facts": [...],           // tous les faits KG actifs
-    "kg_neighbors": [...],       // entités directement liées
-    "backlinks": [...],          // pages wiki qui mentionnent cette entité
-    "confidence_labels": {...}   // EXTRACTED/INFERRED/AMBIGUOUS counts
+    "wiki_page": "...",             // page wiki vivante (Karpathy)
+    "memories": [...],              // top-5 mémoires liées (mempalace verbatim)
+    "kg_facts": [...],              // faits actifs avec confidence_label (graphify)
+    "kg_neighbors": [...],          // entités voisines (graphify path queries)
+    "backlinks": [...],             // autres entités qui mentionnent celle-ci
+    "community": "..."              // communauté Leiden d'appartenance
   }
   ```
-- `GET /api/v1/brain/entity/{name}/graph` — sous-graphe JSON (ego network depth=2) pour D3.js
+- `GET /api/v1/brain/entity/{name}/subgraph` — ego network depth=2 pour D3.js
 
-**Côté Dashboard (JS inline dans `api/__init__.py`) :**
-- Clic sur un nœud D3.js → appel `GET /api/v1/brain/entity/{name}` → slide-in panel latéral
-- Panel affiche : wiki page (rendu markdown) + top mémoires + bouton "open full page"
-- Backlinks : liste des autres entités qui référencent cette entité → clic = navigation
+**Dashboard :**
+- Clic sur un nœud D3.js → slide-in panel avec la vue entity detail
+- Panel : wiki page rendu markdown + top mémoires + faits KG (colorés par confidence_label)
+- Backlinks cliquables → navigation entre entités
+- Nœuds "god nodes" (3+ communautés) mis en évidence visuellement
 
 **Wiki pages :**
-- Ajouter section `## Graph Neighbors` auto-générée dans chaque page wiki vivant
-- Ajouter frontmatter `kg_facts_count` et `backlinks_count`
-
-Inspiré de :
-- **graphify** : entity detail view avec faits + neighbours
-- **Karpathy** : god nodes + backlinks navigation
-- **Obsidian** : graph view cliquable → page
+- Section `## Graph Neighbors` auto-générée (voisins KG directs)
+- Frontmatter enrichi : `community`, `kg_facts_count`, `backlinks_count`, `top_memories`
 
 ---
 
-## [ ] P27 — Obsidian Vault Export (`[[wikilinks]]` + graph.json)
-**Objectif :** Exporter tout le Second Brain MemOS comme un vault Obsidian standard — ouvrable directement dans Obsidian, Logseq, Foam, etc.
+## [ ] P27 — Knowledge Export Universel (Markdown interopérable)
+**Objectif :** Exporter tout le knowledge de MemOS en markdown portable — lisible par n'importe quel outil (Obsidian, Logseq, Foam, simple lecteur de fichiers, autre agent).
 
-À implémenter dans `src/memos/export_obsidian.py` :
-- `ObsidianExporter` classe
-- `export(output_dir: str)` — génère la structure :
+Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledge de MemOS, utile pour backup, migration, partage entre agents, ou audit humain.
+
+À implémenter dans `src/memos/export_markdown.py` :
+- `MarkdownExporter` classe
+- `export(output_dir: str)` — génère :
   ```
-  vault/
-  ├── _index.md          # catalogue (liens vers toutes les pages)
-  ├── _log.md            # journal d'activité
-  ├── _graph.json        # format Obsidian graph data
+  export/
+  ├── INDEX.md              # entrée principale : communautés + god nodes + stats
+  ├── LOG.md                # journal append-only de toute l'activité
   ├── entities/
-  │   ├── Alice.md       # page entité avec [[backlinks]]
-  │   └── Project-X.md
+  │   ├── Alice.md          # page entité : mémoires + faits KG + voisins + backlinks
+  │   └── Project-X.md      # frontmatter YAML : importance, community, kg_facts_count
   ├── memories/
-  │   ├── decisions.md   # mémoires groupées par type-tag
+  │   ├── decisions.md      # mémoires par type-tag (auto-tagger P17)
   │   └── milestones.md
-  └── kg/
-      └── facts.md       # tous les faits KG en table markdown
+  └── communities/
+      └── engineering.md    # page communauté Leiden (P21)
   ```
-- Format `[[wikilinks]]` dans chaque page — liens inter-pages auto-générés depuis les entités détectées
-- Frontmatter YAML standard Obsidian : `tags`, `aliases`, `created`, `modified`
-- `graph.json` : format compatible Obsidian graph plugin (nodes + edges avec weights)
-- CLI : `memos export --format obsidian --output ./vault/`
-- REST : `GET /api/v1/export/obsidian` → ZIP download du vault complet
-
-Inspiré de :
-- **graphify** : subgraph export, entity confidence labels dans le frontmatter
-- **Karpathy** : structure index.md + community pages + god nodes
-- **mempalace** : verbatim storage → contenu fidèle, pas de réécriture LLM
+- Inter-liens entre pages avec syntaxe markdown standard `[Alice](../entities/Alice.md)`
+- Frontmatter YAML : `tags`, `importance`, `community`, `confidence`, `created`, `backlinks`
+- Incrémental : `memos export --update` — ne régénère que les pages modifiées depuis le dernier export
+- CLI : `memos export --format markdown --output ./knowledge/`
+- REST : `GET /api/v1/export/markdown` → ZIP téléchargeable
 
 ---
 # ═══════════════════════════════════════════════════════
