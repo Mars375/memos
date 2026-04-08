@@ -165,7 +165,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
     }
 
 
-def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[str]] = None, rate_limit: int = 100, **kwargs) -> Any:
+def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[str]] = None, rate_limit: int = 100, kg_db_path: Optional[str] = None, **kwargs) -> Any:
     """Create a FastAPI application for MemOS.
     
     Args:
@@ -180,6 +180,9 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     if memos is None:
         memos = MemOS(**kwargs)
+
+    from ..knowledge_graph import KnowledgeGraph
+    _kg = KnowledgeGraph(db_path=kg_db_path)
 
     app = FastAPI(
         title="MemOS",
@@ -305,6 +308,61 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             return {"error": "Tag name is required"}
         count = memos.delete_tag(tag)
         return {"status": "ok", "deleted": count, "tag": tag}
+
+    # ---- Knowledge Graph endpoints ----
+
+    @app.post("/api/v1/kg/facts")
+    async def kg_add_fact(body: dict):
+        """Add a triple to the temporal knowledge graph."""
+        subject = body.get("subject", "").strip()
+        predicate = body.get("predicate", "").strip()
+        obj = body.get("object", "").strip()
+        if not subject or not predicate or not obj:
+            return {"status": "error", "message": "subject, predicate and object are required"}
+        try:
+            fact_id = _kg.add_fact(
+                subject=subject,
+                predicate=predicate,
+                object=obj,
+                valid_from=body.get("valid_from"),
+                valid_to=body.get("valid_to"),
+                confidence=float(body.get("confidence", 1.0)),
+                source=body.get("source"),
+            )
+            return {"status": "ok", "id": fact_id}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.get("/api/v1/kg/query")
+    async def kg_query(entity: str, time: Optional[str] = None, direction: str = "both"):
+        """Query all active facts linked to an entity at a given time."""
+        try:
+            facts = _kg.query(entity, time=time, direction=direction)
+            return {"status": "ok", "entity": entity, "facts": facts}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.get("/api/v1/kg/timeline")
+    async def kg_timeline(entity: str):
+        """Return chronological timeline of facts about an entity."""
+        try:
+            facts = _kg.timeline(entity)
+            return {"status": "ok", "entity": entity, "timeline": facts}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.delete("/api/v1/kg/facts/{fact_id}")
+    async def kg_invalidate(fact_id: str):
+        """Invalidate (soft-delete) a fact by ID."""
+        ok = _kg.invalidate(fact_id)
+        return {"status": "ok" if ok else "not_found"}
+
+    @app.get("/api/v1/kg/stats")
+    async def kg_stats():
+        """Return knowledge graph statistics."""
+        return _kg.stats()
+
+    # ---- End Knowledge Graph ----
 
     @app.get("/api/v1/graph")
     async def api_graph(min_shared_tags: int = 1, limit: int = 500):
