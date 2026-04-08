@@ -9,9 +9,11 @@ from memos.web import DASHBOARD_HTML
 
 
 def test_dashboard_html_contains_title():
-    assert "MemOS Dashboard" in DASHBOARD_HTML
-    assert "recall" in DASHBOARD_HTML.lower()
+    assert "MemOS" in DASHBOARD_HTML
+    assert "search" in DASHBOARD_HTML.lower()
     assert "learn" in DASHBOARD_HTML.lower()
+    assert "graph" in DASHBOARD_HTML.lower()
+    assert "d3" in DASHBOARD_HTML.lower()
 
 
 @pytest.mark.asyncio
@@ -22,7 +24,7 @@ async def test_dashboard_route():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/")
         assert resp.status_code == 200
-        assert "MemOS Dashboard" in resp.text
+        assert "MemOS" in resp.text
         assert "text/html" in resp.headers.get("content-type", "")
 
 

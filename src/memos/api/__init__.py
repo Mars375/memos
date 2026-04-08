@@ -306,7 +306,76 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         count = memos.delete_tag(tag)
         return {"status": "ok", "deleted": count, "tag": tag}
 
+    @app.get("/api/v1/graph")
+    async def api_graph(min_shared_tags: int = 1, limit: int = 500):
+        """Return memory graph: nodes + edges based on shared tags."""
+        import time as _time
+        items = memos._store.list_all(namespace=memos._namespace)
+        now = _time.time()
+
+        # Build nodes
+        nodes = []
+        for item in items[:limit]:
+            if item.is_expired:
+                continue
+            age_days = (now - item.created_at) / 86400
+            nodes.append({
+                "id": item.id,
+                "label": item.content[:60] + ("…" if len(item.content) > 60 else ""),
+                "content": item.content,
+                "tags": item.tags,
+                "importance": item.importance,
+                "relevance": item.relevance_score,
+                "age_days": round(age_days, 1),
+                "access_count": item.access_count,
+                "primary_tag": item.tags[0] if item.tags else "__untagged__",
+            })
+
+        # Build edges based on shared tags
+        edges = []
+        tag_to_ids: dict[str, list[str]] = {}
+        for n in nodes:
+            for tag in n["tags"]:
+                tag_to_ids.setdefault(tag, []).append(n["id"])
+
+        seen = set()
+        for tag, ids in tag_to_ids.items():
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    key = tuple(sorted([ids[i], ids[j]]))
+                    if key not in seen:
+                        seen.add(key)
+                        edges.append({
+                            "source": ids[i],
+                            "target": ids[j],
+                            "shared_tags": [tag],
+                            "weight": 1,
+                        })
+                    else:
+                        # Increment weight for multiple shared tags
+                        for e in edges:
+                            if e["source"] == key[0] and e["target"] == key[1]:
+                                e["weight"] += 1
+                                e["shared_tags"].append(tag)
+                                break
+
+        if min_shared_tags > 1:
+            edges = [e for e in edges if e["weight"] >= min_shared_tags]
+
+        stats = memos.stats()
+        return {
+            "nodes": nodes,
+            "edges": edges,
+            "meta": {
+                "total_nodes": len(nodes),
+                "total_edges": len(edges),
+                "total_memories": stats.total_memories,
+                "total_tags": stats.total_tags,
+            },
+        }
+
     @app.get("/", response_class=HTMLResponse)
+    @app.get("/dashboard", response_class=HTMLResponse)
     async def dashboard():
         return DASHBOARD_HTML
 

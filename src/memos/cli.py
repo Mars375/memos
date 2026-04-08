@@ -386,6 +386,32 @@ def cmd_consolidate(ns: argparse.Namespace) -> None:
                 print(f"    dup=[{d.id[:8]}] {d.content[:60]}")
 
 
+def cmd_mcp_serve(ns: argparse.Namespace) -> None:
+    """Start MCP HTTP server (JSON-RPC 2.0)."""
+    try:
+        import uvicorn
+    except ImportError:
+        print("Error: install memos[server] first", file=sys.stderr)
+        sys.exit(1)
+    from .mcp_server import create_mcp_app
+    from .core import MemOS
+    memos = MemOS(backend=getattr(ns, "backend", "memory"))
+    app = create_mcp_app(memos)
+    host = getattr(ns, "host", "127.0.0.1")
+    port = getattr(ns, "port", 8200)
+    print(f"MemOS MCP server running at http://{host}:{port}")
+    print("Tools: memory_search, memory_save, memory_forget, memory_stats")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
+def cmd_mcp_stdio(ns: argparse.Namespace) -> None:
+    """Start MCP server over stdio (for Claude Code / Cursor)."""
+    from .mcp_server import run_stdio
+    from .core import MemOS
+    memos = MemOS()
+    run_stdio(memos)
+
+
 def cmd_serve(ns: argparse.Namespace) -> None:
     """Start the REST API server."""
     try:
@@ -791,6 +817,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
     serve.add_argument("--chroma-host", default="localhost")
     serve.add_argument("--chroma-port", type=int, default=8000)
+
+    # mcp-serve (HTTP JSON-RPC 2.0)
+    mcp_serve = sub.add_parser("mcp-serve", help="Start MCP server (HTTP JSON-RPC 2.0) for agent integration")
+    mcp_serve.add_argument("--host", default="127.0.0.1")
+    mcp_serve.add_argument("--port", type=int, default=8200)
+    mcp_serve.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # mcp-stdio (stdin/stdout for Claude Code / Cursor direct integration)
+    sub.add_parser("mcp-stdio", help="Start MCP server over stdio (for Claude Code / Cursor)")
 
     # watch / subscribe
     watch = sub.add_parser("watch", help="Watch live memory events from the SSE stream")
@@ -1550,6 +1585,8 @@ def main(argv: list[str] | None = None) -> None:
         "get": cmd_get,
         "prune-expired": cmd_prune_expired,
         "prune": cmd_prune,
+        "mcp-serve": cmd_mcp_serve,
+        "mcp-stdio": cmd_mcp_stdio,
         "serve": cmd_serve,
         "watch": cmd_watch,
         "subscribe": cmd_subscribe,
