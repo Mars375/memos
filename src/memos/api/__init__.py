@@ -1394,4 +1394,8 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         return {"status": "ok", **report.to_dict()}
 
 
+    # ── MCP Streamable HTTP (universal — OpenClaw, Claude Code, Cursor, …) ──
+    from ..mcp_server import add_mcp_routes as _add_mcp
+    _add_mcp(app, memos)
+
     return app

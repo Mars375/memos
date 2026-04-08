@@ -375,3 +375,169 @@ memos kg-path Alice Bob --max-hops 3
 memos kg-neighbors Alice --depth 2
 curl .../api/v1/kg/paths?entity_a=Alice&entity_b=Carol
 ```
+
+---
+
+## [x] P16 — MCP HTTP Universel (Streamable HTTP 2025-03-26)
+Implemented — `add_mcp_routes()` dans `mcp_server.py`, intégré dans le FastAPI principal via `api/__init__.py`.
+**Objectif :** Point d'entrée MCP accessible par tout agent (OpenClaw, Claude Code, Cursor, n'importe quel client HTTP/MCP).
+
+Spec MCP 2025-03-26 :
+- `POST /mcp` — JSON-RPC 2.0, réponse JSON ou SSE selon `Accept: text/event-stream`
+- `GET /mcp` — SSE keepalive stream (canal server→client)
+- `OPTIONS /mcp` — CORS preflight (wildcard origin)
+- `GET /.well-known/mcp.json` — discovery document
+- Header `Mcp-Session-Id` — tracking de session (auto-généré si absent)
+
+Config OpenClaw (`~/.openclaw/openclaw.json`) :
+```json
+"mcp": { "servers": { "memos": { "type": "http", "url": "http://127.0.0.1:8100/mcp" } } }
+```
+
+Config Claude Code (`~/.claude.json`) :
+```json
+"mcpServers": { "memos": { "type": "http", "url": "http://127.0.0.1:8100/mcp" } }
+```
+
+---
+
+## [ ] P17 — Memory Type Tags Zéro-LLM
+**Objectif :** Classifier automatiquement chaque mémoire sans appel LLM, via patterns regex heuristiques.
+
+Inspiré de mempalace : 96.6% accuracy sans extraction LLM. Catégories :
+- `decision` — "j'ai décidé", "on a choisi", "we decided", "le choix est"
+- `preference` — "j'aime", "je préfère", "I prefer", "my favorite"
+- `milestone` — "terminé", "livré", "deployed", "shipped", "completed"
+- `problem` — "bug", "erreur", "bloqué", "issue", "broken", "crash"
+- `emotional` — "frustrant", "content", "excited", "proud", "annoyed"
+
+À implémenter dans `src/memos/tagger.py` :
+- `AutoTagger` class avec patterns compilés par type
+- `tag(content: str) -> list[str]` — retourne les type-tags détectés
+- Intégration dans `MemOS.learn()` — auto-append type tags si aucun tag de type présent
+- CLI : `memos classify "<text>"` — affiche les tags auto-détectés
+- REST : `GET /api/v1/classify?text=...` — retourne `{"tags": [...]}`
+- Tests : 20+ cas pour chaque type, edge cases (multilingue, majuscules)
+
+---
+
+## [ ] P18 — Confidence Labels KG (EXTRACTED / INFERRED / AMBIGUOUS)
+**Objectif :** Ajouter un champ `confidence_label` sur les triplets KG pour indiquer l'origine de la connaissance.
+
+Inspiré de Graphify : distinguer ce qui est explicitement dit vs inféré vs ambigu.
+
+Labels :
+- `EXTRACTED` — fait explicitement déclaré dans le texte source
+- `INFERRED` — déduit logiquement d'autres faits (transitivité, règles)
+- `AMBIGUOUS` — mention implicite ou interprétation incertaine
+
+À implémenter :
+- Ajouter `confidence_label: str = "EXTRACTED"` au schéma SQLite KG (migration)
+- `KnowledgeGraph.add_fact()` accepte `confidence_label` param
+- `KGBridge` : règles d'inférence basiques (si A-emploie->B et B-emploie->C → A-emploie_indirect->C, label INFERRED)
+- CLI : `memos kg-add-fact ... --label INFERRED`
+- REST : `POST /api/v1/kg/facts` accepte `confidence_label`
+- Dashboard : filtres par label
+
+---
+
+## [ ] P19 — Miner Incrémental (SHA-256 Cache + --update)
+**Objectif :** `memos mine` ne re-minera pas les fichiers déjà minés — SHA-256 cache persistant.
+
+Inspiré de mempalace verbatim storage : éviter les re-imports redondants.
+
+À implémenter dans `src/memos/miner/` :
+- `MinerCache` classe dans `src/memos/miner/cache.py` — SQLite `(path, sha256, mined_at, memory_ids)`
+- `mine()` : skip si `sha256(file) == cache[path].sha256`
+- `mine --update` : force re-mine même si déjà vu (remplace les mémoires existantes du fichier)
+- `mine --diff` : ne mine que les nouveaux chunks vs le cache
+- CLI : `memos mine-status <path>` — affiche quels fichiers sont dans le cache
+- Intégration : le cache SQLite est stocké dans `~/.memos/mine-cache.db`
+
+---
+
+## [ ] P20 — Hybrid Retrieval (Semantic + Keyword BM25)
+**Objectif :** Réduire de ~30% le bruit dans le recall en combinant recherche sémantique et keyword.
+
+Inspiré de mempalace : semantic top-50 → BM25 rerank → top-K final.
+
+À implémenter dans `src/memos/retrieval.py` :
+- `HybridRetriever` class
+- Phase 1 : semantic recall top-50 (via backend existant)
+- Phase 2 : BM25 score sur les 50 résultats (rank_bm25 ou implémentation maison)
+- Phase 3 : score final = `alpha * semantic + (1-alpha) * bm25` (alpha=0.7 par défaut)
+- `MemOS.recall()` accepte `retrieval_mode: str = "hybrid"` ("semantic", "keyword", "hybrid")
+- CLI : `memos recall "<query>" --mode hybrid`
+- REST : `POST /api/v1/recall` accepte `retrieval_mode`
+- Dépendance optionnelle : `rank-bm25` (ajout dans `pyproject.toml` extras)
+
+---
+
+## [ ] P21 — Community Wiki (Leiden Graph + Index Navigable)
+**Objectif :** Wiki navigable organisé par communautés de concepts, inspiré du LLM wiki pattern de Karpathy.
+
+Karpathy : 71x moins de tokens vs fichiers bruts, navigation communauté→page→backlinks.
+
+À implémenter :
+- Leiden community detection sur le KG (bibliothèque `leidenalg` ou algo maison BFS clusters)
+- `memos wiki-graph` — génère un wiki structuré par communautés
+  - `index.md` — catalogue auto-généré (une ligne par communauté + top entities)
+  - `log.md` — journal d'activité append-only (chaque ingest ajoute une entrée)
+  - `communities/<id>.md` — page par communauté avec entités, faits, backlinks
+  - "god nodes" — entités présentes dans 3+ communautés, page dédiée
+- Update incrémental : `memos wiki-graph --update` ne regénère que les pages touchées
+- CLI : `memos wiki-graph --output ./wiki/`, `memos wiki-graph --community <id>`
+- Dépendance optionnelle : `leidenalg` ou `python-igraph`
+
+---
+
+## [ ] P22 — URL Ingest (Tweet, arXiv, PDF, Webpage)
+**Objectif :** `memos ingest-url <url>` — ingère n'importe quelle URL dans MemOS sans setup manuel.
+
+Sources supportées :
+- `https://arxiv.org/abs/...` → abstract + titre + auteurs → mémoires tagées `arxiv`, `paper`
+- `https://twitter.com/...` ou `x.com` → texte du tweet → tag `tweet`, `author:<handle>`
+- `*.pdf` → extraction texte (PyMuPDF ou pdfplumber) → chunking intelligent
+- Toute URL HTML → extraction article (readability ou trafilatura) → chunking
+
+À implémenter dans `src/memos/ingest/url.py` :
+- `URLIngestor` classe avec routing par domaine
+- `ingest(url: str, tags: list[str] = []) -> list[Memory]`
+- Dépendances optionnelles : `httpx`, `trafilatura`, `PyMuPDF` (extras `[ingest]`)
+- CLI : `memos ingest-url <url> [--tags tag1,tag2]`
+- REST : `POST /api/v1/ingest/url` body `{"url": "...", "tags": [...]}`
+
+---
+
+## [ ] P23 — Speaker Ownership (Conversation Miner)
+**Objectif :** Dans le conversation miner, attribuer chaque mémoire au bon speaker.
+
+Actuellement : toutes les lignes d'un transcript vont dans le même namespace.
+
+À implémenter dans `src/memos/miner/conversation.py` :
+- Parsing des formats courants : `Speaker: message`, `[HH:MM] Speaker: message`, markdown bold `**Speaker:**`
+- `mine_conversation(path, namespace_prefix="conv", per_speaker=True)`
+  - Si `per_speaker=True` : namespace = `{namespace_prefix}:{speaker}` par speaker
+  - Tags auto : `speaker:{name}`, `conversation`, `date:{YYYY-MM-DD}`
+- CLI : `memos mine-conversation <path> --per-speaker`
+- REST : `POST /api/v1/mine/conversation` accepte `per_speaker: bool`
+
+---
+
+## [ ] P24 — Memory Compression (AAAK pour mémoires décayées)
+**Objectif :** Compresser les mémoires très décayées (importance < 0.1) en résumés agrégés.
+
+Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes qui polluent le recall.
+
+À implémenter dans `src/memos/compression.py` :
+- `MemoryCompressor` classe
+- `compress(items: list[MemoryItem], threshold=0.1) -> CompressionResult`
+  - Grouper les mémoires décayées par tags communs
+  - Pour chaque groupe : créer une mémoire résumé (concaténation des contenus, importance = 0.15)
+  - Supprimer les originaux
+  - Retourner `CompressionResult(compressed_count, summary_count, freed_bytes)`
+- Mode sans LLM : concaténation simple avec séparateur (`" | "`)
+- Mode LLM optionnel : résumé via Ollama si disponible
+- CLI : `memos compress [--dry-run] [--threshold 0.1]`
+- REST : `POST /api/v1/compress` body `{"threshold": 0.1, "dry_run": true}`
+- Cron : auto-compression hebdomadaire si mémoires décayées > 100
