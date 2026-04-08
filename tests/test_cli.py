@@ -169,3 +169,66 @@ class TestCLIFunctional:
         out = capsys.readouterr().out
         assert "Learned" in out
         assert "ttl=1h" in out
+
+
+    def test_search_parsing(self):
+        """Test search command argument parsing."""
+        p = build_parser()
+        ns = p.parse_args(["search", "persistence", "--limit", "10"])
+        assert ns.query == "persistence"
+        assert ns.limit == 10
+
+    def test_search_parsing_json(self):
+        """Test search command with JSON format."""
+        p = build_parser()
+        ns = p.parse_args(["search", "test", "--format", "json"])
+        assert ns.format == "json"
+
+    def test_search_no_results(self, capsys):
+        """Test search with no matching memories."""
+        main(["search", "zzz_no_such_content_xyz"])
+        out = capsys.readouterr().out
+        assert "No memories found" in out
+
+    def test_search_finds_content(self, capsys):
+        """Test search finds a memory by content substring."""
+        main(["learn", "unique_search_target_string", "--tags", "search-test"])
+        main(["search", "search_target"])
+        out = capsys.readouterr().out
+        assert "unique_search_target_string" in out
+        assert "result(s)" in out
+        # cleanup
+        main(["forget", "--tag", "search-test"])
+
+    def test_search_finds_by_tag(self, capsys):
+        """Test search finds a memory by tag substring."""
+        main(["learn", "content for tag search", "--tags", "rare-tag-xyz"])
+        main(["search", "rare-tag-xyz"])
+        out = capsys.readouterr().out
+        assert "content for tag search" in out
+        # cleanup
+        main(["forget", "--tag", "rare-tag-xyz"])
+
+    def test_search_json_output(self, capsys):
+        """Test search with JSON output format."""
+        main(["learn", "json search test content", "--tags", "json-search-test"])
+        capsys.readouterr()  # flush learn output
+        main(["search", "json search test", "--format", "json"])
+        out = capsys.readouterr().out
+        data = json.loads(out)
+        assert "results" in data
+        assert data["total"] >= 1
+        assert any("json search test content" in r["content"] for r in data["results"])
+        # cleanup
+        main(["forget", "--tag", "json-search-test"])
+        capsys.readouterr()  # flush forget output
+
+    def test_search_limit(self, capsys):
+        """Test search respects --limit flag."""
+        for i in range(5):
+            main(["learn", f"search_limit_test_item_{i:02d}", "--tags", "search-limit-test"])
+        main(["search", "search_limit_test_item", "--limit", "2"])
+        out = capsys.readouterr().out
+        assert "2 result(s)" in out
+        # cleanup
+        main(["forget", "--tag", "search-limit-test"])

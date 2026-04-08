@@ -221,6 +221,37 @@ def cmd_recall(ns: argparse.Namespace) -> None:
     print(f"\n{len(results)} result(s)")
 
 
+
+def cmd_search(ns: argparse.Namespace) -> None:
+    """Keyword-only search across all memories (no embeddings required)."""
+    memos = _get_memos(ns)
+    items = memos.search(q=ns.query, limit=ns.limit)
+    fmt = getattr(ns, "format", "text") or "text"
+    if not items:
+        if fmt == "json":
+            print(json.dumps({"results": [], "total": 0}))
+        else:
+            print("No memories found.")
+        return
+    if fmt == "json":
+        print(json.dumps({
+            "results": [
+                {
+                    "id": item.id,
+                    "content": item.content[:200],
+                    "tags": item.tags,
+                    "importance": item.importance,
+                }
+                for item in items
+            ],
+            "total": len(items),
+        }, indent=2))
+        return
+    for item in items:
+        tags_str = f" [{', '.join(item.tags)}]" if item.tags else ""
+        print(f"  [{item.id[:8]}] {item.content[:120]}{tags_str}")
+    print(f"\n{len(items)} result(s)")
+
 def cmd_stats(ns: argparse.Namespace) -> None:
     """Show memory store statistics."""
     memos = _get_memos(ns)
@@ -663,6 +694,13 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--before", help="Only memories created before this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text)")
     recall.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # search
+    search_p = sub.add_parser("search", help="Keyword-only search across memories (no embeddings)")
+    search_p.add_argument("query", help="Search query (substring match on content + tags)")
+    search_p.add_argument("--limit", "-n", type=int, default=20, help="Max results (default: 20)")
+    search_p.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text)")
+    search_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # stats
     stats = sub.add_parser("stats", help="Show memory statistics")
@@ -1456,6 +1494,7 @@ def main(argv: list[str] | None = None) -> None:
         "learn": cmd_learn,
         "batch-learn": cmd_batch_learn,
         "recall": cmd_recall,
+        "search": cmd_search,
         "stats": cmd_stats,
         "forget": cmd_forget,
         "get": cmd_get,
