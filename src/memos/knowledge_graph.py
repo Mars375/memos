@@ -144,6 +144,17 @@ class KnowledgeGraph:
             (fact_id, subject, predicate, str(object), vf, vt, confidence, source, now),
         )
         self._conn.commit()
+        # Upsert subject and object into entities table
+        for entity_name in {subject, str(object)}:
+            existing = self._conn.execute(
+                "SELECT id FROM entities WHERE name = ?", (entity_name,)
+            ).fetchone()
+            if not existing:
+                self._conn.execute(
+                    "INSERT INTO entities (id, name, type, properties, created_at) VALUES (?, ?, 'auto', '{}', ?)",
+                    (_short_id(), entity_name, now),
+                )
+        self._conn.commit()
         return fact_id
 
     def query(

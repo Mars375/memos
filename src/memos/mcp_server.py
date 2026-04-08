@@ -167,6 +167,7 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
             kg_instance = getattr(memos, "_kg", None)
             if kg_instance is None:
                 kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance  # cache it for reuse
             fact_id = kg_instance.add_fact(
                 subject=subject,
                 predicate=predicate,
@@ -186,6 +187,7 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
             kg_instance = getattr(memos, "_kg", None)
             if kg_instance is None:
                 kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance  # cache it for reuse
             facts = kg_instance.query(
                 entity,
                 time=args.get("time"),
@@ -204,6 +206,7 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
             kg_instance = getattr(memos, "_kg", None)
             if kg_instance is None:
                 kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance  # cache it for reuse
             facts = kg_instance.timeline(entity)
             if not facts:
                 return _text(f"No timeline entries for: {entity}")

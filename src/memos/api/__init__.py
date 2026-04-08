@@ -366,10 +366,14 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # ---- Palace (P6) ----
     from ..palace import PalaceIndex, PalaceRecall as _PalaceRecall
-    if kg_db_path and "kg.db" in kg_db_path:
-        _palace_db_path = kg_db_path.replace("kg.db", "palace.db")
+    if kg_db_path:
+        if kg_db_path == ":memory:":
+            _palace_db_path = ":memory:"
+        else:
+            from pathlib import Path as _Path
+            _palace_db_path = str(_Path(kg_db_path).parent / "palace.db")
     else:
-        _palace_db_path = None  # use PalaceIndex default (~/.memos/palace.db)
+        _palace_db_path = None
     _palace = PalaceIndex(db_path=_palace_db_path) if _palace_db_path else PalaceIndex()
 
     @app.get("/api/v1/palace/wings")
