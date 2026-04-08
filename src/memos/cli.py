@@ -677,6 +677,98 @@ def cmd_feedback_stats(ns: argparse.Namespace) -> None:
     print(f"  Avg feedback score:  {stats.avg_feedback_score:.3f}")
 
 
+def _get_kg(ns: argparse.Namespace):
+    """Return a KnowledgeGraph instance from CLI namespace."""
+    from .knowledge_graph import KnowledgeGraph
+    db_path = getattr(ns, "kg_db", None)
+    return KnowledgeGraph(db_path=db_path)
+
+
+def cmd_kg_add(ns: argparse.Namespace) -> None:
+    """Add a fact to the knowledge graph."""
+    kg = _get_kg(ns)
+    try:
+        fact_id = kg.add_fact(
+            subject=ns.subject,
+            predicate=ns.predicate,
+            object=ns.object,
+            valid_from=ns.valid_from,
+            valid_to=ns.valid_to,
+            confidence=ns.confidence,
+            source=ns.source,
+        )
+        print(f"✓ Fact added [{fact_id}]: {ns.subject} -{ns.predicate}-> {ns.object}")
+    finally:
+        kg.close()
+
+
+def cmd_kg_query(ns: argparse.Namespace) -> None:
+    """Query facts about an entity."""
+    kg = _get_kg(ns)
+    try:
+        facts = kg.query(ns.entity, time=ns.at_time, direction=ns.direction)
+        if not facts:
+            print(f"No facts found for entity: {ns.entity}")
+            return
+        for f in facts:
+            inv = " [INVALIDATED]" if f["invalidated_at"] else ""
+            bounds = ""
+            if f["valid_from"] or f["valid_to"]:
+                vf = datetime.fromtimestamp(f["valid_from"]).strftime("%Y-%m-%d") if f["valid_from"] else "?"
+                vt = datetime.fromtimestamp(f["valid_to"]).strftime("%Y-%m-%d") if f["valid_to"] else "?"
+                bounds = f" [{vf} → {vt}]"
+            print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{bounds} (conf={f['confidence']:.2f}){inv}")
+        print(f"\n{len(facts)} fact(s)")
+    finally:
+        kg.close()
+
+
+def cmd_kg_timeline(ns: argparse.Namespace) -> None:
+    """Show chronological timeline of facts about an entity."""
+    kg = _get_kg(ns)
+    try:
+        facts = kg.timeline(ns.entity)
+        if not facts:
+            print(f"No facts found for entity: {ns.entity}")
+            return
+        print(f"Timeline for: {ns.entity}")
+        print("-" * 60)
+        for f in facts:
+            ts = datetime.fromtimestamp(f["created_at"]).strftime("%Y-%m-%d %H:%M")
+            inv = " [INVALIDATED]" if f["invalidated_at"] else ""
+            print(f"  {ts}  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{inv}")
+        print(f"\n{len(facts)} event(s)")
+    finally:
+        kg.close()
+
+
+def cmd_kg_invalidate(ns: argparse.Namespace) -> None:
+    """Invalidate a fact by ID."""
+    kg = _get_kg(ns)
+    try:
+        ok = kg.invalidate(ns.fact_id)
+        if ok:
+            print(f"✓ Fact [{ns.fact_id}] invalidated")
+        else:
+            print(f"Fact [{ns.fact_id}] not found or already invalidated", file=sys.stderr)
+            sys.exit(1)
+    finally:
+        kg.close()
+
+
+def cmd_kg_stats(ns: argparse.Namespace) -> None:
+    """Show knowledge graph statistics."""
+    kg = _get_kg(ns)
+    try:
+        s = kg.stats()
+        print(f"  Total facts:        {s['total_facts']}")
+        print(f"  Active facts:       {s['active_facts']}")
+        print(f"  Invalidated facts:  {s['invalidated_facts']}")
+        print(f"  Total entities:     {s['total_entities']}")
+    finally:
+        kg.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="memos",
@@ -1083,6 +1175,42 @@ def build_parser() -> argparse.ArgumentParser:
     mine_p.add_argument("--backend", default="json", choices=["memory", "json", "chroma", "qdrant"])
     mine_p.add_argument("--persist-path", dest="persist_path",
                         default=str(Path.home() / ".memos" / "store.json"))
+
+    # kg-add
+    kg_add = sub.add_parser("kg-add", help="Add a fact to the knowledge graph")
+    kg_add.add_argument("subject", help="Subject entity")
+    kg_add.add_argument("predicate", help="Relation type")
+    kg_add.add_argument("object", help="Object entity or value")
+    kg_add.add_argument("--from", dest="valid_from", default=None,
+                        help="Valid from (epoch, ISO 8601, or relative e.g. 2d)")
+    kg_add.add_argument("--to", dest="valid_to", default=None,
+                        help="Valid to (epoch, ISO 8601, or relative)")
+    kg_add.add_argument("--confidence", type=float, default=1.0,
+                        help="Confidence 0.0-1.0 (default 1.0)")
+    kg_add.add_argument("--source", default=None, help="Source label")
+    kg_add.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
+
+    # kg-query
+    kg_query = sub.add_parser("kg-query", help="Query facts about an entity")
+    kg_query.add_argument("entity", help="Entity name")
+    kg_query.add_argument("--at", dest="at_time", default=None,
+                          help="Point in time (epoch, ISO 8601, or relative)")
+    kg_query.add_argument("--direction", choices=["both", "subject", "object"], default="both")
+    kg_query.add_argument("--db", dest="kg_db", default=None)
+
+    # kg-timeline
+    kg_tl = sub.add_parser("kg-timeline", help="Show chronological facts about an entity")
+    kg_tl.add_argument("entity", help="Entity name")
+    kg_tl.add_argument("--db", dest="kg_db", default=None)
+
+    # kg-invalidate
+    kg_inv = sub.add_parser("kg-invalidate", help="Invalidate (expire) a fact by ID")
+    kg_inv.add_argument("fact_id", help="Fact ID to invalidate")
+    kg_inv.add_argument("--db", dest="kg_db", default=None)
+
+    # kg-stats
+    kg_stats = sub.add_parser("kg-stats", help="Show knowledge graph statistics")
+    kg_stats.add_argument("--db", dest="kg_db", default=None)
 
     return p
 
@@ -1787,6 +1915,11 @@ def main(argv: list[str] | None = None) -> None:
         "wiki-list": cmd_wiki_list,
         "wiki-read": cmd_wiki_read,
         "mine": cmd_mine,
+        "kg-add": cmd_kg_add,
+        "kg-query": cmd_kg_query,
+        "kg-timeline": cmd_kg_timeline,
+        "kg-invalidate": cmd_kg_invalidate,
+        "kg-stats": cmd_kg_stats,
     }
     commands[ns.command](ns)
 

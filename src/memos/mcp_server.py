@@ -59,6 +59,47 @@ TOOLS = [
         "description": "Return statistics about the memory store.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "kg_add_fact",
+        "description": "Add a temporal fact (triple) to the knowledge graph.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "subject": {"type": "string", "description": "Subject entity"},
+                "predicate": {"type": "string", "description": "Relation type"},
+                "object": {"type": "string", "description": "Object entity or value"},
+                "valid_from": {"type": "string", "description": "Start of validity (epoch, ISO 8601, or relative)"},
+                "valid_to": {"type": "string", "description": "End of validity (epoch, ISO 8601, or relative)"},
+                "confidence": {"type": "number", "default": 1.0, "description": "Confidence 0.0-1.0"},
+                "source": {"type": "string", "description": "Source label"},
+            },
+            "required": ["subject", "predicate", "object"],
+        },
+    },
+    {
+        "name": "kg_query_entity",
+        "description": "Query all active facts linked to an entity at a given time.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string", "description": "Entity name to query"},
+                "time": {"type": "string", "description": "Point in time (epoch, ISO 8601, or relative). Defaults to now."},
+                "direction": {"type": "string", "enum": ["both", "subject", "object"], "default": "both"},
+            },
+            "required": ["entity"],
+        },
+    },
+    {
+        "name": "kg_timeline",
+        "description": "Return chronological sequence of all facts about an entity.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entity": {"type": "string", "description": "Entity name"},
+            },
+            "required": ["entity"],
+        },
+    },
 ]
 
 
@@ -115,6 +156,59 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
                 f"Avg relevance: {s.avg_relevance:.3f}\n"
                 f"Decay candidates: {s.decay_candidates}"
             )
+
+        elif tool == "kg_add_fact":
+            from .knowledge_graph import KnowledgeGraph
+            subject = args.get("subject", "").strip()
+            predicate = args.get("predicate", "").strip()
+            obj = args.get("object", "").strip()
+            if not subject or not predicate or not obj:
+                return _error("subject, predicate and object are required")
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+            fact_id = kg_instance.add_fact(
+                subject=subject,
+                predicate=predicate,
+                object=obj,
+                valid_from=args.get("valid_from"),
+                valid_to=args.get("valid_to"),
+                confidence=float(args.get("confidence", 1.0)),
+                source=args.get("source"),
+            )
+            return _text(f"Fact added [{fact_id}]: {subject} -{predicate}-> {obj}")
+
+        elif tool == "kg_query_entity":
+            from .knowledge_graph import KnowledgeGraph
+            entity = args.get("entity", "").strip()
+            if not entity:
+                return _error("entity is required")
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+            facts = kg_instance.query(
+                entity,
+                time=args.get("time"),
+                direction=args.get("direction", "both"),
+            )
+            if not facts:
+                return _text(f"No facts found for: {entity}")
+            lines = [f"[{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}" for f in facts]
+            return _text(f"{len(facts)} fact(s):\n" + "\n".join(lines))
+
+        elif tool == "kg_timeline":
+            from .knowledge_graph import KnowledgeGraph
+            entity = args.get("entity", "").strip()
+            if not entity:
+                return _error("entity is required")
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+            facts = kg_instance.timeline(entity)
+            if not facts:
+                return _text(f"No timeline entries for: {entity}")
+            lines = [f"[{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}" for f in facts]
+            return _text(f"Timeline ({len(facts)} events):\n" + "\n".join(lines))
 
         else:
             return _error(f"Unknown tool: {tool}")
