@@ -16,6 +16,11 @@ services:
     environment:
       - MEMOS_BACKEND=chroma
       - MEMOS_CHROMA_URL=http://chroma:8000
+      # Client-side Ollama embeddings with SQLite cache — eliminates ~15s/query
+      # penalty from Chroma's built-in ONNX embedder on ARM64 (Pi5, etc.).
+      # First deploy: delete the chroma-data volume and re-ingest (dimension change).
+      - MEMOS_EMBED_HOST=http://host.docker.internal:11434
+      - MEMOS_EMBED_MODEL=nomic-embed-text
     depends_on:
       chroma:
         condition: service_healthy

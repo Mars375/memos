@@ -57,8 +57,16 @@ class MemOS:
         self._backend_name = backend
         # Storage
         if backend == "chroma":
+            import os as _os
+            # Only enable client-side Ollama embeddings when MEMOS_EMBED_HOST is
+            # explicitly configured. When unset, Chroma uses its built-in ONNX
+            # embedder (backward compatible with existing collections).
+            _chroma_embed_host = _os.environ.get("MEMOS_EMBED_HOST", "")
             store: StorageBackend = ChromaBackend(
-                host=chroma_host, port=chroma_port
+                host=chroma_host,
+                port=chroma_port,
+                embed_host=_chroma_embed_host,
+                embed_model=embed_model,
             )
         elif backend == "qdrant":
             store = QdrantBackend(
