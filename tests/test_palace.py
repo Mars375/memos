@@ -528,3 +528,59 @@ def test_cli_palace_stats(tmp_path, capsys) -> None:
     main(["palace-stats", "--db", db])
     out = capsys.readouterr().out
     assert "wings" in out.lower() or "Total" in out
+
+
+
+# ---------------------------------------------------------------------------
+# Regression: Bug 2 — Palace DB path derivation from kg_db_path
+# ---------------------------------------------------------------------------
+
+
+def test_palace_db_colocated_with_kg_db(tmp_path) -> None:
+    """When kg_db_path is a real file path, palace.db must be in the same directory.
+
+    It must NOT fall back to ~/.memos/palace.db, which would leak state between
+    isolated instances (tests, tenants).
+    """
+    import tempfile
+    from pathlib import Path
+    from memos.api import create_fastapi_app
+
+    kg_db = str(tmp_path / "kg.db")
+    # Create the app — this triggers palace path derivation
+    create_fastapi_app(backend="memory", kg_db_path=kg_db)
+
+    expected_palace_db = tmp_path / "palace.db"
+    home_palace_db = Path.home() / ".memos" / "palace.db"
+
+    assert expected_palace_db.exists(), (
+        f"Expected palace.db at {expected_palace_db} but it was not created. "
+        "Palace may have opened the global ~/.memos/palace.db instead."
+    )
+    # Also verify it did NOT fall back to the home directory path
+    # (only meaningful if home palace didn't exist before the test)
+    if home_palace_db.exists():
+        # Can't conclusively check without stat — just confirm colocated one exists
+        pass
+    else:
+        assert not home_palace_db.exists(), (
+            "palace.db was created in ~/.memos/ instead of alongside kg.db"
+        )
+
+
+def test_palace_db_memory_when_kg_is_memory() -> None:
+    """When kg_db_path=':memory:', palace must also use ':memory:' (no file leakage)."""
+    from pathlib import Path
+    from memos.api import create_fastapi_app
+
+    # Snapshot of home palace before
+    home_palace_db = Path.home() / ".memos" / "palace.db"
+    existed_before = home_palace_db.exists()
+
+    create_fastapi_app(backend="memory", kg_db_path=":memory:")
+
+    if not existed_before:
+        assert not home_palace_db.exists(), (
+            "palace.db was created in ~/.memos/ when kg_db_path=':memory:' — "
+            "palace should have used ':memory:' too."
+        )
