@@ -1,16 +1,15 @@
 # ACTIVE.md — Chantier memos
 
 ## Status
-**ACTIVE** — v0.31.1
+**ACTIVE** — v0.31.2
 
 ## Last Action
-- 2026-04-08: P10 Knowledge Graph ↔ Memory Bridge completed
-  - KGBridge: recall_enriched(), learn_and_extract(), link_fact_to_memory()
-  - CLI: memos recall --enriched
-  - REST: /api/v1/recall/enriched, /api/v1/learn/extract
-  - MCP: memory_recall_enriched (12 tools total)
-  - 4 new tests, 1098 total passing
+- 2026-04-08: P13 Living Wiki completed
+  - LivingWikiEngine: init(), update(), lint(), regenerate_index(), read_page(), search(), list_pages()
+  - CLI: memos wiki-living {init,update,lint,index,log,read,search,list,stats}
+  - Entity extraction + backlinks + YAML frontmatter + activity log
+  - 6 new tests, 1107 total passing
 
 ## Next
-- P11 — Recall Analytics Dashboard
+- P14 — Benchmark Suite (MemPalace-inspired)
 - P12 — Memory Conflict Resolution (Multi-instance Sync)

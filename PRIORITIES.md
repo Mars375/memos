@@ -23,7 +23,7 @@ D3.js force-directed, dark theme, `/api/v1/graph`, sidebar stats+search. (v0.29.
 `memos wiki-compile/list/read`, pages markdown par tag, 10 tests. (v0.30.0)
 
 ## [x] P4 — Script de migration markdown → MemOS
-`tools/migrate_markdown.py`, H2/H3 parsing, frontmatter tags, dry-run, 18 tests. (v0.30.0)
+`tools/migrate_markdown.py`, H2/H3 parsing, frontmatter tags, dry-run, 16 tests. (v0.30.0)
 
 ---
 
@@ -212,7 +212,7 @@ Implemented v0.31.1 — KGBridge, enriched recall, learn+extract, explicit memor
 
 ---
 
-## [ ] P11 — Recall Analytics Dashboard
+## [x] P11 — Recall Analytics Dashboard
 **Objectif** : Tableau de bord d'analyse des patterns de rappel — quoi, quand, succès/échec.
 
 À implémenter dans `src/memos/analytics.py` :
@@ -228,6 +228,12 @@ Implemented v0.31.1 — KGBridge, enriched recall, learn+extract, explicit memor
 - REST : `GET /api/v1/analytics/top`, `GET /api/v1/analytics/patterns`, etc.
 - Dashboard : section analytics dans la page web existante (chart.js)
 - Auto-track : intégrer dans `MemOS.recall()` si analytics activé
+
+Implemented in this session:
+- SQLite analytics store at `~/.memos/analytics.db`
+- CLI `memos analytics top|patterns|latency|success-rate|daily|zero|summary`
+- REST analytics endpoints under `/api/v1/analytics/*`
+- Dashboard analytics summary + Chart.js sparkline
 
 Config :
 ```json
@@ -289,7 +295,8 @@ memos analytics latency    # shows p50/p95/p99
 
 ---
 
-## [ ] P13 — Wiki Vivant (Karpathy-inspired)
+## [x] P13 — Wiki Vivant (Karpathy-inspired)
+Implemented v0.31.2 — LivingWikiEngine, CLI `memos wiki-living`, index/log/read/search/list/stats, entity extraction, backlinks, lint, 6 tests.
 **Objectif :** Compléter wiki-compile avec un wiki incrémental par entités/concepts.
 
 Notre wiki-compile actuel génère des pages par tag (snapshot statique). Le pattern Karpathy propose un wiki *vivant* :

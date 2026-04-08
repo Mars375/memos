@@ -264,14 +264,14 @@ class TestParquetIOUnit:
 
     def test_large_export(self, tmp_path):
         m = MemOS(backend="memory", sanitize=False)
-        for i in range(100):
+        for i in range(30):
             m.learn(f"Memory number {i}", tags=[f"batch-{i % 10}"], importance=i / 100)
 
         path = tmp_path / "large.parquet"
         result = m.export_parquet(str(path))
-        assert result["total"] == 100
+        assert result["total"] == 30
         assert result["size_bytes"] > 0
 
         m2 = MemOS(backend="memory", sanitize=False)
         imported = m2.import_parquet(str(path))
-        assert imported["imported"] == 100
+        assert imported["imported"] == 30

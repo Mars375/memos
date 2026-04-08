@@ -1330,6 +1330,46 @@ def build_parser() -> argparse.ArgumentParser:
     wiki_read_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
     wiki_read_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
 
+
+    # wiki-living
+    wl_sp = sub.add_parser("wiki-living", help="Living wiki: init/update/lint/index/log/read/search/list/stats")
+    wl_sub = wl_sp.add_subparsers(dest="wl_action")
+    wl_sub.add_parser("init", help="Initialize living wiki structure")
+    wl_update = wl_sub.add_parser("update", help="Scan memories, extract entities, update pages")
+    wl_update.add_argument("--force", action="store_true", help="Force full rebuild")
+    wl_update.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wl_update.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_update.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_lint = wl_sub.add_parser("lint", help="Detect orphans, contradictions, empty pages")
+    wl_lint.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_lint.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_idx = wl_sub.add_parser("index", help="Regenerate index.md")
+    wl_idx.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wl_idx.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_idx.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_log = wl_sub.add_parser("log", help="Show activity log")
+    wl_log.add_argument("--limit", type=int, default=20, help="Max entries")
+    wl_log.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_log.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_read = wl_sub.add_parser("read", help="Read a living page")
+    wl_read.add_argument("entity", help="Entity name")
+    wl_read.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wl_read.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_read.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_search = wl_sub.add_parser("search", help="Search across living pages")
+    wl_search.add_argument("query", help="Search query")
+    wl_search.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wl_search.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_search.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_list = wl_sub.add_parser("list", help="List all living pages")
+    wl_list.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wl_list.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_list.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    wl_stats = wl_sub.add_parser("stats", help="Living wiki statistics")
+    wl_stats.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wl_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wl_stats.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
     # mine
     mine_p = sub.add_parser("mine", help="Smart mine — import files/conversations into memories")
     mine_p.add_argument("paths", nargs="+", help="Files or directories to mine")
@@ -2054,6 +2094,7 @@ def cmd_wiki_read(ns: argparse.Namespace) -> None:
     print(content)
 
 
+
 def cmd_mine(ns: argparse.Namespace) -> None:
     """Mine files or directories into memories (smart chunker + multi-format)."""
     from .ingest.miner import Miner
@@ -2330,6 +2371,109 @@ def cmd_reinforce(ns: argparse.Namespace) -> None:
     m._store.upsert(item, namespace=m._namespace)
     print(f"✓ Reinforced [{item.id[:8]}] importance: {old_imp:.3f} → {new_imp:.3f}")
 
+def cmd_wiki_living(ns: argparse.Namespace) -> None:
+    """Living wiki commands."""
+    from .wiki_living import LivingWikiEngine
+    memos = _get_memos(ns)
+    wiki_dir = getattr(ns, "wiki_dir", None)
+    engine = LivingWikiEngine(memos, wiki_dir=wiki_dir)
+
+    action = getattr(ns, "wl_action", None)
+    if action == "init":
+        result = engine.init()
+        print(f"Living wiki initialized: {result['wiki_dir']}")
+        print(f"  Pages dir: {result['pages_dir']}")
+        print(f"  DB: {result['db']}")
+
+    elif action == "update":
+        result = engine.update(force=getattr(ns, "force", False))
+        print("Living wiki updated:")
+        print(f"  Pages created: {result.pages_created}")
+        print(f"  Pages updated: {result.pages_updated}")
+        print(f"  Entities found: {result.entities_found}")
+        print(f"  Memories indexed: {result.memories_indexed}")
+        print(f"  Backlinks added: {result.backlinks_added}")
+
+    elif action == "lint":
+        report = engine.lint()
+        issues = 0
+        if report.orphan_pages:
+            print(f"🟡 Orphan pages ({len(report.orphan_pages)}):")
+            for p in report.orphan_pages:
+                print(f"  - {p}")
+            issues += len(report.orphan_pages)
+        if report.empty_pages:
+            print(f"🔵 Empty pages ({len(report.empty_pages)}):")
+            for p in report.empty_pages:
+                print(f"  - {p}")
+            issues += len(report.empty_pages)
+        if report.contradictions:
+            print(f"🔴 Contradictions ({len(report.contradictions)}):")
+            for c in report.contradictions:
+                print(f"  - {c['entity']}: {c['conflicting_terms']}")
+            issues += len(report.contradictions)
+        if report.stale_pages:
+            print(f"🟠 Stale pages ({len(report.stale_pages)}):")
+            for p in report.stale_pages:
+                print(f"  - {p}")
+            issues += len(report.stale_pages)
+        if report.missing_backlinks:
+            print(f"⚪ Missing backlinks ({len(report.missing_backlinks)}):")
+            for src, tgt in report.missing_backlinks:
+                print(f"  - {src} → {tgt}")
+            issues += len(report.missing_backlinks)
+        if issues == 0:
+            print("✅ Living wiki is clean — no issues found.")
+        else:
+            print(f"\nTotal issues: {issues}")
+
+    elif action == "index":
+        content = engine.regenerate_index()
+        print(content)
+
+    elif action == "log":
+        entries = engine.get_log(limit=getattr(ns, "limit", 20))
+        if not entries:
+            print("No activity log entries.")
+        for e in entries:
+            print(f"  {e['time']} [{e['action']}] {e['entity']} — {e['detail']}")
+
+    elif action == "read":
+        content = engine.read_page(ns.entity)
+        if content is None:
+            print(f"No living page found for '{ns.entity}'.", file=sys.stderr)
+            sys.exit(1)
+        print(content)
+
+    elif action == "search":
+        results = engine.search(ns.query)
+        if not results:
+            print(f"No matches for '{ns.query}'.")
+        for r in results:
+            print(f"  [{r['type']}] {r['entity']} ({r['matches']} matches)")
+            print(f"    ...{r['snippet']}...")
+
+    elif action == "list":
+        pages = engine.list_pages()
+        if not pages:
+            print("No living pages. Run: memos wiki-living update")
+        for p in pages:
+            bl = f" ←{len(p.backlinks)}" if p.backlinks else ""
+            mc = len(p.memory_ids)
+            print(f"  [{p.entity_type}] {p.entity} ({mc} mems{bl})")
+
+    elif action == "stats":
+        s = engine.stats()
+        print("Living Wiki Stats:")
+        print(f"  Entities: {s['total_entities']}")
+        print(f"  Memory links: {s['total_memory_links']}")
+        print(f"  Backlinks: {s['total_backlinks']}")
+        print(f"  Types: {s['type_distribution']}")
+
+    else:
+        wl_sp.print_help()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -2386,11 +2530,10 @@ def main(argv: list[str] | None = None) -> None:
         "feedback": cmd_feedback,
         "feedback-list": cmd_feedback_list,
         "feedback-stats": cmd_feedback_stats,
-        "mcp-serve": cmd_mcp_serve,
-        "mcp-stdio": cmd_mcp_stdio,
         "wiki-compile": cmd_wiki_compile,
         "wiki-list": cmd_wiki_list,
         "wiki-read": cmd_wiki_read,
+        "wiki-living": cmd_wiki_living,
         "mine": cmd_mine,
         "kg-add": cmd_kg_add,
         "kg-query": cmd_kg_query,
@@ -2405,7 +2548,6 @@ def main(argv: list[str] | None = None) -> None:
         "palace-assign": cmd_palace_assign,
         "palace-recall": cmd_palace_recall,
         "palace-stats": cmd_palace_stats,
-        # Context Stack (P7)
         "wake-up": cmd_wake_up,
         "identity": cmd_identity,
         "context-for": cmd_context_for,
