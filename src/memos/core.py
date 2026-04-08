@@ -612,6 +612,32 @@ class MemOS:
             top_tags=top_tags,
         )
 
+    def list_tags(self, sort: str = "count", limit: int = 0) -> list[tuple[str, int]]:
+        """List all tags with their memory counts.
+
+        Args:
+            sort: "count" (descending) or "name" (alphabetical).
+            limit: Max tags to return. 0 = all.
+
+        Returns:
+            List of (tag, count) tuples.
+        """
+        self._check_acl("read")
+        items = self._store.list_all(namespace=self._namespace)
+        tag_counts: dict[str, int] = {}
+        for item in items:
+            for tag in item.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+        if sort == "name":
+            result = sorted(tag_counts.items(), key=lambda x: x[0])
+        else:
+            result = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+
+        if limit > 0:
+            result = result[:limit]
+        return result
+
     def search(self, q: str, limit: int = 20) -> list[MemoryItem]:
         """Simple keyword search across all memories."""
         self._check_acl("read")

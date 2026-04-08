@@ -930,6 +930,16 @@ def build_parser() -> argparse.ArgumentParser:
     cache_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
 
+
+    # ── Tags commands ──────────────────────────────────────────
+    tags_p = sub.add_parser("tags", help="List and manage memory tags")
+    tags_sub = tags_p.add_subparsers(dest="tags_action")
+    tags_list = tags_sub.add_parser("list", help="List all tags with counts")
+    tags_list.add_argument("--sort", dest="tags_sort", default="count", choices=["count", "name"], help="Sort order")
+    tags_list.add_argument("--limit", dest="tags_limit", type=int, default=0, help="Max tags (0=all)")
+    tags_list.add_argument("--json", action="store_true", help="JSON output")
+    tags_list.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
     # ── Sharing commands ──────────────────────────────────────
     share_offer = sub.add_parser("share-offer", help="Offer to share memories with another agent")
     share_offer.add_argument("--target", required=True, help="Target agent ID")
@@ -1376,6 +1386,24 @@ def cmd_config(ns: argparse.Namespace) -> None:
 
 
 
+def cmd_tags(ns: argparse.Namespace) -> None:
+    """List all tags with memory counts."""
+    memos = _get_memos(ns)
+    sort_by = getattr(ns, 'tags_sort', 'count') or 'count'
+    limit = getattr(ns, 'tags_limit', 0) or 0
+    tags = memos.list_tags(sort=sort_by, limit=limit)
+
+    if getattr(ns, 'json', False):
+        out = [{'tag': t, 'count': c} for t, c in tags]
+        print(json.dumps(out, ensure_ascii=False))
+    else:
+        if not tags:
+            print('No tags found.')
+            return
+        max_tag_len = max(len(t) for t, _ in tags)
+        for tag, count in tags:
+            print(f'  {tag:<{max_tag_len}}  {count}')
+
 def cmd_share_offer(ns: argparse.Namespace) -> None:
     """Offer to share memories with another agent."""
     from .sharing.models import ShareScope, SharePermission
@@ -1523,6 +1551,7 @@ def main(argv: list[str] | None = None) -> None:
         "compact": cmd_compact,
         "cache-stats": cmd_cache_stats,
         "benchmark": cmd_benchmark,
+        "tags": cmd_tags,
         "share-offer": cmd_share_offer,
         "share-accept": cmd_share_accept,
         "share-reject": cmd_share_reject,

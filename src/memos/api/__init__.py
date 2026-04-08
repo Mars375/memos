@@ -280,6 +280,13 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     # Dashboard
     from ..web import DASHBOARD_HTML
 
+
+    @app.get("/api/v1/tags")
+    async def api_tags(sort: str = "count", limit: int = 0):
+        """List all tags with memory counts."""
+        tags = memos.list_tags(sort=sort, limit=limit)
+        return [{"tag": t, "count": c} for t, c in tags]
+
     @app.get("/", response_class=HTMLResponse)
     async def dashboard():
         return DASHBOARD_HTML
