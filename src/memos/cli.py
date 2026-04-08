@@ -1012,6 +1012,38 @@ def build_parser() -> argparse.ArgumentParser:
     fb_stats.add_argument("--json", action="store_true", help="JSON output")
     fb_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # mcp-serve
+    mcp_serve_p = sub.add_parser("mcp-serve", help="Start MCP HTTP server (JSON-RPC 2.0)")
+    mcp_serve_p.add_argument("--port", type=int, default=8200, help="Port to listen on (default: 8200)")
+    mcp_serve_p.add_argument("--host", default="0.0.0.0", help="Host to bind to")
+    mcp_serve_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    mcp_serve_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
+    # mcp-stdio
+    mcp_stdio_p = sub.add_parser("mcp-stdio", help="Start MCP server over stdio (Claude Code / Cursor)")
+    mcp_stdio_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    mcp_stdio_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
+    # wiki-compile
+    wiki_compile_p = sub.add_parser("wiki-compile", help="Compile memories into markdown pages per tag")
+    wiki_compile_p.add_argument("--tags", nargs="*", help="Only compile these tags")
+    wiki_compile_p.add_argument("--wiki-dir", dest="wiki_dir", help="Output directory (default: ~/.memos/wiki)")
+    wiki_compile_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wiki_compile_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
+    # wiki-list
+    wiki_list_p = sub.add_parser("wiki-list", help="List compiled wiki pages")
+    wiki_list_p.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wiki_list_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wiki_list_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
+    # wiki-read
+    wiki_read_p = sub.add_parser("wiki-read", help="Read a compiled wiki page by tag")
+    wiki_read_p.add_argument("tag", help="Tag name to read")
+    wiki_read_p.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    wiki_read_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    wiki_read_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
     return p
 
 
@@ -1532,6 +1564,72 @@ def cmd_share_stats(ns: argparse.Namespace) -> None:
         print(f"    {status}: {count}")
 
 
+def cmd_mcp_serve(ns: argparse.Namespace) -> None:
+    """Start MCP HTTP server."""
+    from .mcp_server import create_mcp_app
+    try:
+        import uvicorn
+    except ImportError:
+        print("Error: uvicorn is required. Install with: pip install memos[server]", file=sys.stderr)
+        sys.exit(1)
+    memos = _get_memos(ns)
+    app = create_mcp_app(memos)
+    host = getattr(ns, "host", "0.0.0.0")
+    port = getattr(ns, "port", 8200)
+    print(f"MemOS MCP server listening on http://{host}:{port}/mcp")
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def cmd_mcp_stdio(ns: argparse.Namespace) -> None:
+    """Start MCP server over stdio."""
+    from .mcp_server import run_stdio
+    memos = _get_memos(ns)
+    run_stdio(memos)
+
+
+def cmd_wiki_compile(ns: argparse.Namespace) -> None:
+    """Compile memories into per-tag wiki pages."""
+    from .wiki import WikiEngine
+    memos = _get_memos(ns)
+    wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
+    tags = getattr(ns, "tags", None) or None
+    pages = wiki.compile(tags=tags)
+    if not pages:
+        print("No memories found to compile.")
+        return
+    print(f"Compiled {len(pages)} wiki page(s):")
+    for p in sorted(pages, key=lambda x: x.tag):
+        print(f"  [{p.memory_count:3d} memories] {p.tag:30s} → {p.path}")
+
+
+def cmd_wiki_list(ns: argparse.Namespace) -> None:
+    """List compiled wiki pages."""
+    from .wiki import WikiEngine
+    memos = _get_memos(ns)
+    wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
+    pages = wiki.list_pages()
+    if not pages:
+        print("No wiki pages found. Run: memos wiki-compile")
+        return
+    print(f"{'TAG':<30} {'MEMORIES':>8} {'SIZE':>8}  COMPILED")
+    print("-" * 65)
+    for p in pages:
+        size_str = f"{p.size_bytes // 1024}K" if p.size_bytes >= 1024 else f"{p.size_bytes}B"
+        print(f"{p.tag:<30} {p.memory_count:>8} {size_str:>8}  {p.age_str()}")
+
+
+def cmd_wiki_read(ns: argparse.Namespace) -> None:
+    """Read a compiled wiki page by tag."""
+    from .wiki import WikiEngine
+    memos = _get_memos(ns)
+    wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
+    content = wiki.read(ns.tag)
+    if content is None:
+        print(f"No wiki page found for tag '{ns.tag}'. Run: memos wiki-compile", file=sys.stderr)
+        sys.exit(1)
+    print(content)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -1585,6 +1683,11 @@ def main(argv: list[str] | None = None) -> None:
         "feedback": cmd_feedback,
         "feedback-list": cmd_feedback_list,
         "feedback-stats": cmd_feedback_stats,
+        "mcp-serve": cmd_mcp_serve,
+        "mcp-stdio": cmd_mcp_stdio,
+        "wiki-compile": cmd_wiki_compile,
+        "wiki-list": cmd_wiki_list,
+        "wiki-read": cmd_wiki_read,
     }
     commands[ns.command](ns)
 
