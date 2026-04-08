@@ -86,6 +86,9 @@ class _CachedOllamaEF:
             raise RuntimeError(f"Ollama returned no embeddings for model {self._embed_model!r}")
         return embeddings[0]
 
+    def name(self) -> str:  # required by chromadb EmbeddingFunction protocol
+        return f"memos-ollama-{self._embed_model}"
+
     def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002
         results = []
         for text in input:
