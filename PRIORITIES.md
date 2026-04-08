@@ -327,7 +327,7 @@ MemPalace publie des résultats LongMemEval. MemOS devrait :
 
 ---
 
-## [ ] P12 — Memory Conflict Resolution (Multi-instance Sync)
+## [x] P12 — Memory Conflict Resolution (Multi-instance Sync) ✅ v0.31.0 (2026-04-08)
 **Objectif** : Détecter et résoudre les conflits quand deux instances MemOS partagent des mémoires.
 
 Cas d'usage : Agent A et Agent B ont chacun leur MemOS. Ils synchronisent. Si les deux ont modifié la même mémoire → conflit.

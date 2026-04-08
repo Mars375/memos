@@ -1297,6 +1297,20 @@ def build_parser() -> argparse.ArgumentParser:
     share_stats.add_argument("--json", action="store_true", help="JSON output")
     share_stats.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # sync-check (P12 — Conflict Resolution)
+    sync_check = sub.add_parser("sync-check", help="Check for conflicts with a remote memory export")
+    sync_check.add_argument("remote_file", help="Path to remote JSON envelope file")
+    sync_check.add_argument("--json", action="store_true", help="JSON output")
+    sync_check.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # sync-apply (P12 — Conflict Resolution)
+    sync_apply = sub.add_parser("sync-apply", help="Apply remote memories with conflict resolution")
+    sync_apply.add_argument("remote_file", help="Path to remote JSON envelope file")
+    sync_apply.add_argument("--strategy", choices=["local_wins", "remote_wins", "merge", "manual"], default="merge", help="Conflict resolution strategy (default: merge)")
+    sync_apply.add_argument("--dry-run", action="store_true", help="Show what would be applied without writing")
+    sync_apply.add_argument("--json", action="store_true", help="JSON output")
+    sync_apply.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
 
     # feedback
     fb = sub.add_parser("feedback", help="Record relevance feedback for a memory")
@@ -2059,6 +2073,105 @@ def cmd_share_stats(ns: argparse.Namespace) -> None:
         print(f"    {status}: {count}")
 
 
+
+def cmd_sync_check(ns: argparse.Namespace) -> None:
+    """Check for conflicts between local store and a remote export file."""
+    from .conflict import ConflictDetector
+    from .sharing.models import MemoryEnvelope
+
+    memos = _get_memos(ns)
+    path = ns.remote_file
+    with open(path) as f:
+        data = json.load(f)
+
+    envelope = MemoryEnvelope.from_dict(data)
+    if not envelope.validate():
+        print(f"✗ Envelope checksum validation failed — data may be corrupted")
+        return
+
+    detector = ConflictDetector()
+    report = detector.detect(memos, envelope)
+
+    if getattr(ns, 'json', False):
+        print(json.dumps(report.to_dict(), indent=2))
+        return
+
+    print(f"Sync check: {report.total_remote} remote memories")
+    print(f"  New (no conflict):  {report.new_memories}")
+    print(f"  Unchanged:          {report.unchanged}")
+    print(f"  Conflicts:          {len(report.conflicts)}")
+    if report.errors:
+        print(f"  Errors:             {len(report.errors)}")
+        for e in report.errors[:5]:
+            print(f"    - {e}")
+
+    if report.conflicts:
+        print()
+        for c in report.conflicts:
+            types = ", ".join(t.value for t in c.conflict_types)
+            print(f"  ⚠ {c.memory_id[:12]}… [{types}]")
+            if c.local_content != c.remote_content:
+                print(f"    local:  {c.local_content[:80]}")
+                print(f"    remote: {c.remote_content[:80]}")
+            if c.local_tags != c.remote_tags:
+                print(f"    tags: {c.local_tags} → {c.remote_tags}")
+            if abs(c.local_importance - c.remote_importance) > 0.01:
+                print(f"    importance: {c.local_importance:.2f} → {c.remote_importance:.2f}")
+
+
+def cmd_sync_apply(ns: argparse.Namespace) -> None:
+    """Apply remote memories with conflict resolution."""
+    from .conflict import ConflictDetector, ResolutionStrategy
+    from .sharing.models import MemoryEnvelope
+
+    memos = _get_memos(ns)
+    path = ns.remote_file
+    strategy = ResolutionStrategy(ns.strategy)
+
+    with open(path) as f:
+        data = json.load(f)
+
+    envelope = MemoryEnvelope.from_dict(data)
+    if not envelope.validate():
+        print(f"✗ Envelope checksum validation failed — aborting")
+        return
+
+    detector = ConflictDetector()
+    report = detector.detect(memos, envelope)
+
+    if getattr(ns, 'dry_run', False):
+        detector.resolve(report.conflicts, strategy)
+        if getattr(ns, 'json', False):
+            out = report.to_dict()
+            out["dry_run"] = True
+            print(json.dumps(out, indent=2))
+            return
+        print(f"Dry run — strategy: {strategy.value}")
+        print(f"  Conflicts to resolve: {len(report.conflicts)}")
+        print(f"  New memories to add:  {report.new_memories}")
+        for c in report.conflicts:
+            types = ", ".join(t.value for t in c.conflict_types)
+            res = c.resolution.value if c.resolution else "none"
+            print(f"  {c.memory_id[:12]}… [{types}] → {res}")
+        return
+
+    report = detector.apply(memos, report, strategy)
+
+    if getattr(ns, 'json', False):
+        print(json.dumps(report.to_dict(), indent=2))
+        return
+
+    print(f"✓ Sync applied — strategy: {strategy.value}")
+    print(f"  Remote memories:  {report.total_remote}")
+    print(f"  Applied:          {report.applied}")
+    print(f"  Skipped:          {report.skipped}")
+    print(f"  Conflicts:        {len(report.conflicts)}")
+    if report.errors:
+        print(f"  Errors:           {len(report.errors)}")
+        for e in report.errors[:5]:
+            print(f"    - {e}")
+
+
 def cmd_mcp_serve(ns: argparse.Namespace) -> None:
     """Start MCP HTTP server."""
     from .mcp_server import create_mcp_app
@@ -2559,6 +2672,8 @@ def main(argv: list[str] | None = None) -> None:
         "share-import": cmd_share_import,
         "share-list": cmd_share_list,
         "share-stats": cmd_share_stats,
+        "sync-check": cmd_sync_check,
+        "sync-apply": cmd_sync_apply,
         "feedback": cmd_feedback,
         "feedback-list": cmd_feedback_list,
         "feedback-stats": cmd_feedback_stats,

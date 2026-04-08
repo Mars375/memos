@@ -1284,4 +1284,55 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         }
 
 
+    # ── Sync & Conflict Resolution API (P12) ──────────────────────────
+
+    @app.post("/api/v1/sync/check")
+    async def api_sync_check(body: dict):
+        """Check for conflicts between local store and a remote envelope.
+
+        Body: {"envelope": {"source_agent": "...", "target_agent": "...", "memories": [...]}}
+        """
+        from ..conflict import ConflictDetector
+        from ..sharing.models import MemoryEnvelope
+        try:
+            envelope = MemoryEnvelope.from_dict(body["envelope"])
+        except (KeyError, ValueError) as exc:
+            return {"status": "error", "message": f"Invalid envelope: {exc}"}
+        if not envelope.validate():
+            return {"status": "error", "message": "Envelope checksum validation failed"}
+        detector = ConflictDetector()
+        report = detector.detect(memos, envelope)
+        return {"status": "ok", **report.to_dict()}
+
+    @app.post("/api/v1/sync/apply")
+    async def api_sync_apply(body: dict):
+        """Apply remote memories with conflict resolution.
+
+        Body: {"envelope": {...}, "strategy": "local_wins|remote_wins|merge|manual",
+               "dry_run": false}
+        """
+        from ..conflict import ConflictDetector, ResolutionStrategy
+        from ..sharing.models import MemoryEnvelope
+        try:
+            envelope = MemoryEnvelope.from_dict(body["envelope"])
+        except (KeyError, ValueError) as exc:
+            return {"status": "error", "message": f"Invalid envelope: {exc}"}
+        if not envelope.validate():
+            return {"status": "error", "message": "Envelope checksum validation failed"}
+        strategy_name = body.get("strategy", "merge")
+        try:
+            strategy = ResolutionStrategy(strategy_name)
+        except ValueError:
+            return {"status": "error", "message": f"Invalid strategy: {strategy_name}. Use: local_wins, remote_wins, merge, manual"}
+        detector = ConflictDetector()
+        report = detector.detect(memos, envelope)
+        if body.get("dry_run", False):
+            detector.resolve(report.conflicts, strategy)
+            result = report.to_dict()
+            result["dry_run"] = True
+            return {"status": "ok", **result}
+        report = detector.apply(memos, report, strategy)
+        return {"status": "ok", **report.to_dict()}
+
+
     return app
