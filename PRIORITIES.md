@@ -401,7 +401,8 @@ Config Claude Code (`~/.claude.json`) :
 
 ---
 
-## [ ] P17 — Memory Type Tags Zéro-LLM
+## [x] P17 — Memory Type Tags Zéro-LLM
+**Implemented v0.33.0** — AutoTagger, CLI `memos classify`, REST `/api/v1/classify`, auto-tag in `learn()`, 76 tests.
 **Objectif :** Classifier automatiquement chaque mémoire sans appel LLM, via patterns regex heuristiques.
 
 Inspiré de mempalace : 96.6% accuracy sans extraction LLM. Catégories :
