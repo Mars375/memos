@@ -139,7 +139,9 @@ class MemOS:
         )
 
         # Embedding cache (persistent disk-backed)
-        cache_enabled = kwargs.get("cache_enabled", False)
+        # Enabled by default — avoids re-calling Ollama for the same text across
+        # requests and restarts. Stored in ~/.memos/embeddings.db (persistent volume).
+        cache_enabled = kwargs.get("cache_enabled", True)
         if cache_enabled:
             self._embedding_cache = EmbeddingCache(
                 path=kwargs.get("cache_path", "~/.memos/embeddings.db"),
