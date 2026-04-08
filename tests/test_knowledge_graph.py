@@ -311,6 +311,47 @@ def test_search_entities_no_match(kg: KnowledgeGraph) -> None:
     assert results == []
 
 
+# ---------------------------------------------------------------------------
+# Regression: Bug 1 — add_fact must populate entities table
+# ---------------------------------------------------------------------------
+
+
+def test_add_fact_populates_entities_stats(kg: KnowledgeGraph) -> None:
+    """After add_fact, stats()['total_entities'] must be >= 2 (subject + object)."""
+    kg.add_fact("Alice", "knows", "Bob")
+    s = kg.stats()
+    assert s["total_entities"] >= 2, (
+        f"Expected >= 2 entities after add_fact, got {s['total_entities']}"
+    )
+
+
+def test_add_fact_search_entities_finds_subject(kg: KnowledgeGraph) -> None:
+    """After add_fact, search_entities should return the subject entity."""
+    kg.add_fact("Alice", "knows", "Bob")
+    results = kg.search_entities("Alice")
+    assert len(results) >= 1
+    names = [r["name"] for r in results]
+    assert "Alice" in names
+
+
+def test_add_fact_search_entities_finds_object(kg: KnowledgeGraph) -> None:
+    """After add_fact, search_entities should return the object entity."""
+    kg.add_fact("Alice", "knows", "Bob")
+    results = kg.search_entities("Bob")
+    assert len(results) >= 1
+    names = [r["name"] for r in results]
+    assert "Bob" in names
+
+
+def test_add_fact_entities_deduped(kg: KnowledgeGraph) -> None:
+    """Adding multiple facts with the same entity name should not duplicate it."""
+    kg.add_fact("Alice", "knows", "Bob")
+    kg.add_fact("Alice", "likes", "Coffee")
+    results = kg.search_entities("Alice")
+    alice_rows = [r for r in results if r["name"] == "Alice"]
+    assert len(alice_rows) == 1, "Entity 'Alice' should appear exactly once in entities table"
+
+
 def test_add_fact_populates_entities_table(kg: KnowledgeGraph) -> None:
     """Regression: add_fact() must upsert subject and object into entities."""
     kg.add_fact("Alice", "works_on", "ProjectX")
