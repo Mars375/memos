@@ -401,6 +401,304 @@ def _parse_slack_jsonl(lines: List[str]) -> Iterator[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Discord export parser
+# ---------------------------------------------------------------------------
+
+def _parse_discord_export(data: Any) -> Iterator[dict]:
+    """Parse Discord export JSON (DiscordChatExporter format).
+
+    Top-level structure:
+    {
+      "guild": {"name": "..."},
+      "channel": {"name": "...", "type": "..."},
+      "messages": [
+        {"id": "...", "timestamp": "...", "author": {"name": "..."}, "content": "...",
+         "embeds": [...], "attachments": [...]}
+      ]
+    }
+    Also handles exported arrays of channels.
+    """
+    if isinstance(data, list):
+        for item in data:
+            yield from _parse_discord_export(item)
+        return
+
+    if not isinstance(data, dict):
+        return
+
+    guild_name = data.get("guild", {}).get("name", "")
+    channel = data.get("channel", {})
+    channel_name = channel.get("name", "")
+    channel_type = channel.get("type", "")
+
+    messages = data.get("messages", [])
+    if not messages:
+        return
+
+    # Group messages into conversation windows (10-min windows)
+    parsed: List[dict] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content", "").strip()
+        # Also grab embed descriptions
+        for embed in msg.get("embeds", []):
+            if isinstance(embed, dict):
+                desc = embed.get("description", "")
+                if desc:
+                    content += f"\n{desc}"
+        if not content:
+            continue
+        author = msg.get("author", {}).get("name", "user")
+        ts_str = msg.get("timestamp", "")
+        # Parse ISO timestamp to float
+        ts = 0.0
+        if ts_str:
+            try:
+                import datetime
+                dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                ts = dt.timestamp()
+            except Exception:
+                pass
+        parsed.append({"ts": ts, "author": author, "content": content})
+
+    if not parsed:
+        return
+
+    parsed.sort(key=lambda m: m["ts"])
+    window = 600  # 10 minutes
+    group: List[dict] = []
+    group_start = parsed[0]["ts"]
+
+    def _emit(g: List[dict]) -> dict:
+        lines = [f"[{m['author']}] {m['content']}" for m in g]
+        created = ""
+        if g[0]["ts"]:
+            import datetime
+            created = datetime.datetime.fromtimestamp(g[0]["ts"]).isoformat()
+        return {
+            "text": "\n".join(lines),
+            "source": f"{guild_name}#{channel_name}" if guild_name else channel_name,
+            "created": created,
+            "format": "discord",
+            "channel_type": channel_type,
+        }
+
+    for msg in parsed:
+        if msg["ts"] - group_start > window and group:
+            yield _emit(group)
+            group = []
+            group_start = msg["ts"]
+        group.append(msg)
+
+    if group:
+        yield _emit(group)
+
+
+# ---------------------------------------------------------------------------
+# Telegram export parser
+# ---------------------------------------------------------------------------
+
+def _parse_telegram_export(data: Any) -> Iterator[dict]:
+    """Parse Telegram export JSON (result.json from Telegram Desktop).
+
+    Structure:
+    {
+      "name": "Chat Name",
+      "type": "personal_chat" | "private_group" | "private_supergroup" | "public_channel",
+      "messages": [
+        {
+          "id": 123, "type": "message", "date": "2024-01-01T10:00:00",
+          "from": "Alice", "from_id": "user123",
+          "text": "Hello!" | [{"type": "plain", "text": "Hello"}, ...]
+        }
+      ]
+    }
+    """
+    if not isinstance(data, dict):
+        return
+
+    chat_name = data.get("name", "")
+    chat_type = data.get("type", "")
+    messages = data.get("messages", [])
+
+    def _extract_text(text_obj: Any) -> str:
+        """Telegram text can be a plain string or a list of text entities."""
+        if isinstance(text_obj, str):
+            return text_obj
+        if isinstance(text_obj, list):
+            parts = []
+            for part in text_obj:
+                if isinstance(part, str):
+                    parts.append(part)
+                elif isinstance(part, dict):
+                    parts.append(part.get("text", ""))
+            return "".join(parts)
+        return ""
+
+    # Group into 15-min conversation windows
+    parsed: List[dict] = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("type") != "message":
+            continue
+        text = _extract_text(msg.get("text", ""))
+        if not text.strip():
+            continue
+        sender = msg.get("from") or msg.get("actor") or "user"
+        date_str = msg.get("date", "")
+        ts = 0.0
+        if date_str:
+            try:
+                import datetime
+                dt = datetime.datetime.fromisoformat(date_str)
+                ts = dt.timestamp()
+            except Exception:
+                pass
+        parsed.append({"ts": ts, "from": sender, "text": text.strip()})
+
+    if not parsed:
+        return
+
+    parsed.sort(key=lambda m: m["ts"])
+    window = 900  # 15 minutes
+    group: List[dict] = []
+    group_start = parsed[0]["ts"]
+
+    def _emit_tg(g: List[dict]) -> dict:
+        lines = [f"[{m['from']}] {m['text']}" for m in g]
+        created = ""
+        if g[0]["ts"]:
+            import datetime
+            created = datetime.datetime.fromtimestamp(g[0]["ts"]).isoformat()
+        return {
+            "text": "\n".join(lines),
+            "source": chat_name,
+            "created": created,
+            "format": "telegram",
+            "chat_type": chat_type,
+        }
+
+    for msg in parsed:
+        if msg["ts"] - group_start > window and group:
+            yield _emit_tg(group)
+            group = []
+            group_start = msg["ts"]
+        group.append(msg)
+
+    if group:
+        yield _emit_tg(group)
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw session/log parser
+# ---------------------------------------------------------------------------
+
+def _parse_openclaw_session(data: Any) -> Iterator[dict]:
+    """Parse OpenClaw session logs and agent memory files.
+
+    Handles multiple OpenClaw formats:
+
+    1. Session JSONL/JSON — cron execution logs:
+       {"ts": ..., "job": "...", "output": "...", "status": "..."}
+
+    2. Agent summary JSON — produced by forge-* crons:
+       {"summary": "...", "decisions": [...], "learnings": [...], "session_id": "..."}
+
+    3. Memory snapshot JSON — agent state dumps:
+       {"memories": [{"content": "...", "tags": [...]}]}
+
+    4. Plain text / markdown session output (handled by mine_file)
+    """
+    if isinstance(data, list):
+        # Could be JSONL array or batch of sessions
+        for item in data:
+            if isinstance(item, dict):
+                yield from _parse_openclaw_session(item)
+        return
+
+    if not isinstance(data, dict):
+        return
+
+    # Format 1: cron job execution log
+    if "job" in data and ("output" in data or "result" in data):
+        job = data.get("job", "")
+        output = data.get("output") or data.get("result") or ""
+        status = data.get("status", "")
+        ts = data.get("ts") or data.get("timestamp") or ""
+        if isinstance(output, dict):
+            output = json.dumps(output)
+        if output and str(output).strip():
+            created = ""
+            if ts:
+                try:
+                    import datetime
+                    if isinstance(ts, (int, float)):
+                        created = datetime.datetime.fromtimestamp(ts).isoformat()
+                    else:
+                        created = str(ts)
+                except Exception:
+                    pass
+            yield {
+                "text": f"[{job}] {status}\n{output}".strip(),
+                "source": f"openclaw/{job}",
+                "created": created,
+                "format": "openclaw",
+            }
+        return
+
+    # Format 2: agent summary
+    if "summary" in data or "learnings" in data or "decisions" in data:
+        parts: List[str] = []
+        if data.get("summary"):
+            parts.append(str(data["summary"]))
+        for field_name in ("learnings", "decisions", "insights", "actions"):
+            items_field = data.get(field_name, [])
+            if isinstance(items_field, list) and items_field:
+                parts.append(f"\n{field_name.title()}:")
+                for item in items_field:
+                    parts.append(f"- {item}")
+            elif isinstance(items_field, str) and items_field:
+                parts.append(f"{field_name.title()}: {items_field}")
+        text = "\n".join(parts).strip()
+        if text:
+            yield {
+                "text": text,
+                "source": data.get("session_id") or data.get("agent") or "openclaw",
+                "created": data.get("timestamp") or data.get("ts") or "",
+                "format": "openclaw",
+            }
+        return
+
+    # Format 3: memory snapshot
+    if "memories" in data:
+        for mem_item in data.get("memories", []):
+            if isinstance(mem_item, dict) and mem_item.get("content"):
+                yield {
+                    "text": str(mem_item["content"]),
+                    "source": "openclaw/memory-snapshot",
+                    "created": "",
+                    "format": "openclaw",
+                    "_tags": mem_item.get("tags", []),
+                }
+        return
+
+    # Format 4: generic key-value agent state
+    # Try to extract any meaningful text fields
+    for key in ("content", "text", "message", "output", "result", "note"):
+        val = data.get(key)
+        if val and isinstance(val, str) and len(val.strip()) > 20:
+            yield {
+                "text": val.strip(),
+                "source": f"openclaw/{key}",
+                "created": data.get("ts") or data.get("timestamp") or "",
+                "format": "openclaw",
+            }
+            return
+
+
+# ---------------------------------------------------------------------------
 # .gitignore-aware file iterator
 # ---------------------------------------------------------------------------
 
@@ -687,6 +985,141 @@ class Miner:
 
         return result
 
+    def mine_discord_export(
+        self,
+        path: str | Path,
+        tags: Optional[List[str]] = None,
+        importance: float = 0.6,
+    ) -> MineResult:
+        """Import a Discord export JSON file (DiscordChatExporter format)."""
+        path = Path(path).expanduser()
+        result = MineResult()
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            result.errors.append(f"Parse error {path}: {exc}")
+            return result
+
+        base_tags = list(tags or []) + ["discord", "conversation"]
+
+        for convo in _parse_discord_export(data):
+            convo_tags = list(base_tags)
+            source = convo.get("source", "")
+            if source and source not in ("", "discord"):
+                slug = re.sub(r"[^a-z0-9_#]", "_", source.lower())[:40]
+                if slug:
+                    convo_tags.append(slug)
+            result.merge(self._mine_chunks(
+                convo["text"], convo_tags, importance=importance
+            ))
+
+        return result
+
+    def mine_telegram_export(
+        self,
+        path: str | Path,
+        tags: Optional[List[str]] = None,
+        importance: float = 0.6,
+    ) -> MineResult:
+        """Import a Telegram export JSON file (result.json from Telegram Desktop)."""
+        path = Path(path).expanduser()
+        result = MineResult()
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            result.errors.append(f"Parse error {path}: {exc}")
+            return result
+
+        base_tags = list(tags or []) + ["telegram", "conversation"]
+
+        for convo in _parse_telegram_export(data):
+            convo_tags = list(base_tags)
+            source = convo.get("source", "")
+            if source:
+                slug = re.sub(r"[^a-z0-9_]", "_", source.lower())[:30]
+                if slug:
+                    convo_tags.append(slug)
+            # Add channel type as tag (personal/group/channel)
+            chat_type = convo.get("chat_type", "")
+            if chat_type and chat_type not in convo_tags:
+                convo_tags.append(chat_type.replace("_", "-"))
+            result.merge(self._mine_chunks(
+                convo["text"], convo_tags, importance=importance
+            ))
+
+        return result
+
+    def mine_openclaw(
+        self,
+        path: str | Path,
+        tags: Optional[List[str]] = None,
+        importance: float = 0.7,
+    ) -> MineResult:
+        """Import OpenClaw session logs, agent summaries, or memory snapshots.
+
+        Handles:
+        - JSON session/cron logs ({"job": ..., "output": ...})
+        - Agent summary JSON ({"summary": ..., "learnings": [...], "decisions": [...]})
+        - Memory snapshot JSON ({"memories": [...]})
+        - JSONL log files (one JSON object per line)
+        - Directories of OpenClaw logs
+        """
+        path = Path(path).expanduser()
+        result = MineResult()
+
+        if path.is_dir():
+            # Mine all JSON/JSONL/MD files in the directory
+            for f in iter_files(path, extensions={".json", ".jsonl", ".md", ".txt"}):
+                r = self.mine_openclaw(f, tags=tags, importance=importance)
+                result.merge(r)
+            return result
+
+        base_tags = list(tags or []) + ["openclaw"]
+
+        suffix = path.suffix.lower()
+
+        # JSONL — one record per line
+        if suffix == ".jsonl":
+            try:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            except Exception as exc:
+                result.errors.append(str(exc))
+                return result
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                    for convo in _parse_openclaw_session(item):
+                        t = list(base_tags)
+                        extra = convo.pop("_tags", [])
+                        t.extend(extra)
+                        result.merge(self._mine_chunks(convo["text"], t, importance=importance))
+                except json.JSONDecodeError:
+                    pass
+            return result
+
+        # JSON
+        if suffix == ".json":
+            try:
+                data = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+            except Exception as exc:
+                result.errors.append(str(exc))
+                return result
+
+            for convo in _parse_openclaw_session(data):
+                t = list(base_tags)
+                extra = convo.pop("_tags", [])
+                t.extend(extra)
+                result.merge(self._mine_chunks(convo["text"], t, importance=importance))
+            return result
+
+        # Markdown / text — fallback to mine_file
+        return self.mine_file(path, tags=base_tags, importance=importance)
+
     def mine_auto(
         self,
         path: str | Path,
@@ -696,18 +1129,29 @@ class Miner:
         """Auto-detect format and mine accordingly.
 
         Detection order:
-        1. .jsonl → Slack
-        2. .json with Claude structure → Claude
-        3. .json with ChatGPT structure → ChatGPT
-        4. Directory → mine_directory
-        5. Otherwise → mine_file
+        1. Directory → mine_directory
+        2. .jsonl → Slack (default) or OpenClaw if path contains 'openclaw'/'cron'
+        3. .json → sniff structure:
+           - Discord: has "guild" + "channel" + "messages"
+           - Telegram: has "messages" with Telegram fields (from_id, date as string)
+           - OpenClaw: has "job"/"summary"/"memories"/"learnings"
+           - Claude: has "messages" with role=human/assistant
+           - ChatGPT: has "mapping"
+        4. Otherwise → mine_file
         """
         path = Path(path).expanduser()
 
         if path.is_dir():
+            # Check if it looks like an OpenClaw dir
+            path_lower = str(path).lower()
+            if "openclaw" in path_lower or "cron" in path_lower:
+                return self.mine_openclaw(path, tags=tags, importance=importance)
             return self.mine_directory(path, tags=tags, importance=importance)
 
         if path.suffix.lower() == ".jsonl":
+            path_lower = str(path).lower()
+            if "openclaw" in path_lower or "cron" in path_lower or "agent" in path_lower:
+                return self.mine_openclaw(path, tags=tags, importance=importance)
             return self.mine_slack_export(path, tags=tags, importance=importance)
 
         if path.suffix.lower() == ".json":
@@ -716,17 +1160,33 @@ class Miner:
             except Exception:
                 return self.mine_file(path, tags=tags, importance=importance)
 
-            # Detect Claude: has "messages" with "role": "human"|"assistant"
-            if isinstance(data, list) and data and isinstance(data[0], dict):
-                if "messages" in data[0] or "chat_messages" in data[0]:
+            # Sniff structure
+            root = data[0] if isinstance(data, list) and data else data
+
+            if isinstance(root, dict):
+                # Discord: guild + channel keys
+                if "guild" in root and "channel" in root:
+                    return self.mine_discord_export(path, tags=tags, importance=importance)
+
+                # Telegram: messages list where items have "from_id" or "actor_id"
+                if "messages" in root and isinstance(root["messages"], list):
+                    msgs = root["messages"]
+                    sample = next((m for m in msgs if isinstance(m, dict)), {})
+                    if "from_id" in sample or "actor_id" in sample or "date" in sample:
+                        # Check if date is ISO string (Telegram style) vs dict (Claude style)
+                        if isinstance(sample.get("date"), str) and "from_id" in sample:
+                            return self.mine_telegram_export(path, tags=tags, importance=importance)
+
+                # OpenClaw: job/summary/memories/learnings fields
+                if any(k in root for k in ("job", "summary", "learnings", "decisions", "memories")):
+                    return self.mine_openclaw(path, tags=tags, importance=importance)
+
+                # Claude: messages with role=human/assistant
+                if "messages" in root or "chat_messages" in root:
                     return self.mine_claude_export(path, tags=tags, importance=importance)
-                # ChatGPT: has "mapping" key
-                if "mapping" in data[0]:
-                    return self.mine_chatgpt_export(path, tags=tags, importance=importance)
-            elif isinstance(data, dict):
-                if "messages" in data or "chat_messages" in data:
-                    return self.mine_claude_export(path, tags=tags, importance=importance)
-                if "mapping" in data:
+
+                # ChatGPT: mapping tree
+                if "mapping" in root:
                     return self.mine_chatgpt_export(path, tags=tags, importance=importance)
 
         return self.mine_file(path, tags=tags, importance=importance)

@@ -1070,8 +1070,9 @@ def build_parser() -> argparse.ArgumentParser:
     # mine
     mine_p = sub.add_parser("mine", help="Smart mine — import files/conversations into memories")
     mine_p.add_argument("paths", nargs="+", help="Files or directories to mine")
-    mine_p.add_argument("--format", choices=["auto", "claude", "chatgpt", "slack"], default="auto",
-                        help="Force format (default: auto-detect)")
+    mine_p.add_argument("--format",
+                        choices=["auto", "claude", "chatgpt", "slack", "discord", "telegram", "openclaw"],
+                        default="auto", help="Force format (default: auto-detect)")
     mine_p.add_argument("--tags", nargs="*", help="Extra tags to apply to all chunks")
     mine_p.add_argument("--chunk-size", type=int, default=800, dest="chunk_size",
                         help="Max chars per chunk (default: 800)")
@@ -1702,6 +1703,12 @@ def cmd_mine(ns: argparse.Namespace) -> None:
             r = miner.mine_chatgpt_export(path, tags=tags)
         elif fmt == "slack":
             r = miner.mine_slack_export(path, tags=tags)
+        elif fmt == "discord":
+            r = miner.mine_discord_export(path, tags=tags)
+        elif fmt == "telegram":
+            r = miner.mine_telegram_export(path, tags=tags)
+        elif fmt == "openclaw":
+            r = miner.mine_openclaw(path, tags=tags)
         else:
             r = miner.mine_auto(path, tags=tags)
 

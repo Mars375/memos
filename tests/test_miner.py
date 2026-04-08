@@ -7,6 +7,7 @@ from memos.ingest.miner import (
     Miner, MineResult,
     chunk_text, content_hash, detect_room, iter_files,
     _parse_claude_export, _parse_chatgpt_export, _parse_slack_jsonl,
+    _parse_discord_export, _parse_telegram_export, _parse_openclaw_session,
 )
 
 
@@ -326,3 +327,285 @@ def test_mine_result_merge():
     assert r1.imported == 5
     assert r1.skipped_duplicates == 1
     assert r1.errors == ["oops"]
+
+
+# ---------------------------------------------------------------------------
+# Discord
+# ---------------------------------------------------------------------------
+
+def test_parse_discord_basic():
+    data = {
+        "guild": {"name": "MyServer"},
+        "channel": {"name": "general", "type": "GuildTextChat"},
+        "messages": [
+            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
+             "author": {"name": "alice"}, "content": "Hello everyone!"},
+            {"id": "2", "timestamp": "2024-01-01T10:01:00+00:00",
+             "author": {"name": "bob"}, "content": "Hey Alice!"},
+        ]
+    }
+    result = list(_parse_discord_export(data))
+    assert len(result) == 1
+    assert "[alice]" in result[0]["text"]
+    assert "[bob]" in result[0]["text"]
+    assert result[0]["format"] == "discord"
+    assert "MyServer" in result[0]["source"]
+
+
+def test_parse_discord_window_split():
+    data = {
+        "guild": {"name": "S"}, "channel": {"name": "c"},
+        "messages": [
+            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
+             "author": {"name": "a"}, "content": "First message"},
+            {"id": "2", "timestamp": "2024-01-01T11:00:00+00:00",  # 1h later
+             "author": {"name": "b"}, "content": "Different window"},
+        ]
+    }
+    result = list(_parse_discord_export(data))
+    assert len(result) == 2  # different 10-min windows
+
+
+def test_parse_discord_list():
+    data = [
+        {"guild": {"name": "S"}, "channel": {"name": "c1"},
+         "messages": [{"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
+                       "author": {"name": "a"}, "content": "Hi"}]},
+        {"guild": {"name": "S"}, "channel": {"name": "c2"},
+         "messages": [{"id": "2", "timestamp": "2024-01-01T10:00:00+00:00",
+                       "author": {"name": "b"}, "content": "Hello"}]},
+    ]
+    result = list(_parse_discord_export(data))
+    assert len(result) == 2
+
+
+def test_miner_discord_export(tmp_path, mem):
+    export = tmp_path / "discord.json"
+    data = {
+        "guild": {"name": "DevServer"},
+        "channel": {"name": "python", "type": "GuildTextChat"},
+        "messages": [
+            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
+             "author": {"name": "dev1"}, "content": "FastAPI is great for building REST APIs."},
+            {"id": "2", "timestamp": "2024-01-01T10:02:00+00:00",
+             "author": {"name": "dev2"}, "content": "Agreed, async support is excellent."},
+        ]
+    }
+    export.write_text(json.dumps(data))
+    miner = Miner(mem)
+    result = miner.mine_discord_export(export)
+    assert result.imported >= 1
+    assert result.errors == []
+
+
+def test_miner_auto_discord(tmp_path, mem):
+    export = tmp_path / "discord_export.json"
+    data = {
+        "guild": {"name": "S"}, "channel": {"name": "c"},
+        "messages": [{"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
+                      "author": {"name": "a"}, "content": "Testing auto-detection of discord format."}]
+    }
+    export.write_text(json.dumps(data))
+    miner = Miner(mem)
+    result = miner.mine_auto(export)
+    assert result.imported >= 1
+
+
+# ---------------------------------------------------------------------------
+# Telegram
+# ---------------------------------------------------------------------------
+
+def test_parse_telegram_basic():
+    data = {
+        "name": "My Chat",
+        "type": "personal_chat",
+        "messages": [
+            {"id": 1, "type": "message", "date": "2024-01-01T10:00:00",
+             "from": "alice", "from_id": "user123", "text": "Hello!"},
+            {"id": 2, "type": "message", "date": "2024-01-01T10:01:00",
+             "from": "bob", "from_id": "user456", "text": "Hey there!"},
+        ]
+    }
+    result = list(_parse_telegram_export(data))
+    assert len(result) >= 1
+    assert "[alice]" in result[0]["text"]
+    assert result[0]["format"] == "telegram"
+
+
+def test_parse_telegram_formatted_text():
+    """Telegram text can be a list of entity objects."""
+    data = {
+        "name": "Chat", "type": "personal_chat",
+        "messages": [{
+            "id": 1, "type": "message", "date": "2024-01-01T10:00:00",
+            "from": "user", "from_id": "u1",
+            "text": [
+                {"type": "plain", "text": "Check out "},
+                {"type": "link", "text": "this link"},
+                " for more info.",
+            ]
+        }]
+    }
+    result = list(_parse_telegram_export(data))
+    assert len(result) == 1
+    assert "Check out" in result[0]["text"]
+    assert "this link" in result[0]["text"]
+
+
+def test_parse_telegram_skips_non_messages():
+    data = {
+        "name": "Chat", "type": "personal_chat",
+        "messages": [
+            {"id": 1, "type": "service", "date": "2024-01-01T10:00:00",
+             "from": "system", "action": "pin_message"},
+            {"id": 2, "type": "message", "date": "2024-01-01T10:01:00",
+             "from": "alice", "from_id": "u1", "text": "Valid message content here."},
+        ]
+    }
+    result = list(_parse_telegram_export(data))
+    assert len(result) == 1
+    assert "Valid message" in result[0]["text"]
+
+
+def test_miner_telegram_export(tmp_path, mem):
+    export = tmp_path / "result.json"
+    data = {
+        "name": "Dev Chat", "type": "private_supergroup",
+        "messages": [
+            {"id": 1, "type": "message", "date": "2024-01-01T10:00:00",
+             "from": "alice", "from_id": "u1",
+             "text": "We should use PostgreSQL for this project data storage."},
+            {"id": 2, "type": "message", "date": "2024-01-01T10:02:00",
+             "from": "bob", "from_id": "u2", "text": "Agreed, it handles relations well."},
+        ]
+    }
+    export.write_text(json.dumps(data))
+    miner = Miner(mem)
+    result = miner.mine_telegram_export(export)
+    assert result.imported >= 1
+    assert result.errors == []
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw
+# ---------------------------------------------------------------------------
+
+def test_parse_openclaw_cron_log():
+    data = {"job": "forge-chantier-memos", "status": "done",
+            "ts": 1700000000, "output": "Implemented wiki compile mode with 10 tests."}
+    result = list(_parse_openclaw_session(data))
+    assert len(result) == 1
+    assert "forge-chantier-memos" in result[0]["text"]
+    assert "wiki compile" in result[0]["text"]
+    assert result[0]["format"] == "openclaw"
+
+
+def test_parse_openclaw_summary():
+    data = {
+        "summary": "Session focused on MCP server implementation.",
+        "learnings": ["JSON-RPC 2.0 requires exact id matching", "FastAPI Request type must be imported at module level"],
+        "decisions": ["Use stdio transport for Claude Code integration"],
+    }
+    result = list(_parse_openclaw_session(data))
+    assert len(result) == 1
+    assert "MCP server" in result[0]["text"]
+    assert "JSON-RPC" in result[0]["text"]
+    assert "stdio transport" in result[0]["text"]
+
+
+def test_parse_openclaw_memory_snapshot():
+    data = {
+        "memories": [
+            {"content": "Python async is essential for IO-bound tasks.", "tags": ["python", "async"]},
+            {"content": "Docker multi-stage builds reduce image size.", "tags": ["docker"]},
+        ]
+    }
+    result = list(_parse_openclaw_session(data))
+    assert len(result) == 2
+    assert result[0]["_tags"] == ["python", "async"]
+
+
+def test_parse_openclaw_list():
+    data = [
+        {"job": "job1", "output": "Result of first job execution."},
+        {"job": "job2", "output": "Result of second job execution."},
+    ]
+    result = list(_parse_openclaw_session(data))
+    assert len(result) == 2
+
+
+def test_miner_openclaw_json(tmp_path, mem):
+    log = tmp_path / "session.json"
+    data = {"job": "forge-chantier-memos", "status": "done",
+            "output": "Added temporal knowledge graph with SQLite backend and validity windows."}
+    log.write_text(json.dumps(data))
+    miner = Miner(mem)
+    result = miner.mine_openclaw(log)
+    assert result.imported >= 1
+    assert "openclaw" in mem.recall("knowledge graph", top=1)[0].item.tags
+
+
+def test_miner_openclaw_jsonl(tmp_path, mem):
+    log = tmp_path / "cron.jsonl"
+    lines = [
+        json.dumps({"job": "forge-gate", "status": "ok", "output": "Spawned memos chantier."}),
+        json.dumps({"job": "forge-scout", "status": "ok", "output": "Found 3 new signals."}),
+    ]
+    log.write_text("\n".join(lines))
+    miner = Miner(mem)
+    result = miner.mine_openclaw(log)
+    assert result.imported >= 2
+
+
+def test_miner_openclaw_directory(tmp_path, mem):
+    (tmp_path / "session1.json").write_text(json.dumps(
+        {"job": "j1", "output": "Implemented first feature successfully."}))
+    (tmp_path / "notes.md").write_text("## Learnings\n\nAlways validate before building.")
+    miner = Miner(mem)
+    result = miner.mine_openclaw(tmp_path)
+    assert result.imported >= 2
+
+
+def test_miner_auto_openclaw(tmp_path, mem):
+    log = tmp_path / "openclaw_session.json"
+    data = {"summary": "Session implementing the wiki compile mode for MemOS.",
+            "learnings": ["WikiEngine groups by tag efficiently"],
+            "decisions": ["Use ~/.memos/wiki as default output dir"]}
+    log.write_text(json.dumps(data))
+    miner = Miner(mem)
+    result = miner.mine_auto(log)
+    assert result.imported >= 1
+
+
+# ---------------------------------------------------------------------------
+# mine CLI format option
+# ---------------------------------------------------------------------------
+
+def test_miner_format_choices(tmp_path, mem):
+    """Verify each format can be explicitly forced."""
+    # Discord
+    discord_file = tmp_path / "d.json"
+    discord_file.write_text(json.dumps({
+        "guild": {"name": "S"}, "channel": {"name": "c"},
+        "messages": [{"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
+                      "author": {"name": "u"}, "content": "Discord message content here."}]
+    }))
+    miner = Miner(mem)
+    r = miner.mine_discord_export(discord_file)
+    assert r.imported >= 1
+
+    # Telegram
+    tg_file = tmp_path / "t.json"
+    tg_file.write_text(json.dumps({
+        "name": "C", "type": "personal_chat",
+        "messages": [{"id": 1, "type": "message", "date": "2024-01-01T10:00:00",
+                      "from": "u", "from_id": "u1", "text": "Telegram message content here."}]
+    }))
+    r = miner.mine_telegram_export(tg_file)
+    assert r.imported >= 1
+
+    # OpenClaw
+    oc_file = tmp_path / "oc.json"
+    oc_file.write_text(json.dumps({"job": "test", "output": "OpenClaw job completed successfully."}))
+    r = miner.mine_openclaw(oc_file)
+    assert r.imported >= 1
