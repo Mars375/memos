@@ -7,7 +7,7 @@
 
 services:
   memos:
-    build: .
+    image: ghcr.io/mars375/memos:latest
     ports:
       - "8100:8000"
     volumes:
@@ -25,7 +25,7 @@ services:
 
   # --- Qdrant profile (use with: docker compose --profile qdrant up) ---
   memos-qdrant:
-    build: .
+    image: ghcr.io/mars375/memos:latest
     profiles: ["qdrant"]
     ports:
       - "8000:8000"
