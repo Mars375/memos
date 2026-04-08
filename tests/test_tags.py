@@ -337,3 +337,140 @@ class TestRenameTagAPI:
         resp = client.post("/api/v1/tags/rename", json={"old": "ghost", "new": "new"})
         assert resp.status_code == 200
         assert resp.json()["renamed"] == 0
+
+
+# ── delete_tag tests ────────────────────────────────────────────────────────
+
+
+class TestDeleteTagCore:
+    def setup_method(self):
+        self.memos = MemOS(backend=InMemoryBackend())
+
+    def test_delete_tag_removes_from_memories(self):
+        self.memos.learn("hello world", tags=["greet", "important"])
+        self.memos.learn("bye world", tags=["greet"])
+        count = self.memos.delete_tag("greet")
+        assert count == 2
+        tags = self.memos.list_tags()
+        tag_names = [t for t, _ in tags]
+        assert "greet" not in tag_names
+        assert "important" in tag_names
+
+    def test_delete_nonexistent_tag(self):
+        self.memos.learn("hello", tags=["keep"])
+        count = self.memos.delete_tag("missing")
+        assert count == 0
+        tags = self.memos.list_tags()
+        assert tags == [("keep", 1)]
+
+    def test_delete_tag_preserves_other_tags(self):
+        self.memos.learn("item", tags=["a", "b", "c"])
+        count = self.memos.delete_tag("b")
+        assert count == 1
+        items = self.memos.recall("item", top=5)
+        assert len(items) > 0
+        tags = items[0].item.tags
+        assert "a" in tags
+        assert "c" in tags
+        assert "b" not in tags
+
+    def test_delete_tag_case_insensitive(self):
+        self.memos.learn("hello", tags=["MyTag"])
+        count = self.memos.delete_tag("mytag")
+        assert count == 1
+        tags = self.memos.list_tags()
+        tag_names = [t for t, _ in tags]
+        assert "MyTag" not in tag_names
+
+    def test_delete_tag_empty_store(self):
+        count = self.memos.delete_tag("anything")
+        assert count == 0
+
+    def test_delete_tag_multiple_memories(self):
+        for i in range(5):
+            self.memos.learn(f"mem {i}", tags=["bulk", f"tag{i}"])
+        count = self.memos.delete_tag("bulk")
+        assert count == 5
+        tags = self.memos.list_tags()
+        tag_names = [t for t, _ in tags]
+        assert "bulk" not in tag_names
+        for i in range(5):
+            assert f"tag{i}" in tag_names
+
+
+class TestDeleteTagCLI:
+    def test_cli_delete_tag(self, capsys):
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+        import sys
+
+        m = MemOS(backend=InMemoryBackend())
+        m.learn("test item", tags=["remove-me", "keep"])
+
+        parser = build_parser()
+        sys.argv = ["memos", "tags", "delete", "remove-me"]
+        import unittest.mock
+        with unittest.mock.patch("memos.cli._get_memos", return_value=m):
+            main()
+        captured = capsys.readouterr()
+        assert "Deleted tag" in captured.out
+        assert "remove-me" in captured.out
+        tags = m.list_tags()
+        tag_names = [t for t, _ in tags]
+        assert "remove-me" not in tag_names
+        assert "keep" in tag_names
+
+    def test_cli_delete_missing_tag(self, capsys):
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+        import sys
+        import unittest.mock
+
+        m = MemOS(backend=InMemoryBackend())
+        m.learn("hello", tags=["stay"])
+
+        parser = build_parser()
+        sys.argv = ["memos", "tags", "delete", "ghost"]
+        with unittest.mock.patch("memos.cli._get_memos", return_value=m):
+            main()
+        captured = capsys.readouterr()
+        assert "0 memory(s)" in captured.out
+
+
+class TestDeleteTagAPI:
+    def test_api_delete_tag(self):
+        from fastapi.testclient import TestClient
+        from memos.api import create_fastapi_app
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        m.learn("api test", tags=["zap", "keep"])
+        resp = client.post("/api/v1/tags/delete", json={"tag": "zap"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["deleted"] == 1
+        assert data["tag"] == "zap"
+
+        tags = m.list_tags()
+        tag_names = [t for t, _ in tags]
+        assert "zap" not in tag_names
+
+    def test_api_delete_tag_missing_tag_in_body(self):
+        from fastapi.testclient import TestClient
+        from memos.api import create_fastapi_app
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/delete", json={})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "error" in data

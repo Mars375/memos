@@ -297,6 +297,15 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         count = memos.rename_tag(old_tag, new_tag)
         return {"status": "ok", "renamed": count, "old_tag": old_tag, "new_tag": new_tag}
 
+    @app.post("/api/v1/tags/delete")
+    async def api_tags_delete(body: dict):
+        """Delete a tag from all memories."""
+        tag = body.get("tag")
+        if not tag:
+            return {"error": "Tag name is required"}
+        count = memos.delete_tag(tag)
+        return {"status": "ok", "deleted": count, "tag": tag}
+
     @app.get("/", response_class=HTMLResponse)
     async def dashboard():
         return DASHBOARD_HTML

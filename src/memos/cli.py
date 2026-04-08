@@ -945,6 +945,10 @@ def build_parser() -> argparse.ArgumentParser:
     tags_rename.add_argument("new_tag", help="New tag name")
     tags_rename.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    tags_delete = tags_sub.add_parser("delete", help="Delete a tag from all memories")
+    tags_delete.add_argument("tag", help="Tag name to remove")
+    tags_delete.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
     # ── Sharing commands ──────────────────────────────────────
     share_offer = sub.add_parser("share-offer", help="Offer to share memories with another agent")
     share_offer.add_argument("--target", required=True, help="Target agent ID")
@@ -1395,6 +1399,11 @@ def cmd_tags(ns: argparse.Namespace) -> None:
     """Tag management commands."""
     action = getattr(ns, 'tags_action', 'list') or 'list'
     memos = _get_memos(ns)
+
+    if action == 'delete':
+        count = memos.delete_tag(ns.tag)
+        print(f"✓ Deleted tag '{ns.tag}' ({count} memory(s) updated)")
+        return
 
     if action == 'rename':
         count = memos.rename_tag(ns.old_tag, ns.new_tag)
