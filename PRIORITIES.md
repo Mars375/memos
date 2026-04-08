@@ -541,3 +541,114 @@ Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes 
 - CLI : `memos compress [--dry-run] [--threshold 0.1]`
 - REST : `POST /api/v1/compress` body `{"threshold": 0.1, "dry_run": true}`
 - Cron : auto-compression hebdomadaire si mémoires décayées > 100
+
+---
+# ═══════════════════════════════════════════════════════
+#  V1 RELEASE CHECKLIST — les 5 bloquants avant de taguer v1.0.0
+# ═══════════════════════════════════════════════════════
+
+## [ ] P25 — API Authentication (Bearer Token + Namespace Keys)
+**Priorité : CRITIQUE — bloquant v1**
+**Objectif :** Sécuriser l'API REST et isoler les namespaces par agent.
+
+Sans auth, n'importe quel process sur le réseau peut lire/écrire toutes les mémoires de tous les agents.
+
+À implémenter dans `src/memos/api/auth.py` :
+- `API_KEY` env var → master key (accès total)
+- `MEMOS_NAMESPACE_KEYS` env var → JSON map `{"orion": "key1", "specter": "key2"}` (clé par namespace)
+- FastAPI dependency `require_auth(request)` — vérifie `Authorization: Bearer <key>`
+- Si clé de namespace → force `namespace` dans la requête (pas d'accès cross-namespace)
+- Si master key → accès total (utile pour le dashboard, l'admin)
+- `GET /api/v1/auth/whoami` — retourne namespace autorisé + permissions
+- Middleware : log les tentatives d'accès non autorisées
+- Si `API_KEY` non configuré → mode open (backward compat, log warning au démarrage)
+
+Config docker-compose :
+```yaml
+- API_KEY=<master-key>
+- MEMOS_NAMESPACE_KEYS={"orion":"<key>","specter":"<key>","tachikoma":"<key>"}
+```
+
+---
+
+## [ ] P26 — Memory Deduplication (Near-duplicate Detection)
+**Priorité : CRITIQUE — bloquant v1**
+**Objectif :** Empêcher l'accumulation de mémoires dupliquées lors des re-imports.
+
+Sans dédup, miner le même fichier deux fois double les mémoires → recall bruité, stats faussées.
+
+À implémenter dans `src/memos/dedup.py` :
+- `DedupEngine` classe
+- `is_duplicate(content: str, existing: list[MemoryItem], threshold=0.95) -> MemoryItem | None`
+  - Exact match : SHA-256 sur le contenu normalisé (trim + lowercase) → O(1)
+  - Near-dup : Jaccard sur trigrams si aucun exact match → retourne le plus proche si ≥ threshold
+- `MemOS.learn()` appelle `DedupEngine.is_duplicate()` avant d'insérer
+  - Si doublon exact → skip silencieux, retourne l'original
+  - Si near-dup → skip avec warning log, retourne l'original
+  - `learn(..., allow_duplicate=True)` → bypass pour les cas légitimes
+- CLI : `memos dedup-check "<text>"` — vérifie si une mémoire similaire existe déjà
+- REST : `POST /api/v1/dedup/check` body `{"content": "..."}` → `{"is_duplicate": bool, "match": {...}}`
+- Batch dedup : `memos dedup-scan [--fix]` — scanne toutes les mémoires, liste/supprime les doublons
+
+---
+
+## [ ] P27 — Namespace Management API
+**Priorité : HAUTE — bloquant v1 multi-agent**
+**Objectif :** API REST complète pour gérer les namespaces — indispensable pour 5 agents OpenClaw.
+
+Actuellement : les namespaces existent en CLI mais invisible depuis l'API → aucun outil agent ne peut gérer ses propres espaces.
+
+À implémenter dans `src/memos/api/__init__.py` :
+- `GET /api/v1/namespaces` — liste tous les namespaces (nom, nb mémoires, taille, dernière activité)
+- `POST /api/v1/namespaces` body `{"name": "orion", "description": "SRE agent"}` — crée un namespace
+- `GET /api/v1/namespaces/{name}` — stats détaillées (nb mémoires, top tags, dernière écriture)
+- `DELETE /api/v1/namespaces/{name}` — supprime namespace + toutes ses mémoires (confirmation required)
+- `POST /api/v1/namespaces/{name}/export` — export JSON du namespace
+- `POST /api/v1/namespaces/{name}/import` — import JSON dans le namespace
+- MCP tool : `namespace_list`, `namespace_stats`
+- CLI : `memos namespaces list`, `memos namespaces delete <name>`
+
+---
+
+## [ ] P28 — Advanced Recall Filters (Date, Importance, Tag Logic)
+**Priorité : HAUTE — qualité v1**
+**Objectif :** Recall structuré pour les requêtes agent complexes — pas juste query+tags+top_k.
+
+À implémenter :
+- `POST /api/v1/recall` body enrichi :
+  ```json
+  {
+    "query": "...",
+    "tags": {"include": ["project-x"], "exclude": ["archived"], "mode": "AND"},
+    "importance": {"min": 0.3, "max": 1.0},
+    "created_after": "2026-01-01",
+    "created_before": "2026-04-01",
+    "top_k": 10,
+    "retrieval_mode": "hybrid"
+  }
+  ```
+- `GET /api/v1/memories` query params : `tag=x&tag=y&min_importance=0.3&after=2026-01-01&sort=importance`
+- `src/memos/query.py` : `MemoryQuery` dataclass + `QueryEngine.execute(query, store)`
+- Tag logic : `include` (must have ANY), `require` (must have ALL), `exclude` (must not have)
+- MCP tool `memory_search` enrichi avec les nouveaux paramètres
+- CLI : `memos recall "<query>" --min-importance 0.5 --after 2026-01-01 --tags project-x`
+
+---
+
+## [ ] P29 — PyPI Release + README v1
+**Priorité : HAUTE — condition nécessaire pour v1.0.0**
+**Objectif :** `pip install memos-agent` fonctionne. Le README est la documentation de référence.
+
+À faire :
+- Renommer le package PyPI en `memos-agent` (éviter conflit avec `memos` existant)
+- `pyproject.toml` : bump version → `1.0.0`, description complète, classifiers, keywords
+- GitHub Actions workflow `publish.yml` : build + push PyPI sur tag `v1.*`
+- README complet :
+  - Quick start (3 commandes)
+  - MCP config : OpenClaw, Claude Code, Cursor (exemples copy-paste)
+  - Backends : memory/json/chroma/qdrant — quand utiliser lequel
+  - Docker one-liner avec variables d'env
+  - API reference (lien vers `/docs` Swagger auto-généré)
+  - Badge PyPI, Docker, coverage
+- `CHANGELOG.md` : entrées depuis v0.29.0 jusqu'à v1.0.0
+- GitHub Release `v1.0.0` avec notes de release
