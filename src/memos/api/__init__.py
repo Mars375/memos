@@ -471,6 +471,65 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         """Return knowledge graph statistics."""
         return _kg.stats()
 
+    @app.get("/api/v1/kg/paths")
+    async def kg_paths(
+        entity_a: str,
+        entity_b: str,
+        max_hops: int = 3,
+        max_paths: int = 10,
+    ):
+        """Find paths between two entities in the knowledge graph."""
+        paths = _kg.find_paths(entity_a, entity_b, max_hops=max_hops, max_paths=max_paths)
+        return {
+            "entity_a": entity_a,
+            "entity_b": entity_b,
+            "max_hops": max_hops,
+            "paths": [
+                {
+                    "hops": len(p),
+                    "edges": [
+                        {
+                            "id": t["id"],
+                            "subject": t["subject"],
+                            "predicate": t["predicate"],
+                            "object": t["object"],
+                            "confidence": t["confidence"],
+                        }
+                        for t in p
+                    ],
+                }
+                for p in paths
+            ],
+            "total": len(paths),
+        }
+
+    @app.get("/api/v1/kg/neighbors")
+    async def kg_neighbors(
+        entity: str,
+        depth: int = 1,
+        direction: str = "both",
+    ):
+        """Show entity neighborhood up to N hops."""
+        result = _kg.neighbors(entity, depth=depth, direction=direction)
+        return {
+            "center": result["center"],
+            "depth": result["depth"],
+            "total_nodes": len(result["nodes"]),
+            "total_edges": len(result["edges"]),
+            "nodes": result["nodes"],
+            "layers": result["layers"],
+            "edges": [
+                {
+                    "id": t["id"],
+                    "subject": t["subject"],
+                    "predicate": t["predicate"],
+                    "object": t["object"],
+                    "confidence": t["confidence"],
+                }
+                for t in result["edges"]
+            ],
+        }
+
     # ---- End Knowledge Graph ----
 
     # ---- Palace (P6) ----

@@ -901,6 +901,64 @@ def cmd_kg_stats(ns: argparse.Namespace) -> None:
         kg.close()
 
 
+def cmd_kg_path(ns: argparse.Namespace) -> None:
+    """Find paths between two entities in the knowledge graph."""
+    kg = _get_kg(ns)
+    try:
+        paths = kg.find_paths(
+            ns.entity_a, ns.entity_b,
+            max_hops=getattr(ns, "max_hops", 3),
+            max_paths=getattr(ns, "max_paths", 10),
+        )
+        if not paths:
+            print(f"No path found between {ns.entity_a!r} and {ns.entity_b!r}")
+            return
+        print(f"Found {len(paths)} path(s):")
+        for i, path in enumerate(paths, 1):
+            hops = len(path)
+            print(f"\n  Path {i} ({hops} hop{'s' if hops != 1 else ''}):")
+            for triple in path:
+                vf = f" (from {_ts(triple['valid_from'])})" if triple.get('valid_from') else ""
+                print(f"    {triple['subject']} -[{triple['predicate']}]-> {triple['object']}{vf}")
+    finally:
+        kg.close()
+
+
+def cmd_kg_neighbors(ns: argparse.Namespace) -> None:
+    """Show entity neighborhood in the knowledge graph."""
+    kg = _get_kg(ns)
+    try:
+        result = kg.neighbors(
+            ns.entity,
+            depth=getattr(ns, "depth", 1),
+            direction=getattr(ns, "direction", "both"),
+        )
+        print(f"Neighborhood of {ns.entity!r} (depth={result['depth']}):")
+        print(f"  Nodes discovered: {len(result['nodes'])}")
+        print(f"  Edges discovered: {len(result['edges'])}")
+        if result["layers"]:
+            for hop, entities in result["layers"].items():
+                if entities:
+                    print(f"  Hop {hop}: {', '.join(entities)}")
+        if result["edges"]:
+            print(f"\n  Edges:")
+            for triple in result["edges"]:
+                print(f"    {triple['subject']} -[{triple['predicate']}]-> {triple['object']}")
+    finally:
+        kg.close()
+
+
+def _ts(val) -> str:
+    """Format a timestamp for display."""
+    if val is None:
+        return ""
+    from datetime import datetime, timezone
+    try:
+        return datetime.fromtimestamp(val, tz=timezone.utc).strftime("%Y-%m-%d")
+    except Exception:
+        return str(val)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="memos",
@@ -1446,6 +1504,21 @@ def build_parser() -> argparse.ArgumentParser:
     # kg-stats
     kg_stats = sub.add_parser("kg-stats", help="Show knowledge graph statistics")
     kg_stats.add_argument("--db", dest="kg_db", default=None)
+
+    # kg-path
+    kg_path = sub.add_parser("kg-path", help="Find paths between two entities")
+    kg_path.add_argument("entity_a", help="Start entity")
+    kg_path.add_argument("entity_b", help="Target entity")
+    kg_path.add_argument("--max-hops", type=int, default=3, help="Max hops (default: 3)")
+    kg_path.add_argument("--max-paths", type=int, default=10, help="Max paths to return (default: 10)")
+    kg_path.add_argument("--db", dest="kg_db", default=None)
+
+    # kg-neighbors
+    kg_nbrs = sub.add_parser("kg-neighbors", help="Show entity neighborhood")
+    kg_nbrs.add_argument("entity", help="Entity name")
+    kg_nbrs.add_argument("--depth", type=int, default=1, help="Neighborhood depth (default: 1)")
+    kg_nbrs.add_argument("--direction", choices=["both", "subject", "object"], default="both")
+    kg_nbrs.add_argument("--db", dest="kg_db", default=None)
 
     # ---- Palace (P6) ----
     palace_db_help = "Path to palace.db (default: ~/.memos/palace.db)"
@@ -2687,6 +2760,8 @@ def main(argv: list[str] | None = None) -> None:
         "kg-timeline": cmd_kg_timeline,
         "kg-invalidate": cmd_kg_invalidate,
         "kg-stats": cmd_kg_stats,
+        "kg-path": cmd_kg_path,
+        "kg-neighbors": cmd_kg_neighbors,
         "palace-init": cmd_palace_init,
         "palace-wing-create": cmd_palace_wing_create,
         "palace-wing-list": cmd_palace_wing_list,

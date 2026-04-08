@@ -353,3 +353,25 @@ memos sync-check /tmp/instance_a.json
 # Apply with merge strategy
 memos sync-apply /tmp/instance_a.json --strategy merge
 ```
+
+---
+
+## [x] P15 — KG Path Queries (Multi-hop Graph Traversal)
+Implemented v0.32.0 — KnowledgeGraph.find_paths/shortest_path/neighbors, CLI `memos kg-path/kg-neighbors`, REST `/api/v1/kg/paths` + `/api/v1/kg/neighbors`, 23 tests.
+**Objectif** : Requêtes multi-sauts dans le Knowledge Graph — "comment X est-il connecté à Y ?"
+
+Inspiré de Graphify : path queries (A → B), neighborhood expansion, shortest path.
+
+À implémenter dans `src/memos/knowledge_graph.py` :
+- `find_paths(entity_a, entity_b, max_hops=3, max_paths=10)` — BFS, retourne tous les chemins
+- `shortest_path(entity_a, entity_b, max_hops=5)` — BFS chemin le plus court
+- `neighbors(entity, depth=1, direction="both")` — expansion de voisinage multi-hop
+- CLI : `memos kg-path <entity_a> <entity_b> --max-hops 3`, `memos kg-neighbors <entity> --depth 2`
+- REST : `GET /api/v1/kg/paths?entity_a=X&entity_b=Y&max_hops=3`, `GET /api/v1/kg/neighbors?entity=X&depth=1`
+
+Validation :
+```bash
+memos kg-path Alice Bob --max-hops 3
+memos kg-neighbors Alice --depth 2
+curl .../api/v1/kg/paths?entity_a=Alice&entity_b=Carol
+```
