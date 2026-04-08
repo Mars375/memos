@@ -393,6 +393,15 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     from ..web import DASHBOARD_HTML
 
 
+    @app.get("/api/v1/classify")
+    async def api_classify(text: str):
+        """Classify text into memory type tags (zero-LLM)."""
+        from ..tagger import AutoTagger
+        tagger = AutoTagger()
+        tags = tagger.tag(text)
+        detailed = tagger.tag_detailed(text)
+        return {"status": "ok", "tags": tags, "matches": detailed}
+
     @app.get("/api/v1/tags")
     async def api_tags(sort: str = "count", limit: int = 0):
         """List all tags with memory counts."""

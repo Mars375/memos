@@ -1593,6 +1593,11 @@ def build_parser() -> argparse.ArgumentParser:
     ctx_for_p.add_argument("--backend", default="memory",
                            choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # --- Classify ---
+    classify_p = sub.add_parser("classify", help="Classify text into memory type tags")
+    classify_p.add_argument("text", help="Text to classify")
+    classify_p.add_argument("--detailed", action="store_true", help="Show matched patterns")
+
     # --- Decay & Reinforce ---
     decay_p = sub.add_parser("decay", help="Apply importance decay to memories")
     decay_p.add_argument("--apply", action="store_true", help="Apply decay (default is dry-run)")
@@ -2548,6 +2553,27 @@ def cmd_context_for(ns: argparse.Namespace) -> None:
     print(output)
 
 
+def cmd_classify(ns: argparse.Namespace) -> None:
+    """Classify text into memory type tags."""
+    from .tagger import AutoTagger
+    tagger = AutoTagger()
+    text = ns.text
+
+    if ns.detailed:
+        result = tagger.tag_detailed(text)
+        if not result:
+            print("No type tags detected.")
+            return
+        for tag, matches in result.items():
+            print(f"  {tag}: {', '.join(matches)}")
+    else:
+        tags = tagger.tag(text)
+        if not tags:
+            print("No type tags detected.")
+        else:
+            print(f"Tags: {', '.join(tags)}")
+
+
 def cmd_decay(ns: argparse.Namespace) -> None:
     """Apply importance decay to memories."""
     from .core import MemOS
@@ -2773,6 +2799,7 @@ def main(argv: list[str] | None = None) -> None:
         "wake-up": cmd_wake_up,
         "identity": cmd_identity,
         "context-for": cmd_context_for,
+        "classify": cmd_classify,
         "decay": cmd_decay,
         "reinforce": cmd_reinforce,
     }

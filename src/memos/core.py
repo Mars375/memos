@@ -24,6 +24,7 @@ from .namespaces.acl import NamespaceACL, Role
 from .cache.embedding_cache import EmbeddingCache
 from .cache.embedding_cache import EmbeddingCache
 from .analytics import RecallAnalytics
+from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .migration import MigrationEngine, MigrationReport, _create_backend
@@ -255,10 +256,18 @@ class MemOS:
             if issues:
                 raise ValueError(f"Memory failed sanitization: {issues}")
 
+        # Auto-tag with type tags (decision, preference, milestone, etc.)
+        final_tags = list(tags) if tags else []
+        if not isinstance(final_tags, list):
+            final_tags = []
+        auto_tags = AutoTagger().auto_tag(content.strip(), existing_tags=final_tags)
+        if auto_tags:
+            final_tags.extend(auto_tags)
+
         item = MemoryItem(
             id=generate_id(content),
             content=content.strip(),
-            tags=tags or [],
+            tags=final_tags,
             importance=max(0.0, min(1.0, importance)),
             metadata=metadata or {},
             ttl=ttl,
