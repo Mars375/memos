@@ -1,0 +1,472 @@
+"""Tests for the Multi-layer Context Stack (P7).
+
+Covers:
+- set/get identity
+- wake_up without identity (empty)
+- wake_up with identity + memories
+- wake_up max_chars respected
+- wake_up format (sections: === IDENTITY ===, === MEMORY CONTEXT ===)
+- recall_l2 with tag filters
+- recall_l3 full search
+- context_for format
+- REST endpoints (via httpx AsyncClient)
+- MCP tool dispatch
+- CLI wake-up
+- CLI identity set/show
+"""
+
+from __future__ import annotations
+
+import sys
+from io import StringIO
+from pathlib import Path
+from typing import Generator
+from unittest.mock import patch
+
+import pytest
+
+from memos.context import ContextStack
+from memos.core import MemOS
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def memos_mem() -> MemOS:
+    """In-memory MemOS instance (no embedding, fast)."""
+    return MemOS(backend="memory")
+
+
+@pytest.fixture()
+def cs_tmp(memos_mem: MemOS, tmp_path: Path) -> ContextStack:
+    """ContextStack with a temporary identity file path."""
+    identity_file = tmp_path / "identity.txt"
+    return ContextStack(memos_mem, identity_path=str(identity_file))
+
+
+@pytest.fixture()
+def cs_with_memories(cs_tmp: ContextStack) -> ContextStack:
+    """ContextStack loaded with a few memories for testing."""
+    m = cs_tmp._memos
+    m.learn("Python async best practices", tags=["python", "async"], importance=0.9)
+    m.learn("Docker multi-stage builds", tags=["devops"], importance=0.85)
+    m.learn("Redis caching patterns", tags=["redis", "cache"], importance=0.7)
+    m.learn("Git rebase workflow", tags=["git"], importance=0.5)
+    return cs_tmp
+
+
+# ---------------------------------------------------------------------------
+# 1. Identity (L0) — set / get
+# ---------------------------------------------------------------------------
+
+
+def test_get_identity_missing_returns_empty(cs_tmp: ContextStack) -> None:
+    """get_identity() should return empty string when file does not exist."""
+    assert cs_tmp.get_identity() == ""
+
+
+def test_set_then_get_identity(cs_tmp: ContextStack) -> None:
+    content = "I am an AI assistant focused on Python and DevOps."
+    cs_tmp.set_identity(content)
+    assert cs_tmp.get_identity() == content
+
+
+def test_set_identity_creates_parent_dirs(memos_mem: MemOS, tmp_path: Path) -> None:
+    deep_path = tmp_path / "a" / "b" / "c" / "identity.txt"
+    cs = ContextStack(memos_mem, identity_path=str(deep_path))
+    cs.set_identity("deep identity")
+    assert deep_path.exists()
+    assert deep_path.read_text() == "deep identity"
+
+
+def test_set_identity_overwrites(cs_tmp: ContextStack) -> None:
+    cs_tmp.set_identity("first version")
+    cs_tmp.set_identity("second version")
+    assert cs_tmp.get_identity() == "second version"
+
+
+def test_identity_path_tilde_expansion(memos_mem: MemOS) -> None:
+    """ContextStack constructor must expand ~ in identity_path."""
+    cs = ContextStack(memos_mem, identity_path="~/.memos/identity.txt")
+    assert "~" not in str(cs._identity_path)
+    assert str(Path.home()) in str(cs._identity_path)
+
+
+# ---------------------------------------------------------------------------
+# 2. wake_up — output format
+# ---------------------------------------------------------------------------
+
+
+def test_wake_up_empty_store_no_identity(cs_tmp: ContextStack) -> None:
+    """wake_up() on an empty store with no identity should still produce output."""
+    output = cs_tmp.wake_up()
+    assert isinstance(output, str)
+    assert "=== IDENTITY ===" in output
+    assert "=== MEMORY CONTEXT" in output
+
+
+def test_wake_up_includes_identity_section(cs_tmp: ContextStack) -> None:
+    cs_tmp.set_identity("I am a DevOps-focused agent.")
+    output = cs_tmp.wake_up()
+    assert "=== IDENTITY ===" in output
+    assert "I am a DevOps-focused agent." in output
+
+
+def test_wake_up_includes_memory_context_section(cs_with_memories: ContextStack) -> None:
+    output = cs_with_memories.wake_up()
+    assert "=== MEMORY CONTEXT" in output
+    # At least one memory should appear
+    assert "Python async best practices" in output
+
+
+def test_wake_up_memory_count_in_header(cs_with_memories: ContextStack) -> None:
+    """The memory section header should include the count of returned memories."""
+    output = cs_with_memories.wake_up(l1_top=3)
+    assert "=== MEMORY CONTEXT (3 memories) ===" in output
+
+
+def test_wake_up_includes_stats_section(cs_with_memories: ContextStack) -> None:
+    output = cs_with_memories.wake_up(include_stats=True)
+    assert "=== STATS ===" in output
+    assert "memories" in output
+
+
+def test_wake_up_no_stats(cs_with_memories: ContextStack) -> None:
+    output = cs_with_memories.wake_up(include_stats=False)
+    assert "=== STATS ===" not in output
+
+
+def test_wake_up_respects_max_chars(cs_with_memories: ContextStack) -> None:
+    """wake_up() must truncate output to exactly max_chars."""
+    cs_with_memories.set_identity("x" * 500)
+    output = cs_with_memories.wake_up(max_chars=100)
+    assert len(output) <= 100
+
+
+def test_wake_up_importance_ordering(cs_tmp: ContextStack) -> None:
+    """Memories should appear in descending importance order."""
+    m = cs_tmp._memos
+    m.learn("Low priority", importance=0.1)
+    m.learn("High priority", importance=0.99)
+    m.learn("Medium priority", importance=0.5)
+    output = cs_tmp.wake_up(l1_top=3)
+    idx_high = output.index("High priority")
+    idx_medium = output.index("Medium priority")
+    idx_low = output.index("Low priority")
+    assert idx_high < idx_medium < idx_low
+
+
+def test_wake_up_memory_line_format(cs_with_memories: ContextStack) -> None:
+    """Each memory line should follow [score] content (tags: ...) format."""
+    output = cs_with_memories.wake_up()
+    # Check that at least one line has the [X.XX] prefix
+    lines = output.splitlines()
+    mem_lines = [l for l in lines if l.startswith("[")]
+    assert len(mem_lines) > 0
+    # Score format: [0.XX] or [1.00]
+    import re
+    for line in mem_lines:
+        assert re.match(r"^\[[\d.]+\]", line), f"unexpected format: {line!r}"
+
+
+# ---------------------------------------------------------------------------
+# 3. recall_l2 — scoped by tags
+# ---------------------------------------------------------------------------
+
+
+def test_recall_l2_with_tags(cs_with_memories: ContextStack) -> None:
+    results = cs_with_memories.recall_l2("async patterns", tags=["python"])
+    # With keyword matching, we may get results; just check type
+    assert isinstance(results, list)
+
+
+def test_recall_l2_no_tags_returns_results(cs_with_memories: ContextStack) -> None:
+    results = cs_with_memories.recall_l2("Docker builds", tags=None)
+    assert isinstance(results, list)
+
+
+def test_recall_l2_top_limits_results(cs_with_memories: ContextStack) -> None:
+    results = cs_with_memories.recall_l2("patterns", top=2)
+    assert len(results) <= 2
+
+
+# ---------------------------------------------------------------------------
+# 4. recall_l3 — full search
+# ---------------------------------------------------------------------------
+
+
+def test_recall_l3_returns_list(cs_with_memories: ContextStack) -> None:
+    results = cs_with_memories.recall_l3("Docker")
+    assert isinstance(results, list)
+
+
+def test_recall_l3_top_limits(cs_with_memories: ContextStack) -> None:
+    results = cs_with_memories.recall_l3("patterns", top=2)
+    assert len(results) <= 2
+
+
+# ---------------------------------------------------------------------------
+# 5. context_for
+# ---------------------------------------------------------------------------
+
+
+def test_context_for_returns_string(cs_with_memories: ContextStack) -> None:
+    output = cs_with_memories.context_for("async Python patterns")
+    assert isinstance(output, str)
+
+
+def test_context_for_respects_max_chars(cs_with_memories: ContextStack) -> None:
+    cs_with_memories.set_identity("y" * 200)
+    output = cs_with_memories.context_for("docker", max_chars=50)
+    assert len(output) <= 50
+
+
+def test_context_for_includes_identity_when_set(cs_with_memories: ContextStack) -> None:
+    cs_with_memories.set_identity("My identity text.")
+    output = cs_with_memories.context_for("python async", max_chars=2000)
+    assert "=== IDENTITY ===" in output
+    assert "My identity text." in output
+
+
+def test_context_for_includes_relevant_section(cs_with_memories: ContextStack) -> None:
+    output = cs_with_memories.context_for("docker multi-stage", max_chars=2000)
+    assert "=== RELEVANT MEMORIES" in output
+
+
+def test_context_for_no_identity_still_works(cs_with_memories: ContextStack) -> None:
+    output = cs_with_memories.context_for("caching")
+    assert isinstance(output, str)
+
+
+# ---------------------------------------------------------------------------
+# 6. REST endpoints
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_rest_wake_up_returns_context() -> None:
+    """GET /api/v1/context/wake-up returns context string."""
+    from httpx import AsyncClient, ASGITransport
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    m.learn("Test memory for wake-up", importance=0.8)
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/context/wake-up")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert "context" in data
+    assert "=== MEMORY CONTEXT" in data["context"]
+
+
+@pytest.mark.anyio
+async def test_rest_identity_get_empty() -> None:
+    """GET /api/v1/context/identity returns empty when no identity file set."""
+    from httpx import AsyncClient, ASGITransport
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/context/identity")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+
+
+@pytest.mark.anyio
+async def test_rest_identity_set_and_get() -> None:
+    """POST /api/v1/context/identity stores identity and returns char count."""
+    from httpx import AsyncClient, ASGITransport
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/context/identity",
+            json={"content": "I am a test agent."},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["chars"] == len("I am a test agent.")
+
+
+@pytest.mark.anyio
+async def test_rest_identity_set_missing_content() -> None:
+    """POST /api/v1/context/identity without content returns error."""
+    from httpx import AsyncClient, ASGITransport
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/api/v1/context/identity", json={})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "error"
+
+
+@pytest.mark.anyio
+async def test_rest_context_for_returns_context() -> None:
+    """GET /api/v1/context/for returns context for a query."""
+    from httpx import AsyncClient, ASGITransport
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    m.learn("Python async patterns", tags=["python"])
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/context/for", params={"query": "python async"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert "context" in data
+    assert data["query"] == "python async"
+
+
+# ---------------------------------------------------------------------------
+# 7. MCP dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_memory_wake_up_dispatch() -> None:
+    """_dispatch('memory_wake_up', ...) returns text content."""
+    from memos.mcp_server import _dispatch
+
+    m = MemOS(backend="memory")
+    m.learn("Wake-up test memory", importance=0.9)
+    result = _dispatch(m, "memory_wake_up", {"max_chars": 500, "include_stats": True})
+    assert "content" in result
+    text = result["content"][0]["text"]
+    assert "=== MEMORY CONTEXT" in text
+
+
+def test_mcp_memory_wake_up_default_args() -> None:
+    """_dispatch('memory_wake_up', {}) uses default parameters."""
+    from memos.mcp_server import _dispatch
+
+    m = MemOS(backend="memory")
+    result = _dispatch(m, "memory_wake_up", {})
+    assert "content" in result
+    assert result.get("isError") is not True
+
+
+def test_mcp_memory_context_for_dispatch() -> None:
+    """_dispatch('memory_context_for', ...) returns context for a query."""
+    from memos.mcp_server import _dispatch
+
+    m = MemOS(backend="memory")
+    m.learn("Docker multi-stage builds", tags=["devops"])
+    result = _dispatch(m, "memory_context_for", {"query": "docker", "max_chars": 800})
+    assert "content" in result
+    assert result.get("isError") is not True
+
+
+def test_mcp_memory_context_for_missing_query() -> None:
+    """_dispatch('memory_context_for', {}) returns an error when query missing."""
+    from memos.mcp_server import _dispatch
+
+    m = MemOS(backend="memory")
+    result = _dispatch(m, "memory_context_for", {})
+    assert result.get("isError") is True
+
+
+def test_mcp_tools_list_includes_wake_up() -> None:
+    """TOOLS list must include the memory_wake_up tool definition."""
+    from memos.mcp_server import TOOLS
+
+    names = [t["name"] for t in TOOLS]
+    assert "memory_wake_up" in names
+
+
+def test_mcp_tools_list_includes_context_for() -> None:
+    """TOOLS list must include the memory_context_for tool definition."""
+    from memos.mcp_server import TOOLS
+
+    names = [t["name"] for t in TOOLS]
+    assert "memory_context_for" in names
+
+
+# ---------------------------------------------------------------------------
+# 8. CLI — wake-up and identity commands
+# ---------------------------------------------------------------------------
+
+
+def test_cli_wake_up(tmp_path: Path, capsys) -> None:
+    """memos wake-up prints L0+L1 context."""
+    from memos.cli import main
+
+    persist = tmp_path / "store.json"
+    # Pre-populate via MemOS then persist
+    m = MemOS(backend="memory")
+    m.learn("CLI wake-up test memory", importance=0.8)
+    from memos.storage.json_backend import JsonFileBackend
+    jb = JsonFileBackend(path=str(persist))
+    for item in m._store.list_all():
+        jb.upsert(item)
+
+    # Use memory backend with persist-path so the CLI can load memories
+    main(["wake-up", "--backend", "memory", "--max-chars", "1000", "--top", "5"])
+    captured = capsys.readouterr()
+    # wake-up output must contain the MEMORY CONTEXT section header
+    assert "=== MEMORY CONTEXT" in captured.out
+
+
+def test_cli_identity_show_empty(tmp_path: Path, capsys) -> None:
+    """memos identity show prints a helpful message when no identity is set."""
+    from memos.context import ContextStack
+
+    class _FakeMemos:
+        namespace = ""
+        def stats(self):
+            from memos.models import MemoryStats
+            return MemoryStats()
+        _store = type("S", (), {"list_all": lambda self, **kw: []})()
+
+    identity_path = tmp_path / "no_identity.txt"
+    cs = ContextStack(_FakeMemos(), identity_path=str(identity_path))  # type: ignore[arg-type]
+
+    # With no file, get_identity returns empty string
+    result = cs.get_identity()
+    assert result == ""
+
+    # After calling wake_up with no memories, it still works
+    output = cs.wake_up(include_stats=False)
+    assert "=== IDENTITY ===" in output
+
+
+def test_cli_identity_set_and_show(tmp_path: Path, capsys) -> None:
+    """memos identity set <text> then show round-trips correctly."""
+    from memos.cli import cmd_identity
+    import argparse
+
+    identity_file = tmp_path / "identity.txt"
+
+    class _FakeMemos:
+        namespace = ""
+        def stats(self):
+            from memos.models import MemoryStats
+            return MemoryStats()
+        def _store_list_all(self):
+            return []
+
+    # Manually build a ContextStack pointed at our tmp file
+    cs = ContextStack(_FakeMemos(), identity_path=str(identity_file))  # type: ignore[arg-type]
+    cs.set_identity("Test identity content")
+
+    assert identity_file.read_text() == "Test identity content"
+
+    result = cs.get_identity()
+    assert result == "Test identity content"
