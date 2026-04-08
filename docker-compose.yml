@@ -9,7 +9,10 @@ services:
   memos:
     build: .
     ports:
-      - "8000:8000"
+      - "8100:8000"
+    volumes:
+      - memos-data:/root/.memos
+      - /mnt/shared-storage/openclaw/workspace-labs:/data/host:ro
     environment:
       - MEMOS_BACKEND=chroma
       - MEMOS_CHROMA_URL=http://chroma:8000
@@ -17,6 +20,8 @@ services:
       chroma:
         condition: service_healthy
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # --- Qdrant profile (use with: docker compose --profile qdrant up) ---
   memos-qdrant:
@@ -45,7 +50,7 @@ services:
     environment:
       - ANONYMIZED_TELEMETRY=FALSE
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "/usr/local/bin/chroma", "--help"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -61,7 +66,7 @@ services:
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -69,3 +74,4 @@ services:
 volumes:
   chroma-data:
   qdrant-data:
+  memos-data:

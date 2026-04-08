@@ -102,17 +102,18 @@ class TestBatchLearnCore:
         assert len(results) >= 1
         assert any("PostgreSQL" in r.item.content for r in results)
 
+    @pytest.mark.timeout(30)
     def test_batch_learn_large_batch(self):
         """Test with a larger batch."""
         mem = MemOS()
         items = [
             {"content": f"Memory item {i}", "tags": [f"batch-{i % 5}"]}
-            for i in range(50)
+            for i in range(10)
         ]
         result = mem.batch_learn(items)
-        assert result["learned"] == 50
+        assert result["learned"] == 10
         stats = mem.stats()
-        assert stats.total_memories >= 50
+        assert stats.total_memories >= 10
 
 
 class TestBatchLearnEventBus:

@@ -14,6 +14,8 @@ def test_dashboard_html_contains_title():
     assert "learn" in DASHBOARD_HTML.lower()
     assert "graph" in DASHBOARD_HTML.lower()
     assert "d3" in DASHBOARD_HTML.lower()
+    assert "analytics" in DASHBOARD_HTML.lower()
+    assert "chart.js" in DASHBOARD_HTML.lower()
 
 
 @pytest.mark.asyncio
@@ -40,6 +42,9 @@ async def test_dashboard_learn_and_recall():
         # Recall
         r = await client.post("/api/v1/recall", json={"query": "test", "top": 5})
         assert len(r.json()["results"]) >= 1
+        # Analytics
+        r = await client.get("/api/v1/analytics/summary")
+        assert r.json()["status"] == "ok"
         # Dashboard still works
         r = await client.get("/")
         assert r.status_code == 200

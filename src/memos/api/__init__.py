@@ -94,6 +94,36 @@ def create_api(memos: MemOS) -> dict[str, Any]:
             "top_tags": s.top_tags,
         }
 
+    async def analytics_top(body: dict | None = None) -> dict:
+        payload = body or {}
+        return {"status": "ok", "results": memos.analytics.top_recalled(n=payload.get("n", 20))}
+
+    async def analytics_patterns(body: dict | None = None) -> dict:
+        payload = body or {}
+        return {"status": "ok", "results": memos.analytics.query_patterns(n=payload.get("n", 20))}
+
+    async def analytics_latency(_body: dict | None = None) -> dict:
+        return {"status": "ok", "results": memos.analytics.latency_stats()}
+
+    async def analytics_success(body: dict | None = None) -> dict:
+        payload = body or {}
+        days = int(payload.get("days", 7))
+        return {"status": "ok", **memos.analytics.recall_success_rate_stats(days=days)}
+
+    async def analytics_daily(body: dict | None = None) -> dict:
+        payload = body or {}
+        days = int(payload.get("days", 30))
+        return {"status": "ok", "results": memos.analytics.daily_activity(days=days)}
+
+    async def analytics_zero(body: dict | None = None) -> dict:
+        payload = body or {}
+        return {"status": "ok", "results": memos.analytics.zero_result_queries(n=payload.get("n", 20))}
+
+    async def analytics_summary(body: dict | None = None) -> dict:
+        payload = body or {}
+        days = int(payload.get("days", 7))
+        return {"status": "ok", **memos.analytics.summary(days=days)}
+
     async def search(body: dict) -> dict:
         items = memos.search(q=body["q"], limit=body.get("limit", 20))
         return {
@@ -159,6 +189,13 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         "recall": recall,
         "prune": prune,
         "stats": stats,
+        "analytics_top": analytics_top,
+        "analytics_patterns": analytics_patterns,
+        "analytics_latency": analytics_latency,
+        "analytics_success": analytics_success,
+        "analytics_daily": analytics_daily,
+        "analytics_zero": analytics_zero,
+        "analytics_summary": analytics_summary,
         "search": search,
         "delete_memory": delete_memory,
         "get_memory": get_memory,
@@ -182,7 +219,9 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         memos = MemOS(**kwargs)
 
     from ..knowledge_graph import KnowledgeGraph
+    from ..kg_bridge import KGBridge
     _kg = KnowledgeGraph(db_path=kg_db_path)
+    _kg_bridge = KGBridge(memos, _kg)
 
     app = FastAPI(
         title="MemOS",
@@ -195,6 +234,23 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     @app.post("/api/v1/learn")
     async def api_learn(body: dict):
         return await routes["learn"](body)
+
+    @app.post("/api/v1/learn/extract")
+    async def api_learn_extract(body: dict):
+        """Learn a memory and extract simple KG facts."""
+        content = body.get("content", "").strip()
+        if not content:
+            return {"status": "error", "message": "content is required"}
+        try:
+            payload = _kg_bridge.learn_and_extract(
+                content,
+                tags=body.get("tags"),
+                importance=float(body.get("importance", 0.5)),
+                metadata=body.get("metadata"),
+            )
+            return {"status": "ok", **payload}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
 
     @app.post("/api/v1/learn/batch")
     async def api_batch_learn(body: dict):
@@ -214,6 +270,31 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         return await routes["recall"](body)
 
     # SSE Streaming Recall endpoint
+    @app.get("/api/v1/recall/enriched")
+    async def api_recall_enriched(
+        q: str,
+        top: int = 10,
+        filter_tags: str | None = None,
+        min_score: float = 0.0,
+        filter_after: str | None = None,
+        filter_before: str | None = None,
+    ):
+        """Recall memories and augment them with KG facts."""
+        from datetime import datetime as _dt
+
+        tags = [t.strip() for t in filter_tags.split(",") if t.strip()] if filter_tags else None
+        after_ts = _dt.fromisoformat(filter_after).timestamp() if filter_after else None
+        before_ts = _dt.fromisoformat(filter_before).timestamp() if filter_before else None
+        payload = _kg_bridge.recall_enriched(
+            q,
+            top=top,
+            filter_tags=tags,
+            min_score=min_score,
+            filter_after=after_ts,
+            filter_before=before_ts,
+        )
+        return {"status": "ok", **payload}
+
     @app.get("/api/v1/recall/stream")
     async def api_recall_stream(
         q: str,
@@ -255,6 +336,34 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     @app.get("/api/v1/stats")
     async def api_stats():
         return await routes["stats"]()
+
+    @app.get("/api/v1/analytics/summary")
+    async def api_analytics_summary(days: int = 7):
+        return await routes["analytics_summary"]({"days": days})
+
+    @app.get("/api/v1/analytics/top")
+    async def api_analytics_top(n: int = 20):
+        return await routes["analytics_top"]({"n": n})
+
+    @app.get("/api/v1/analytics/patterns")
+    async def api_analytics_patterns(n: int = 20):
+        return await routes["analytics_patterns"]({"n": n})
+
+    @app.get("/api/v1/analytics/latency")
+    async def api_analytics_latency():
+        return await routes["analytics_latency"]()
+
+    @app.get("/api/v1/analytics/success-rate")
+    async def api_analytics_success_rate(days: int = 7):
+        return await routes["analytics_success"]({"days": days})
+
+    @app.get("/api/v1/analytics/daily")
+    async def api_analytics_daily(days: int = 30):
+        return await routes["analytics_daily"]({"days": days})
+
+    @app.get("/api/v1/analytics/zero-result")
+    async def api_analytics_zero_result(n: int = 20):
+        return await routes["analytics_zero"]({"n": n})
 
     @app.get("/api/v1/search")
     async def api_search(q: str, limit: int = 20):

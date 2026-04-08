@@ -187,11 +187,44 @@ def cmd_recall(ns: argparse.Namespace) -> None:
         except ValueError:
             print(f"Error: Invalid --before date format: {ns.before!r}. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM")
             return
+    fmt = getattr(ns, "format", "text") or "text"
+    if getattr(ns, "enriched", False):
+        bridge = _get_kg_bridge(ns, memos=memos)
+        try:
+            payload = bridge.recall_enriched(
+                ns.query,
+                top=ns.top,
+                filter_tags=filter_tags,
+                min_score=ns.min_score,
+                filter_after=filter_after,
+                filter_before=filter_before,
+            )
+        finally:
+            bridge.close()
+        if fmt == "json":
+            print(json.dumps(payload, indent=2))
+            return
+        memories = payload["memories"]
+        facts = payload["facts"]
+        if not memories and not facts:
+            print("No memories or KG facts found.")
+            return
+        if memories:
+            print("Memories:")
+            for r in memories:
+                tags_str = f" [{', '.join(r['tags'])}]" if r['tags'] else ""
+                print(f"  {r['score']:.3f} {r['content'][:120]}{tags_str}")
+            print(f"\n{len(memories)} memory result(s)")
+        if facts:
+            print("\nKG facts:")
+            for f in facts:
+                print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}")
+            print(f"\n{len(facts)} fact(s)")
+        return
     results = memos.recall(
         ns.query, top=ns.top, min_score=ns.min_score,
         filter_tags=filter_tags, filter_after=filter_after, filter_before=filter_before,
     )
-    fmt = getattr(ns, "format", "text") or "text"
     if not results:
         if fmt == "json":
             print(json.dumps({"results": [], "total": 0}))
@@ -273,6 +306,95 @@ def cmd_stats(ns: argparse.Namespace) -> None:
     print(f"  Decay candidates:{s.decay_candidates}")
     if s.top_tags:
         print(f"  Top tags:        {', '.join(s.top_tags[:5])}")
+
+
+def cmd_analytics(ns: argparse.Namespace) -> None:
+    """Show recall analytics."""
+    memos = _get_memos(ns)
+    action = getattr(ns, "analytics_action", None)
+    if not action:
+        print("Error: analytics subcommand required", file=sys.stderr)
+        sys.exit(1)
+
+    if action == "top":
+        results = memos.analytics.top_recalled(n=ns.n)
+        if ns.json:
+            print(json.dumps({"results": results}, indent=2))
+            return
+        for row in results:
+            print(f"  {row['count']:>3} {row['memory_id'][:8]}")
+        print(f"\n{len(results)} result(s)")
+        return
+
+    if action == "patterns":
+        results = memos.analytics.query_patterns(n=ns.n)
+        if ns.json:
+            print(json.dumps({"results": results}, indent=2))
+            return
+        for row in results:
+            print(f"  {row['count']:>3} {row['query']}")
+        print(f"\n{len(results)} result(s)")
+        return
+
+    if action == "latency":
+        stats = memos.analytics.latency_stats()
+        if ns.json:
+            print(json.dumps(stats, indent=2))
+            return
+        print(f"  Count:   {stats['count']}")
+        print(f"  Avg:     {stats['avg']:.2f} ms")
+        print(f"  p50:     {stats['p50']:.2f} ms")
+        print(f"  p95:     {stats['p95']:.2f} ms")
+        print(f"  p99:     {stats['p99']:.2f} ms")
+        return
+
+    if action == "success-rate":
+        stats = memos.analytics.recall_success_rate_stats(days=ns.days)
+        if ns.json:
+            print(json.dumps(stats, indent=2))
+            return
+        print(f"  Success rate: {stats['success_rate']:.1f}%")
+        print(f"  Total recalls: {stats['total_recalls']}")
+        print(f"  Successful:    {stats['successful_recalls']}")
+        print(f"  Failed:        {stats['failed_recalls']}")
+        return
+
+    if action == "daily":
+        results = memos.analytics.daily_activity(days=ns.days)
+        if ns.json:
+            print(json.dumps({"results": results}, indent=2))
+            return
+        for row in results:
+            print(f"  {row['date']}  {row['count']}")
+        print(f"\n{len(results)} day(s)")
+        return
+
+    if action == "zero":
+        results = memos.analytics.zero_result_queries(n=ns.n)
+        if ns.json:
+            print(json.dumps({"results": results}, indent=2))
+            return
+        for row in results:
+            print(f"  {row['count']:>3} {row['query']}")
+        print(f"\n{len(results)} result(s)")
+        return
+
+    if action == "summary":
+        summary = memos.analytics.summary(days=ns.days)
+        if ns.json:
+            print(json.dumps(summary, indent=2))
+            return
+        success = summary["success"]
+        print(f"  Success rate: {success['success_rate']:.1f}% ({success['successful_recalls']}/{success['total_recalls']})")
+        latency = summary["latency"]
+        print(f"  Latency p95:  {latency['p95']:.2f} ms")
+        print(f"  Top queries:  {len(summary['top_queries'])}")
+        print(f"  Zero-result:   {len(summary['zero_result_queries'])}")
+        print(f"  Daily points:  {len(summary['daily_activity'])}")
+        return
+
+    print(f"Error: unknown analytics action: {action}", file=sys.stderr)
+    sys.exit(1)
 
 
 def cmd_forget(ns: argparse.Namespace) -> None:
@@ -684,6 +806,16 @@ def _get_kg(ns: argparse.Namespace):
     return KnowledgeGraph(db_path=db_path)
 
 
+def _get_kg_bridge(ns: argparse.Namespace, memos: Any | None = None):
+    """Return a KGBridge instance from CLI namespace."""
+    from .kg_bridge import KGBridge
+    from .knowledge_graph import KnowledgeGraph
+    if memos is None:
+        memos = _get_memos(ns)
+    kg = KnowledgeGraph(db_path=getattr(ns, "kg_db", None))
+    return KGBridge(memos, kg)
+
+
 def cmd_kg_add(ns: argparse.Namespace) -> None:
     """Add a fact to the knowledge graph."""
     kg = _get_kg(ns)
@@ -811,6 +943,8 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--after", help="Only memories created after this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--before", help="Only memories created before this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text)")
+    recall.add_argument("--enriched", action="store_true", help="Augment recall with KG facts")
+    recall.add_argument("--kg-db", dest="kg_db", default=None, help="Path to kg.db")
     recall.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # search
@@ -824,6 +958,43 @@ def build_parser() -> argparse.ArgumentParser:
     stats = sub.add_parser("stats", help="Show memory statistics")
     stats.add_argument("--json", action="store_true", help="JSON output")
     stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # analytics
+    analytics = sub.add_parser("analytics", help="Show recall analytics")
+    analytics_sub = analytics.add_subparsers(dest="analytics_action")
+    analytics_top = analytics_sub.add_parser("top", help="Most recalled memories")
+    analytics_top.add_argument("--n", type=int, default=20, help="Max memories (default: 20)")
+    analytics_top.add_argument("--json", action="store_true", help="JSON output")
+    analytics_top.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    analytics_patterns = analytics_sub.add_parser("patterns", help="Most frequent queries")
+    analytics_patterns.add_argument("--n", type=int, default=20, help="Max queries (default: 20)")
+    analytics_patterns.add_argument("--json", action="store_true", help="JSON output")
+    analytics_patterns.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    analytics_latency = analytics_sub.add_parser("latency", help="Latency statistics")
+    analytics_latency.add_argument("--json", action="store_true", help="JSON output")
+    analytics_latency.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    analytics_success = analytics_sub.add_parser("success-rate", help="Recall success rate")
+    analytics_success.add_argument("--days", type=int, default=7, help="Lookback window in days (default: 7)")
+    analytics_success.add_argument("--json", action="store_true", help="JSON output")
+    analytics_success.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    analytics_daily = analytics_sub.add_parser("daily", help="Daily recall activity")
+    analytics_daily.add_argument("--days", type=int, default=30, help="Lookback window in days (default: 30)")
+    analytics_daily.add_argument("--json", action="store_true", help="JSON output")
+    analytics_daily.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    analytics_zero = analytics_sub.add_parser("zero", help="Queries with zero results")
+    analytics_zero.add_argument("--n", type=int, default=20, help="Max queries (default: 20)")
+    analytics_zero.add_argument("--json", action="store_true", help="JSON output")
+    analytics_zero.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    analytics_summary = analytics_sub.add_parser("summary", help="Compact analytics summary")
+    analytics_summary.add_argument("--days", type=int, default=7, help="Lookback window in days (default: 7)")
+    analytics_summary.add_argument("--json", action="store_true", help="JSON output")
+    analytics_summary.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # forget
     forget = sub.add_parser("forget", help="Delete a memory")
@@ -2173,6 +2344,7 @@ def main(argv: list[str] | None = None) -> None:
         "recall": cmd_recall,
         "search": cmd_search,
         "stats": cmd_stats,
+        "analytics": cmd_analytics,
         "forget": cmd_forget,
         "get": cmd_get,
         "prune-expired": cmd_prune_expired,

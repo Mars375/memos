@@ -183,7 +183,7 @@ memos stats               # shows decay metrics
 
 ---
 
-## [ ] P10 — Knowledge Graph ↔ Memory Bridge
+## [x] P10 — Knowledge Graph ↔ Memory Bridge
 **Objectif** : Connecter le Knowledge Graph (faits typés) aux mémoires (texte libre) pour un rappel enrichi.
 
 Actuellement, le KG et les mémoires sont deux mondes séparés. Le bridge permet :
@@ -207,6 +207,8 @@ memos learn "Alice leads the infrastructure team at Acme Corp since January"
 memos kg-add "Alice" "leads" "infrastructure-team" --source auto
 memos recall --enriched "Alice"  # retourne mémoires + faits KG en un seul call
 ```
+
+Implemented v0.31.1 — KGBridge, enriched recall, learn+extract, explicit memory links, REST `/api/v1/recall/enriched` + `/api/v1/learn/extract`, MCP `memory_recall_enriched`.
 
 ---
 
@@ -245,6 +247,75 @@ memos analytics top        # shows most recalled memories
 memos analytics patterns   # shows query patterns
 memos analytics latency    # shows p50/p95/p99
 ```
+
+---
+
+---
+
+## 📡 External Intelligence Watch
+
+> Projets et patterns à surveiller pour améliorer MemOS.
+> Le cron forge-scout-signals et forge-scout-needs alimentent cette veille.
+> Date de création : 2026-04-08
+
+### 🔍 Graphify (https://github.com/safishamsi/graphify)
+- **Ce qu'il fait** : graphe de connaissances multimodal (code, docs, PDFs, images) avec visualisation
+- **À récupérer pour MemOS :**
+  - [ ] Pipeline d'extraction graphe depuis PDFs/images/code (multimodal)
+  - [ ] Requêtes de chemin (path queries : `A → B`) et explication de liens
+  - [ ] Wiki auto-généré par communautés du graphe (pas juste par tags)
+  - [ ] Mode watch/update incrémental sur corpus
+- **Faisabilité :** moyen/difficile
+- **Priorité :** P2 (après wiki vivant)
+
+### 📝 LLM Wiki Pattern (Andrej Karpathy)
+- **Ce qu'il fait** : wiki markdown persistant maintenu par l'agent, 3 couches (raw → wiki → schema)
+- **À récupérer pour MemOS :**
+  - [ ] Wiki vivant incrémental par entités/concepts (notre wiki compile est par tag, pas par concept)
+  - [ ] `index.md` + `log.md` comme primitives de navigation
+  - [ ] Workflow "ingest → update pages existantes → lint contradictions/orphans"
+  - [ ] Schéma YAML frontmatter standardisé pour chaque page wiki
+- **Faisabilité :** facile/moyen
+- **Priorité :** **P1** — complément naturel de wiki-compile
+
+### 🏰 MemPalace (https://github.com/milla-jovovich/mempalace)
+- **Ce qu'il fait** : mémoire agent avec wings/rooms, KG temporel, verbatim recall, benchmarks
+- **Déjà intégré dans MemOS :** Palace, KG temporel, context stack, miner, KG bridge
+- **À récupérer encore :**
+  - [ ] Mode **verbatim first** explicite (stockage brut avant synthèse)
+  - [ ] Suite de benchmarks reproductibles type LongMemEval intégrée au repo
+- **Faisabilité :** facile
+- **Priorité :** P1 — benchmarks = crédibilité projet
+
+---
+
+## [ ] P13 — Wiki Vivant (Karpathy-inspired)
+**Objectif :** Compléter wiki-compile avec un wiki incrémental par entités/concepts.
+
+Notre wiki-compile actuel génère des pages par tag (snapshot statique). Le pattern Karpathy propose un wiki *vivant* :
+- Pages créées par entité/concept (pas par tag)
+- `index.md` = catalogue auto-généré
+- `log.md` = journal d'activité (append-only)
+- À chaque ingest : update des pages existantes + lint contradictions
+- Frontmatter YAML standardisé
+
+À implémenter :
+- Mode `wiki --living` dans wiki engine
+- Entity extraction basique (noms propres, concepts récurrents)
+- Page templates par type (person, project, concept, decision)
+- Auto-link entre pages (backlinks)
+- Lint : orphelins, contradictions, pages vides
+
+### ---
+
+## [ ] P14 — Benchmark Suite (MemPalace-inspired)
+**Objectif :** Suite de benchmarks reproductibles pour mesurer la qualité de recall.
+
+MemPalace publie des résultats LongMemEval. MemOS devrait :
+- Intégrer un benchmark interne (recall accuracy, latency, decay behavior)
+- Script de génération de dataset synthétique
+- CI : benchmarks tournent à chaque PR
+- Publier les résultats dans le README
 
 ---
 

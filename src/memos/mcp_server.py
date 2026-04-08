@@ -101,6 +101,20 @@ TOOLS = [
         },
     },
     {
+        "name": "memory_recall_enriched",
+        "description": "Recall memories and augment them with KG facts linked to the detected entities.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "top_k": {"type": "integer", "default": 10, "description": "Number of memory results"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter memories by tags"},
+                "min_score": {"type": "number", "default": 0.0, "description": "Minimum score"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "memory_decay",
         "description": "Apply importance decay to memories. Dry-run by default. Use apply=true to persist changes.",
         "inputSchema": {
@@ -287,6 +301,36 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
                 return _text(f"No timeline entries for: {entity}")
             lines = [f"[{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}" for f in facts]
             return _text(f"Timeline ({len(facts)} events):\n" + "\n".join(lines))
+
+        elif tool == "memory_recall_enriched":
+            from .kg_bridge import KGBridge
+            from .knowledge_graph import KnowledgeGraph
+            query = args.get("query", "").strip()
+            if not query:
+                return _error("query is required")
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance
+            bridge = getattr(memos, "_kg_bridge", None)
+            if bridge is None:
+                bridge = KGBridge(memos, kg_instance)
+                memos._kg_bridge = bridge
+            payload = bridge.recall_enriched(
+                query,
+                top=int(args.get("top_k", 10)),
+                filter_tags=args.get("tags"),
+                min_score=float(args.get("min_score", 0.0)),
+            )
+            memories = payload.get("memories", [])
+            facts = payload.get("facts", [])
+            text = [f"Memories ({len(memories)}):"]
+            for r in memories:
+                text.append(f"  {r['score']:.3f} {r['content'][:120]}")
+            text.append(f"KG facts ({len(facts)}):")
+            for f in facts:
+                text.append(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}")
+            return _text("\n".join(text))
 
         elif tool == "memory_decay":
             items = memos._store.list_all(namespace=memos._namespace)

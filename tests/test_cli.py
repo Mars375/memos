@@ -34,9 +34,10 @@ class TestCLIParsing:
 
     def test_recall_args(self):
         p = build_parser()
-        ns = p.parse_args(["recall", "test query", "--top", "3"])
+        ns = p.parse_args(["recall", "test query", "--top", "3", "--enriched"])
         assert ns.query == "test query"
         assert ns.top == 3
+        assert ns.enriched is True
 
     def test_serve_args(self):
         p = build_parser()
@@ -104,6 +105,28 @@ class TestCLIFunctional:
         main(["stats"])
         out = capsys.readouterr().out
         assert "Total memories" in out
+
+    def test_analytics_args(self):
+        p = build_parser()
+        ns = p.parse_args(["analytics", "top", "--n", "3"])
+        assert ns.command == "analytics"
+        assert ns.analytics_action == "top"
+        assert ns.n == 3
+
+    def test_analytics_top_command(self, capsys):
+        class FakeAnalytics:
+            def top_recalled(self, n: int = 20):
+                assert n == 2
+                return [{"memory_id": "abc12345", "count": 4}]
+
+        class FakeMemOS:
+            analytics = FakeAnalytics()
+
+        with patch("memos.cli._get_memos", return_value=FakeMemOS()):
+            main(["analytics", "top", "--n", "2"])
+        out = capsys.readouterr().out
+        assert "abc12345" in out
+        assert "result(s)" in out
 
     def test_stats_json(self, capsys):
         # Fresh instance → empty stats, just verify JSON output works

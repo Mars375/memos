@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 COPY src/ src/
 COPY tests/ tests/
+COPY tools/ tools/
 
 RUN pip install --no-cache-dir ".[server,chroma,dev]"
 

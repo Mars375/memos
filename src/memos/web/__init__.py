@@ -9,6 +9,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MemOS — Second Brain</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -31,6 +32,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .tag-chip:hover{border-color:var(--accent);}
   .tag-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
   .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  #analytics-panel{padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  #analytics-panel h3{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:8px;}
+  .analytics-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px;}
+  .metric{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;}
+  .metric .val{display:block;font-size:1.05em;font-weight:700;color:var(--accent2);}
+  .metric .lbl{display:block;font-size:.62em;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+  #analytics-chart{width:100%;height:140px;}
   #detail-panel{flex:1;overflow-y:auto;padding:16px;}
   #detail-empty{color:var(--text2);font-size:.82em;text-align:center;margin-top:30px;line-height:1.7;}
   #detail-card{display:none;}
@@ -84,6 +92,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <h3>Filter by tag</h3>
     <div id="tags-list"></div>
   </div>
+  <div id="analytics-panel">
+    <h3>Recall analytics</h3>
+    <div class="analytics-grid">
+      <div class="metric"><span class="val" id="a-success">—</span><span class="lbl">Success</span></div>
+      <div class="metric"><span class="val" id="a-p95">—</span><span class="lbl">p95 ms</span></div>
+    </div>
+    <canvas id="analytics-chart" height="140"></canvas>
+  </div>
   <div id="detail-panel">
     <p id="detail-empty">Click a node to<br>inspect a memory</p>
     <div id="detail-card">
@@ -119,6 +135,7 @@ function tc(t){if(!tcmap[t])tcmap[t]=PAL[ci++%PAL.length];return tcmap[t];}
 function nr(d){return 4+d.importance*10+Math.min(d.access_count*.5,6);}
 
 let GD={nodes:[],edges:[]},sim,svg,zoom,lSel,nSel,selId=null,aTags=new Set(),sq='';
+let analyticsChart=null;
 
 function initGraph(){
   const area=document.getElementById('graph-area');
@@ -255,6 +272,26 @@ function buildTags(){
   });
 }
 
+function renderAnalytics(summary){
+  if(!summary)return;
+  const success=summary.success||{};
+  const latency=summary.latency||{};
+  document.getElementById('a-success').textContent=((success.success_rate??0).toFixed(1))+'%';
+  document.getElementById('a-p95').textContent=((latency.p95??0).toFixed(1));
+
+  const points=summary.daily_activity||[];
+  const canvas=document.getElementById('analytics-chart');
+  if(!canvas||typeof Chart==='undefined')return;
+  const labels=points.map(p=>(p.date||'').slice(5));
+  const values=points.map(p=>p.count||0);
+  if(analyticsChart)analyticsChart.destroy();
+  analyticsChart=new Chart(canvas.getContext('2d'),{
+    type:'line',
+    data:{labels,datasets:[{label:'Recalls',data:values,borderColor:'#7c6ff7',backgroundColor:'rgba(124,111,247,.18)',tension:.35,fill:true,pointRadius:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8888aa',maxTicksLimit:6},grid:{color:'rgba(42,42,74,.35)'}},y:{ticks:{color:'#8888aa',precision:0},grid:{color:'rgba(42,42,74,.35)'}}}}
+  });
+}
+
 function toggleTag(tag){
   const el=document.querySelector('.tag-chip[data-tag="'+tag+'"]');
   if(aTags.has(tag)){aTags.delete(tag);el.classList.remove('active');}
@@ -293,15 +330,17 @@ async function forgetSelected(){
 async function refreshGraph(){
   document.getElementById('loading').style.display='flex';
   try{
-    const [gd,st]=await Promise.all([
+    const [gd,st,an]=await Promise.all([
       fetch(API+'/graph').then(r=>r.json()),
-      fetch(API+'/stats').then(r=>r.json())
+      fetch(API+'/stats').then(r=>r.json()),
+      fetch(API+'/analytics/summary?days=14').then(r=>r.json()).catch(()=>null)
     ]);
     GD={nodes:gd.nodes,edges:gd.edges};
     document.getElementById('s-nodes').textContent=gd.meta.total_nodes;
     document.getElementById('s-tags').textContent=gd.meta.total_tags;
     document.getElementById('s-edges').textContent=gd.meta.total_edges;
     document.getElementById('s-decay').textContent=st.decay_candidates??0;
+    renderAnalytics(an);
     buildTags();initGraph();
   }finally{
     document.getElementById('loading').style.display='none';

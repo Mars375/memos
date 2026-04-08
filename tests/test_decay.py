@@ -427,4 +427,4 @@ def test_mcp_tools_list_includes_decay():
     names = {t["name"] for t in TOOLS}
     assert "memory_decay" in names
     assert "memory_reinforce" in names
-    assert len(TOOLS) == 11  # 4 original + 3 kg + 2 decay/reinforce + 2 context-stack (P7)
+    assert len(TOOLS) == 12  # 4 original + 3 kg + 1 bridge + 2 decay/reinforce + 2 context-stack (P7)

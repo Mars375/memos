@@ -23,6 +23,7 @@ from .versioning.models import MemoryVersion, VersionDiff
 from .namespaces.acl import NamespaceACL, Role
 from .cache.embedding_cache import EmbeddingCache
 from .cache.embedding_cache import EmbeddingCache
+from .analytics import RecallAnalytics
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .migration import MigrationEngine, MigrationReport, _create_backend
@@ -144,6 +145,13 @@ class MemOS:
         # Sharing engine (multi-agent memory exchange)
         self._sharing = SharingEngine()
 
+        # Recall analytics (query patterns, latency, success rate)
+        self._analytics = RecallAnalytics(
+            path=kwargs.get("analytics_path"),
+            enabled=kwargs.get("analytics_enabled", True),
+            retention_days=kwargs.get("analytics_retention_days", 90),
+        )
+
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
     @property
@@ -186,6 +194,11 @@ class MemOS:
     def events(self) -> EventBus:
         """Access the event bus for subscriptions."""
         return self._events
+
+    @property
+    def analytics(self) -> RecallAnalytics:
+        """Access recall analytics."""
+        return self._analytics
 
     def subscribe(
         self,
@@ -365,98 +378,109 @@ class MemOS:
     ) -> list[RecallResult]:
         """Retrieve memories relevant to a query."""
         self._check_acl("read")
-        # Try retrieval engine for hybrid search (supports Qdrant native)
-        engine_results = self._retrieval.search(
-            query, top=top, filter_tags=filter_tags,
-            namespace=self._namespace,
-        )
+        started = time.perf_counter()
+        final_results: list[RecallResult] = []
 
-        if engine_results:
-            # Touch recalled items and emit events
-            for r in engine_results[:top]:
-                r.item.touch()
-                self._store.upsert(r.item, namespace=self._namespace)
-                self._events.emit_sync("recalled", {
-                    "id": r.item.id,
-                    "query": query,
-                    "score": r.score,
-                    "tags": r.item.tags,
-                }, namespace=self._namespace)
+        try:
+            # Try retrieval engine for hybrid search (supports Qdrant native)
+            engine_results = self._retrieval.search(
+                query, top=top, filter_tags=filter_tags,
+                namespace=self._namespace,
+            )
 
-            # Filter out expired memories
-            engine_results = [r for r in engine_results if not r.item.is_expired]
+            if engine_results:
+                # Touch recalled items and emit events
+                for r in engine_results[:top]:
+                    r.item.touch()
+                    self._store.upsert(r.item, namespace=self._namespace)
+                    self._events.emit_sync("recalled", {
+                        "id": r.item.id,
+                        "query": query,
+                        "score": r.score,
+                        "tags": r.item.tags,
+                    }, namespace=self._namespace)
 
-            # Filter by date range
-            if filter_after is not None:
-                engine_results = [r for r in engine_results if r.item.created_at >= filter_after]
-            if filter_before is not None:
-                engine_results = [r for r in engine_results if r.item.created_at <= filter_before]
+                # Filter out expired memories
+                engine_results = [r for r in engine_results if not r.item.is_expired]
 
-            # Apply decay
-            adjusted = []
-            for r in engine_results[:top]:
-                decayed = self._decay.adjusted_score(r.score, r.item)
-                if decayed >= min_score:
-                    r.score = decayed
-                    adjusted.append(r)
-            return sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
+                # Filter by date range
+                if filter_after is not None:
+                    engine_results = [r for r in engine_results if r.item.created_at >= filter_after]
+                if filter_before is not None:
+                    engine_results = [r for r in engine_results if r.item.created_at <= filter_before]
 
-        # Fallback: basic keyword search
-        all_items = self._store.list_all(namespace=self._namespace)
+                # Apply decay
+                adjusted = []
+                for r in engine_results[:top]:
+                    decayed = self._decay.adjusted_score(r.score, r.item)
+                    if decayed >= min_score:
+                        r.score = decayed
+                        adjusted.append(r)
+                final_results = sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
+            else:
+                # Fallback: basic keyword search
+                all_items = self._store.list_all(namespace=self._namespace)
 
-        if filter_tags:
-            tag_set = set(t.lower() for t in filter_tags)
-            all_items = [
-                item for item in all_items
-                if tag_set & set(t.lower() for t in item.tags)
-            ]
+                if filter_tags:
+                    tag_set = set(t.lower() for t in filter_tags)
+                    all_items = [
+                        item for item in all_items
+                        if tag_set & set(t.lower() for t in item.tags)
+                    ]
 
-        if not all_items:
-            return []
+                if not all_items:
+                    final_results = []
+                else:
+                    results = []
+                    for item in all_items:
+                        kw_score = self._retrieval._bm25(query, item.content)
+                        if kw_score > 0:
+                            results.append(RecallResult(
+                                item=item,
+                                score=kw_score,
+                                match_reason="keyword",
+                            ))
 
-        results = []
-        for item in all_items:
-            kw_score = self._retrieval._bm25(query, item.content)
-            if kw_score > 0:
-                results.append(RecallResult(
-                    item=item,
-                    score=kw_score,
-                    match_reason="keyword",
-                ))
+                    results.sort(key=lambda r: r.score, reverse=True)
 
-        results.sort(key=lambda r: r.score, reverse=True)
+                    # Filter out expired memories
+                    results = [r for r in results if not r.item.is_expired]
 
-        # Filter out expired memories
-        results = [r for r in results if not r.item.is_expired]
+                    # Filter by date range
+                    if filter_after is not None:
+                        results = [r for r in results if r.item.created_at >= filter_after]
+                    if filter_before is not None:
+                        results = [r for r in results if r.item.created_at <= filter_before]
 
-        # Filter by date range
-        if filter_after is not None:
-            results = [r for r in results if r.item.created_at >= filter_after]
-        if filter_before is not None:
-            results = [r for r in results if r.item.created_at <= filter_before]
+                    # Touch recalled items
+                    for r in results[:top]:
+                        r.item.touch()
+                        self._store.upsert(r.item, namespace=self._namespace)
 
-        # Touch recalled items
-        for r in results[:top]:
-            r.item.touch()
-            self._store.upsert(r.item, namespace=self._namespace)
+                        # Emit recall event for each touched item
+                        self._events.emit_sync("recalled", {
+                            "id": r.item.id,
+                            "query": query,
+                            "score": r.score,
+                            "tags": r.item.tags,
+                        }, namespace=self._namespace)
 
-            # Emit recall event for each touched item
-            self._events.emit_sync("recalled", {
-                "id": r.item.id,
-                "query": query,
-                "score": r.score,
-                "tags": r.item.tags,
-            }, namespace=self._namespace)
+                    # Apply decay
+                    adjusted = []
+                    for r in results[:top]:
+                        decayed = self._decay.adjusted_score(r.score, r.item)
+                        if decayed >= min_score:
+                            r.score = decayed
+                            adjusted.append(r)
 
-        # Apply decay
-        adjusted = []
-        for r in results[:top]:
-            decayed = self._decay.adjusted_score(r.score, r.item)
-            if decayed >= min_score:
-                r.score = decayed
-                adjusted.append(r)
+                    final_results = sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
+        finally:
+            try:
+                self._analytics.track_recall(query, final_results, (time.perf_counter() - started) * 1000.0)
+            except Exception:
+                pass
 
-        return sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
+        return final_results
 
 
     async def recall_stream(
