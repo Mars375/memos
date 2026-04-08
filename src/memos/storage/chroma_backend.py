@@ -89,7 +89,7 @@ class _CachedOllamaEF:
     def name(self) -> str:  # required by chromadb EmbeddingFunction protocol
         return f"memos-ollama-{self._embed_model}"
 
-    def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002
+    def _embed_batch(self, input: list[str]) -> list[list[float]]:  # noqa: A002
         results = []
         for text in input:
             cached = self._lookup(text)
@@ -100,6 +100,17 @@ class _CachedOllamaEF:
             self._store(text, vec)
             results.append(vec)
         return results
+
+    # chromadb ≥ 0.6 API: separate embed_documents / embed_query methods
+    def embed_documents(self, input: list[str]) -> list[list[float]]:  # noqa: A002
+        return self._embed_batch(input)
+
+    def embed_query(self, input: list[str]) -> list[list[float]]:  # noqa: A002
+        return self._embed_batch(input)
+
+    # Legacy / compat: some versions call __call__ directly
+    def __call__(self, input: list[str]) -> list[list[float]]:  # noqa: A002
+        return self._embed_batch(input)
 
 
 class ChromaBackend(StorageBackend):
