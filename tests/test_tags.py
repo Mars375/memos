@@ -181,3 +181,159 @@ class TestTagsAPI:
         resp = client.get("/api/v1/tags")
         assert resp.status_code == 200
         assert resp.json() == []
+
+
+# ── Core rename tests ──────────────────────────────────────────────────────
+
+
+class TestRenameTagCore:
+    def setup_method(self):
+        self.memos = MemOS(backend=InMemoryBackend())
+
+    def test_rename_basic(self):
+        self.memos.learn("hello", tags=["alpha"])
+        count = self.memos.rename_tag("alpha", "beta")
+        assert count == 1
+        tags = self.memos.list_tags()
+        tag_names = [t for t, _ in tags]
+        assert "alpha" not in tag_names
+        assert "beta" in tag_names
+
+    def test_rename_multiple_memories(self):
+        self.memos.learn("a", tags=["x", "y"])
+        self.memos.learn("b", tags=["x"])
+        self.memos.learn("c", tags=["z"])
+        count = self.memos.rename_tag("x", "renamed")
+        assert count == 2
+        tags = dict(self.memos.list_tags())
+        assert "x" not in tags
+        assert tags["renamed"] == 2
+        assert tags["y"] == 1
+        assert tags["z"] == 1
+
+    def test_rename_preserves_other_tags(self):
+        self.memos.learn("multi", tags=["a", "b", "c"])
+        count = self.memos.rename_tag("b", "renamed")
+        assert count == 1
+        item = self.memos._store.list_all()[0]
+        assert "a" in item.tags
+        assert "renamed" in item.tags
+        assert "c" in item.tags
+        assert "b" not in item.tags
+
+    def test_rename_nonexistent_tag(self):
+        self.memos.learn("hello", tags=["keep"])
+        count = self.memos.rename_tag("missing", "new")
+        assert count == 0
+
+    def test_rename_case_insensitive(self):
+        self.memos.learn("hello", tags=["MyTag"])
+        count = self.memos.rename_tag("mytag", "newtag")
+        assert count == 1
+        tags = dict(self.memos.list_tags())
+        assert "newtag" in tags
+
+    def test_rename_empty_store(self):
+        count = self.memos.rename_tag("a", "b")
+        assert count == 0
+
+    def test_rename_updates_accessed_at(self):
+        import time
+        self.memos.learn("hello", tags=["old"])
+        item_before = self.memos._store.list_all()[0]
+        ts_before = item_before.accessed_at
+        time.sleep(0.01)
+        self.memos.rename_tag("old", "new")
+        item_after = self.memos._store.list_all()[0]
+        assert item_after.accessed_at >= ts_before
+
+
+# ── CLI rename tests ───────────────────────────────────────────────────────
+
+
+class TestRenameTagCLI:
+    def test_rename_parser(self):
+        p = build_parser()
+        ns = p.parse_args(["tags", "rename", "old", "new"])
+        assert ns.tags_action == "rename"
+        assert ns.old_tag == "old"
+        assert ns.new_tag == "new"
+
+    def test_rename_cli(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        main(["init"])
+        main(["learn", "hello world", "--tags", "alpha,beta"])
+        capsys.readouterr()
+        main(["tags", "rename", "alpha", "gamma"])
+        captured = capsys.readouterr()
+        assert "gamma" in captured.out
+        assert "1 memory(s) updated" in captured.out
+        # Verify the tag was actually renamed
+        main(["tags", "list", "--json"])
+        captured = capsys.readouterr()
+        data = json.loads(captured.out)
+        tag_names = [d["tag"] for d in data]
+        assert "gamma" in tag_names
+        assert "alpha" not in tag_names
+
+    def test_rename_nonexistent_cli(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        main(["init"])
+        capsys.readouterr()
+        main(["tags", "rename", "ghost", "new"])
+        captured = capsys.readouterr()
+        assert "0 memory(s) updated" in captured.out
+
+
+# ── API rename tests ───────────────────────────────────────────────────────
+
+
+class TestRenameTagAPI:
+    def test_api_rename(self):
+        from memos.api import create_fastapi_app
+        from fastapi.testclient import TestClient
+
+        m = MemOS(backend=InMemoryBackend())
+        m.learn("api test a", tags=["old-tag", "keep"])
+        m.learn("api test b", tags=["old-tag"])
+
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/rename", json={"old": "old-tag", "new": "new-tag"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["renamed"] == 2
+        assert data["old_tag"] == "old-tag"
+        assert data["new_tag"] == "new-tag"
+
+        # Verify via list
+        resp = client.get("/api/v1/tags")
+        tag_map = {d["tag"]: d["count"] for d in resp.json()}
+        assert "new-tag" in tag_map
+        assert tag_map["new-tag"] == 2
+        assert "old-tag" not in tag_map
+
+    def test_api_rename_missing_params(self):
+        from memos.api import create_fastapi_app
+        from fastapi.testclient import TestClient
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/rename", json={"old": "x"})
+        assert resp.status_code == 200
+        assert "error" in resp.json()
+
+    def test_api_rename_nonexistent(self):
+        from memos.api import create_fastapi_app
+        from fastapi.testclient import TestClient
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/rename", json={"old": "ghost", "new": "new"})
+        assert resp.status_code == 200
+        assert resp.json()["renamed"] == 0

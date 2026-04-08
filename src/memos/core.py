@@ -638,6 +638,36 @@ class MemOS:
             result = result[:limit]
         return result
 
+    def rename_tag(self, old_tag: str, new_tag: str) -> int:
+        """Rename a tag across all memories.
+
+        Args:
+            old_tag: Tag name to replace.
+            new_tag: New tag name.
+
+        Returns:
+            Number of memories updated.
+        """
+        self._check_acl("write")
+        updated = 0
+        old_lower = old_tag.lower()
+        for item in self._store.list_all(namespace=self._namespace):
+            tags_lower = [t.lower() for t in item.tags]
+            if old_lower not in tags_lower:
+                continue
+            new_tags = [new_tag if t.lower() == old_lower else t for t in item.tags]
+            item.tags = new_tags
+            item.accessed_at = time.time()
+            self._store.upsert(item, namespace=self._namespace)
+            self._events.emit_sync("tag_renamed", {
+                "id": item.id,
+                "old_tag": old_tag,
+                "new_tag": new_tag,
+            }, namespace=self._namespace)
+            updated += 1
+        return updated
+
+
     def search(self, q: str, limit: int = 20) -> list[MemoryItem]:
         """Simple keyword search across all memories."""
         self._check_acl("read")

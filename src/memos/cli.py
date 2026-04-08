@@ -940,6 +940,11 @@ def build_parser() -> argparse.ArgumentParser:
     tags_list.add_argument("--json", action="store_true", help="JSON output")
     tags_list.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    tags_rename = tags_sub.add_parser("rename", help="Rename a tag across all memories")
+    tags_rename.add_argument("old_tag", help="Current tag name")
+    tags_rename.add_argument("new_tag", help="New tag name")
+    tags_rename.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
+
     # ── Sharing commands ──────────────────────────────────────
     share_offer = sub.add_parser("share-offer", help="Offer to share memories with another agent")
     share_offer.add_argument("--target", required=True, help="Target agent ID")
@@ -1387,8 +1392,16 @@ def cmd_config(ns: argparse.Namespace) -> None:
 
 
 def cmd_tags(ns: argparse.Namespace) -> None:
-    """List all tags with memory counts."""
+    """Tag management commands."""
+    action = getattr(ns, 'tags_action', 'list') or 'list'
     memos = _get_memos(ns)
+
+    if action == 'rename':
+        count = memos.rename_tag(ns.old_tag, ns.new_tag)
+        print(f"✓ Renamed tag '{ns.old_tag}' → '{ns.new_tag}' ({count} memory(s) updated)")
+        return
+
+    # Default: list
     sort_by = getattr(ns, 'tags_sort', 'count') or 'count'
     limit = getattr(ns, 'tags_limit', 0) or 0
     tags = memos.list_tags(sort=sort_by, limit=limit)

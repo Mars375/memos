@@ -287,6 +287,16 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         tags = memos.list_tags(sort=sort, limit=limit)
         return [{"tag": t, "count": c} for t, c in tags]
 
+    @app.post("/api/v1/tags/rename")
+    async def api_tags_rename(body: dict):
+        """Rename a tag across all memories."""
+        old_tag = body.get("old")
+        new_tag = body.get("new")
+        if not old_tag or not new_tag:
+            return {"error": "Both 'old' and 'new' tag names are required"}
+        count = memos.rename_tag(old_tag, new_tag)
+        return {"status": "ok", "renamed": count, "old_tag": old_tag, "new_tag": new_tag}
+
     @app.get("/", response_class=HTMLResponse)
     async def dashboard():
         return DASHBOARD_HTML
