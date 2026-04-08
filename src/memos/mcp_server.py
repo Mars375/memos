@@ -124,6 +124,57 @@ TOOLS = [
             "required": ["memory_id"],
         },
     },
+    {
+        "name": "memory_wake_up",
+        "description": (
+            "Return L0 (identity) + L1 (top memories by importance) as a single string "
+            "ready to inject into an agent system prompt. Use at session start."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "max_chars": {
+                    "type": "integer",
+                    "default": 2000,
+                    "description": "Maximum character count of the returned string",
+                },
+                "l1_top": {
+                    "type": "integer",
+                    "default": 15,
+                    "description": "Number of top-importance memories to include",
+                },
+                "include_stats": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Include a STATS section with total/tag counts",
+                },
+            },
+        },
+    },
+    {
+        "name": "memory_context_for",
+        "description": (
+            "Return optimised context (identity + semantic results) for a specific query. "
+            "Combines L0 identity with L3 full-search results."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The query to retrieve context for"},
+                "max_chars": {
+                    "type": "integer",
+                    "default": 1500,
+                    "description": "Maximum character count of the returned string",
+                },
+                "top": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Number of semantic results to include",
+                },
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -263,6 +314,26 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
             new_imp = memos._decay.reinforce(item, strength=args.get("strength"))
             memos._store.upsert(item, namespace=memos._namespace)
             return _text(f"Reinforced [{item.id[:8]}] importance: {old_imp:.3f} -> {new_imp:.3f}")
+
+        elif tool == "memory_wake_up":
+            from .context import ContextStack
+            cs = ContextStack(memos)
+            max_chars = int(args.get("max_chars", 2000))
+            l1_top = int(args.get("l1_top", 15))
+            include_stats = bool(args.get("include_stats", True))
+            output = cs.wake_up(max_chars=max_chars, l1_top=l1_top, include_stats=include_stats)
+            return _text(output)
+
+        elif tool == "memory_context_for":
+            from .context import ContextStack
+            query = args.get("query", "").strip()
+            if not query:
+                return _error("query is required")
+            cs = ContextStack(memos)
+            max_chars = int(args.get("max_chars", 1500))
+            top = int(args.get("top", 10))
+            output = cs.context_for(query=query, max_chars=max_chars, top=top)
+            return _text(output)
 
         else:
             return _error(f"Unknown tool: {tool}")

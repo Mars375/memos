@@ -316,6 +316,19 @@ def test_search_entities_no_match(kg: KnowledgeGraph) -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_add_fact_populates_entities(kg: KnowledgeGraph) -> None:
+    """Bug 1 regression: add_fact must upsert both nodes into entities table."""
+    kg.add_fact("Alice", "works_on", "ProjectX")
+    s = kg.stats()
+    assert s["total_entities"] >= 2, (
+        f"Expected at least 2 entities after add_fact, got {s['total_entities']}"
+    )
+    results = kg.search_entities("Alice")
+    assert len(results) >= 1, "search_entities('Alice') should return at least 1 result"
+    names = {r["name"] for r in results}
+    assert "Alice" in names
+
+
 def test_add_fact_populates_entities_stats(kg: KnowledgeGraph) -> None:
     """After add_fact, stats()['total_entities'] must be >= 2 (subject + object)."""
     kg.add_fact("Alice", "knows", "Bob")
@@ -352,6 +365,14 @@ def test_add_fact_entities_deduped(kg: KnowledgeGraph) -> None:
     assert len(alice_rows) == 1, "Entity 'Alice' should appear exactly once in entities table"
 
 
+def test_add_fact_entities_no_duplicates(kg: KnowledgeGraph) -> None:
+    """Repeated add_fact with same entity names should not create duplicate rows."""
+    kg.add_fact("Alice", "knows", "Bob")
+    kg.add_fact("Alice", "likes", "Coffee")
+    results = kg.search_entities("Alice")
+    assert len(results) == 1, "Alice entity should appear exactly once even after multiple add_fact calls"
+
+
 def test_add_fact_populates_entities_table(kg: KnowledgeGraph) -> None:
     """Regression: add_fact() must upsert subject and object into entities."""
     kg.add_fact("Alice", "works_on", "ProjectX")
@@ -363,6 +384,16 @@ def test_add_fact_populates_entities_table(kg: KnowledgeGraph) -> None:
     assert len(results) >= 1, "search_entities('Alice') should return at least 1 result"
     names = {r["name"] for r in results}
     assert "Alice" in names
+
+
+def test_query_self_referential_no_duplicate_ids(kg: KnowledgeGraph) -> None:
+    """Bug regression: query('X', direction='both') on a self-referential fact must not return duplicate IDs."""
+    kg.add_fact("X", "relates_to", "X")
+    facts = kg.query("X", direction="both")
+    ids = [f["id"] for f in facts]
+    assert len(ids) == len(set(ids)), (
+        f"Duplicate fact IDs returned by query with direction='both': {ids}"
+    )
 
 
 def test_query_both_direction_no_duplicates(kg: KnowledgeGraph) -> None:

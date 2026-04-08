@@ -1252,6 +1252,39 @@ def build_parser() -> argparse.ArgumentParser:
     palace_stats = sub.add_parser("palace-stats", help="Show Palace statistics")
     palace_stats.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
 
+    # ---- Context Stack (P7) ----
+
+    # wake-up
+    wake_up_p = sub.add_parser("wake-up", help="Print L0+L1 context for session priming")
+    wake_up_p.add_argument("--max-chars", dest="max_chars", type=int, default=2000,
+                           help="Max characters in output (default: 2000)")
+    wake_up_p.add_argument("--top", dest="l1_top", type=int, default=15,
+                           help="Top-N memories by importance (default: 15)")
+    wake_up_p.add_argument("--no-stats", dest="no_stats", action="store_true",
+                           help="Omit the STATS section")
+    wake_up_p.add_argument("--backend", default="memory",
+                           choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    # identity
+    identity_p = sub.add_parser("identity", help="Manage agent identity (L0)")
+    identity_sub = identity_p.add_subparsers(dest="identity_action")
+
+    id_set = identity_sub.add_parser("set", help="Write identity (use - to read from stdin)")
+    id_set.add_argument("text", nargs="?", default=None,
+                        help="Identity text (omit to read from stdin)")
+
+    identity_sub.add_parser("show", help="Show current identity")
+
+    # context-for
+    ctx_for_p = sub.add_parser("context-for", help="Retrieve optimised context for a query")
+    ctx_for_p.add_argument("query", help="Query string")
+    ctx_for_p.add_argument("--max-chars", dest="max_chars", type=int, default=1500,
+                           help="Max characters in output (default: 1500)")
+    ctx_for_p.add_argument("--top", type=int, default=10,
+                           help="Number of semantic results to include (default: 10)")
+    ctx_for_p.add_argument("--backend", default="memory",
+                           choices=["memory", "chroma", "qdrant", "pinecone"])
+
     # --- Decay & Reinforce ---
     decay_p = sub.add_parser("decay", help="Apply importance decay to memories")
     decay_p.add_argument("--apply", action="store_true", help="Apply decay (default is dry-run)")
@@ -2030,6 +2063,62 @@ def cmd_palace_stats(ns: argparse.Namespace) -> None:
         palace.close()
 
 
+def cmd_wake_up(ns: argparse.Namespace) -> None:
+    """Print L0 (identity) + L1 (top memories) context for session priming."""
+    from .context import ContextStack
+    memos = _get_memos(ns)
+    cs = ContextStack(memos)
+    output = cs.wake_up(
+        max_chars=ns.max_chars,
+        l1_top=ns.l1_top,
+        include_stats=not ns.no_stats,
+    )
+    print(output)
+
+
+def cmd_identity(ns: argparse.Namespace) -> None:
+    """Manage agent identity (L0 context)."""
+    from .context import ContextStack
+    action = getattr(ns, "identity_action", None) or "show"
+    # identity uses its own path, not a memos backend
+    # We instantiate ContextStack with a dummy memos only if needed
+    # For show/set we only need the file path
+
+    class _Stub:
+        """Minimal stub so ContextStack can be constructed without a full backend."""
+        namespace = ""
+        def _store(self):  # pragma: no cover
+            pass
+
+    cs = ContextStack(_Stub())  # type: ignore[arg-type]
+
+    if action == "set":
+        text = ns.text
+        if text is None or text == "-":
+            text = sys.stdin.read()
+        cs.set_identity(text)
+        print(f"Identity written to {cs._identity_path}")
+    else:
+        content = cs.get_identity()
+        if content:
+            print(content)
+        else:
+            print(f"(no identity file at {cs._identity_path})")
+
+
+def cmd_context_for(ns: argparse.Namespace) -> None:
+    """Print context optimised for a specific query (L0 + L3)."""
+    from .context import ContextStack
+    memos = _get_memos(ns)
+    cs = ContextStack(memos)
+    output = cs.context_for(
+        query=ns.query,
+        max_chars=ns.max_chars,
+        top=ns.top,
+    )
+    print(output)
+
+
 def cmd_decay(ns: argparse.Namespace) -> None:
     """Apply importance decay to memories."""
     from .core import MemOS
@@ -2144,6 +2233,10 @@ def main(argv: list[str] | None = None) -> None:
         "palace-assign": cmd_palace_assign,
         "palace-recall": cmd_palace_recall,
         "palace-stats": cmd_palace_stats,
+        # Context Stack (P7)
+        "wake-up": cmd_wake_up,
+        "identity": cmd_identity,
+        "context-for": cmd_context_for,
         "decay": cmd_decay,
         "reinforce": cmd_reinforce,
     }

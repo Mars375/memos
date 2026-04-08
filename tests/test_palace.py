@@ -530,6 +530,7 @@ def test_cli_palace_stats(tmp_path, capsys) -> None:
     assert "wings" in out.lower() or "Total" in out
 
 
+
 # ---------------------------------------------------------------------------
 # Regression: Bug 2 — Palace DB path derivation from kg_db_path
 # ---------------------------------------------------------------------------

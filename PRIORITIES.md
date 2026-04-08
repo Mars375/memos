@@ -27,7 +27,8 @@ D3.js force-directed, dark theme, `/api/v1/graph`, sidebar stats+search. (v0.29.
 
 ---
 
-## [ ] P5 — Temporal Knowledge Graph (inspiré MemPalace)
+## [x] P5 — Temporal Knowledge Graph (inspiré MemPalace)
+Implémenté v0.30.0 — KnowledgeGraph SQLite, CLI kg-add/query/timeline/invalidate/stats, REST /api/v1/kg/*, MCP kg_add_fact/kg_query_entity/kg_timeline.
 **Objectif** : Stocker des faits typés avec fenêtres temporelles — permet le raisonnement historique.
 
 Inspiré de MemPalace : SQLite triples `(subject, predicate, object)` avec `valid_from / valid_to`.
@@ -55,7 +56,8 @@ curl .../api/v1/kg/query?entity=Alice&time=2025-03-15
 
 ---
 
-## [ ] P6 — Hierarchical Palace (Wings/Rooms)
+## [x] P6 — Hierarchical Palace (Wings/Rooms)
+Implémenté v0.30.0 — PalaceIndex SQLite, Wings/Rooms CRUD, palace-assign/recall, REST /api/v1/palace/*, auto-detect from tags.
 **Objectif** : Organisation hiérarchique à 3 niveaux — mesure +34% de précision du recall vs tags plats.
 
 Inspiré de MemPalace : Wings (person/project) → Rooms (topic) → Memories.
@@ -83,7 +85,8 @@ memos palace-recall "deployment pipeline" --wing openclaw
 
 ---
 
-## [ ] P7 — Multi-layer Context (Wake-up / L0-L1-L2-L3)
+## [x] P7 — Multi-layer Context (Wake-up / L0-L1-L2-L3)
+Implémenté v0.30.0 — ContextStack, wake-up, identity, recall_l2/l3, context-for, MCP memory_wake_up/memory_context_for.
 **Objectif** : Récupération étagée pour optimiser les tokens — identité toujours chargée, détail à la demande.
 
 Inspiré de MemPalace MemoryStack :
@@ -111,7 +114,8 @@ memos wake-up  # retourne L0 + top-15 mémoires en <800 tokens
 
 ---
 
-## [ ] P8 — Smart Chunking + Multi-format Import
+## [x] P8 — Smart Chunking + Multi-format Import
+Implémenté v0.30.0 — chunk_text paragraph-aware, content_hash dedup, mine --format claude/chatgpt/slack/discord/telegram/openclaw, auto-detect.
 **Objectif** : Chunking respectueux des paragraphes + import Claude/ChatGPT/Slack.
 
 Inspiré de MemPalace miner :

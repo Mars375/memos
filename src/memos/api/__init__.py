@@ -465,6 +465,67 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # ---- End Palace ----
 
+    # ---- Context Stack (P7) ----
+    from ..context import ContextStack as _ContextStack
+    _context_stack = _ContextStack(memos)
+
+    @app.get("/api/v1/context/wake-up")
+    async def context_wake_up(
+        max_chars: int = 2000,
+        l1_top: int = 15,
+        include_stats: bool = True,
+    ):
+        """Return L0+L1 context string for session priming.
+
+        Query params:
+            max_chars: Maximum characters (default 2000)
+            l1_top: Top-N memories by importance (default 15)
+            include_stats: Include STATS section (default true)
+        """
+        output = _context_stack.wake_up(
+            max_chars=max_chars,
+            l1_top=l1_top,
+            include_stats=include_stats,
+        )
+        return {"status": "ok", "context": output, "chars": len(output)}
+
+    @app.get("/api/v1/context/identity")
+    async def context_get_identity():
+        """Read the current agent identity (L0)."""
+        content = _context_stack.get_identity()
+        return {"status": "ok", "identity": content, "exists": bool(content)}
+
+    @app.post("/api/v1/context/identity")
+    async def context_set_identity(body: dict):
+        """Write the agent identity. Body: {content: string}"""
+        content = body.get("content")
+        if content is None:
+            return {"status": "error", "message": "content is required"}
+        _context_stack.set_identity(content)
+        return {"status": "ok", "chars": len(content)}
+
+    @app.get("/api/v1/context/for")
+    async def context_for_query(
+        query: str,
+        max_chars: int = 1500,
+        top: int = 10,
+    ):
+        """Return optimised context for a specific query (L0 + L3).
+
+        Query params:
+            query: Search query (required)
+            max_chars: Maximum characters (default 1500)
+            top: Number of semantic results (default 10)
+        """
+        output = _context_stack.context_for(
+            query=query,
+            max_chars=max_chars,
+            top=top,
+        )
+        return {"status": "ok", "context": output, "query": query, "chars": len(output)}
+
+    # ---- End Context Stack ----
+
 
     @app.get("/api/v1/graph")
     async def api_graph(min_shared_tags: int = 1, limit: int = 500):
