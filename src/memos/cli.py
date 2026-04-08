@@ -1212,6 +1212,46 @@ def build_parser() -> argparse.ArgumentParser:
     kg_stats = sub.add_parser("kg-stats", help="Show knowledge graph statistics")
     kg_stats.add_argument("--db", dest="kg_db", default=None)
 
+    # ---- Palace (P6) ----
+    palace_db_help = "Path to palace.db (default: ~/.memos/palace.db)"
+
+    palace_init = sub.add_parser("palace-init", help="Initialise the Palace schema")
+    palace_init.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_wing_create = sub.add_parser("palace-wing-create", help="Create a Wing")
+    palace_wing_create.add_argument("name", help="Wing name")
+    palace_wing_create.add_argument("--description", default="", help="Wing description")
+    palace_wing_create.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_wing_list = sub.add_parser("palace-wing-list", help="List Wings")
+    palace_wing_list.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_room_create = sub.add_parser("palace-room-create", help="Create a Room inside a Wing")
+    palace_room_create.add_argument("wing", help="Wing name")
+    palace_room_create.add_argument("room", help="Room name")
+    palace_room_create.add_argument("--description", default="", help="Room description")
+    palace_room_create.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_room_list = sub.add_parser("palace-room-list", help="List Rooms")
+    palace_room_list.add_argument("--wing", default=None, help="Filter by wing name")
+    palace_room_list.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_assign = sub.add_parser("palace-assign", help="Assign a memory to a Wing/Room")
+    palace_assign.add_argument("memory_id", help="Memory ID")
+    palace_assign.add_argument("--wing", required=True, help="Wing name")
+    palace_assign.add_argument("--room", default=None, help="Room name (optional)")
+    palace_assign.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_recall = sub.add_parser("palace-recall", help="Scoped recall using Palace")
+    palace_recall.add_argument("query", help="Recall query")
+    palace_recall.add_argument("--wing", default=None, help="Scope to wing")
+    palace_recall.add_argument("--room", default=None, help="Scope to room (requires --wing)")
+    palace_recall.add_argument("--top", type=int, default=10, help="Max results (default 10)")
+    palace_recall.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
+    palace_stats = sub.add_parser("palace-stats", help="Show Palace statistics")
+    palace_stats.add_argument("--db", dest="palace_db", default=None, help=palace_db_help)
+
     return p
 
 
@@ -1854,6 +1894,130 @@ def cmd_mine(ns: argparse.Namespace) -> None:
             print(f"  [{', '.join(c['tags'])}] {c['content']}")
 
 
+def _get_palace(ns: argparse.Namespace):
+    """Return a PalaceIndex using the --db flag or the default path."""
+    from .palace import PalaceIndex
+    db = getattr(ns, "palace_db", None) or None
+    if db:
+        return PalaceIndex(db_path=db)
+    return PalaceIndex()
+
+
+def cmd_palace_init(ns: argparse.Namespace) -> None:
+    """Initialise the Palace schema (creates tables if absent)."""
+    palace = _get_palace(ns)
+    palace.close()
+    print("Palace schema initialised.")
+
+
+def cmd_palace_wing_create(ns: argparse.Namespace) -> None:
+    """Create a Wing in the Palace."""
+    palace = _get_palace(ns)
+    try:
+        wing_id = palace.create_wing(ns.name, description=ns.description)
+        print(f"Wing created: {ns.name} [{wing_id}]")
+    finally:
+        palace.close()
+
+
+def cmd_palace_wing_list(ns: argparse.Namespace) -> None:
+    """List all Wings."""
+    palace = _get_palace(ns)
+    try:
+        wings = palace.list_wings()
+        if not wings:
+            print("No wings found.")
+            return
+        print(f"{'NAME':<24} {'ROOMS':>6} {'MEMORIES':>9}  DESCRIPTION")
+        print("-" * 65)
+        for w in wings:
+            print(f"{w['name']:<24} {w['room_count']:>6} {w['memory_count']:>9}  {w['description']}")
+    finally:
+        palace.close()
+
+
+def cmd_palace_room_create(ns: argparse.Namespace) -> None:
+    """Create a Room inside a Wing."""
+    palace = _get_palace(ns)
+    try:
+        room_id = palace.create_room(ns.wing, ns.room, description=ns.description)
+        print(f"Room created: {ns.wing}/{ns.room} [{room_id}]")
+    except KeyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        palace.close()
+
+
+def cmd_palace_room_list(ns: argparse.Namespace) -> None:
+    """List Rooms, optionally filtered by wing."""
+    palace = _get_palace(ns)
+    try:
+        rooms = palace.list_rooms(wing_name=ns.wing)
+        if not rooms:
+            print("No rooms found.")
+            return
+        print(f"{'WING':<20} {'ROOM':<20} {'MEMORIES':>9}  DESCRIPTION")
+        print("-" * 65)
+        for r in rooms:
+            print(f"{r['wing_name']:<20} {r['name']:<20} {r['memory_count']:>9}  {r['description']}")
+    except KeyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        palace.close()
+
+
+def cmd_palace_assign(ns: argparse.Namespace) -> None:
+    """Assign a memory to a Wing (and optionally a Room)."""
+    palace = _get_palace(ns)
+    try:
+        palace.assign(ns.memory_id, ns.wing, room_name=ns.room)
+        room_str = f"/{ns.room}" if ns.room else ""
+        print(f"Assigned [{ns.memory_id}] -> {ns.wing}{room_str}")
+    except KeyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        palace.close()
+
+
+def cmd_palace_recall(ns: argparse.Namespace) -> None:
+    """Scoped recall using Palace wing/room filter."""
+    from .palace import PalaceRecall
+    palace = _get_palace(ns)
+    memos = _get_memos(ns)
+    try:
+        pr = PalaceRecall(palace)
+        results = pr.palace_recall(
+            memos, ns.query,
+            wing_name=ns.wing,
+            room_name=ns.room,
+            top=ns.top,
+        )
+        if not results:
+            print("No memories found.")
+            return
+        for r in results:
+            tags_str = f" [{', '.join(r.item.tags)}]" if r.item.tags else ""
+            print(f"  {r.score:.3f} {r.item.content[:120]}{tags_str}")
+        print(f"\n{len(results)} result(s)")
+    finally:
+        palace.close()
+
+
+def cmd_palace_stats(ns: argparse.Namespace) -> None:
+    """Show Palace statistics."""
+    palace = _get_palace(ns)
+    try:
+        s = palace.stats()
+        print(f"  Total wings:       {s['total_wings']}")
+        print(f"  Total rooms:       {s['total_rooms']}")
+        print(f"  Assigned memories: {s['assigned_memories']}")
+    finally:
+        palace.close()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -1920,6 +2084,14 @@ def main(argv: list[str] | None = None) -> None:
         "kg-timeline": cmd_kg_timeline,
         "kg-invalidate": cmd_kg_invalidate,
         "kg-stats": cmd_kg_stats,
+        "palace-init": cmd_palace_init,
+        "palace-wing-create": cmd_palace_wing_create,
+        "palace-wing-list": cmd_palace_wing_list,
+        "palace-room-create": cmd_palace_room_create,
+        "palace-room-list": cmd_palace_room_list,
+        "palace-assign": cmd_palace_assign,
+        "palace-recall": cmd_palace_recall,
+        "palace-stats": cmd_palace_stats,
     }
     commands[ns.command](ns)
 

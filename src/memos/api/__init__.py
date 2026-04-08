@@ -364,6 +364,103 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # ---- End Knowledge Graph ----
 
+    # ---- Palace (P6) ----
+    from ..palace import PalaceIndex, PalaceRecall as _PalaceRecall
+    if kg_db_path and "kg.db" in kg_db_path:
+        _palace_db_path = kg_db_path.replace("kg.db", "palace.db")
+    else:
+        _palace_db_path = None  # use PalaceIndex default (~/.memos/palace.db)
+    _palace = PalaceIndex(db_path=_palace_db_path) if _palace_db_path else PalaceIndex()
+
+    @app.get("/api/v1/palace/wings")
+    async def palace_list_wings():
+        """List all Wings with memory and room counts."""
+        return {"status": "ok", "wings": _palace.list_wings()}
+
+    @app.post("/api/v1/palace/wings")
+    async def palace_create_wing(body: dict):
+        """Create a Wing. Body: {name, description?}"""
+        name = body.get("name", "").strip()
+        if not name:
+            return {"status": "error", "message": "name is required"}
+        try:
+            wing_id = _palace.create_wing(name, description=body.get("description", ""))
+            return {"status": "ok", "id": wing_id, "name": name}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.get("/api/v1/palace/rooms")
+    async def palace_list_rooms(wing: Optional[str] = None):
+        """List Rooms, optionally filtered by wing name."""
+        try:
+            rooms = _palace.list_rooms(wing_name=wing)
+            return {"status": "ok", "rooms": rooms}
+        except KeyError as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.post("/api/v1/palace/rooms")
+    async def palace_create_room(body: dict):
+        """Create a Room. Body: {wing, name, description?}"""
+        wing_name = body.get("wing", "").strip()
+        room_name = body.get("name", "").strip()
+        if not wing_name or not room_name:
+            return {"status": "error", "message": "wing and name are required"}
+        try:
+            room_id = _palace.create_room(wing_name, room_name, description=body.get("description", ""))
+            return {"status": "ok", "id": room_id, "wing": wing_name, "name": room_name}
+        except KeyError as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.post("/api/v1/palace/assign")
+    async def palace_assign(body: dict):
+        """Assign a memory to a Wing/Room. Body: {memory_id, wing, room?}"""
+        memory_id = body.get("memory_id", "").strip()
+        wing_name = body.get("wing", "").strip()
+        if not memory_id or not wing_name:
+            return {"status": "error", "message": "memory_id and wing are required"}
+        try:
+            _palace.assign(memory_id, wing_name, room_name=body.get("room"))
+            return {"status": "ok", "memory_id": memory_id, "wing": wing_name, "room": body.get("room")}
+        except KeyError as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.delete("/api/v1/palace/assign/{memory_id}")
+    async def palace_unassign(memory_id: str):
+        """Remove a palace assignment."""
+        _palace.unassign(memory_id)
+        return {"status": "ok", "memory_id": memory_id}
+
+    @app.get("/api/v1/palace/recall")
+    async def palace_recall_endpoint(
+        query: str,
+        wing: Optional[str] = None,
+        room: Optional[str] = None,
+        top: int = 10,
+    ):
+        """Scoped recall. Query params: query, wing?, room?, top?"""
+        pr = _PalaceRecall(_palace)
+        results = pr.palace_recall(memos, query, wing_name=wing, room_name=room, top=top)
+        return {
+            "status": "ok",
+            "results": [
+                {
+                    "id": r.item.id,
+                    "content": r.item.content,
+                    "score": round(r.score, 4),
+                    "tags": r.item.tags,
+                    "match_reason": r.match_reason,
+                }
+                for r in results
+            ],
+        }
+
+    @app.get("/api/v1/palace/stats")
+    async def palace_stats_endpoint():
+        """Palace aggregate statistics."""
+        return {"status": "ok", **_palace.stats()}
+
+    # ---- End Palace ----
+
     @app.get("/api/v1/graph")
     async def api_graph(min_shared_tags: int = 1, limit: int = 500):
         """Return memory graph: nodes + edges based on shared tags."""
