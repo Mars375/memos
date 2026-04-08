@@ -746,3 +746,73 @@ Actuellement : les namespaces existent en CLI mais invisible depuis l'API → au
   - Badge PyPI, Docker, coverage
 - `CHANGELOG.md` : entrées depuis v0.29.0 jusqu'à v1.0.0
 - GitHub Release `v1.0.0` avec notes de release
+
+---
+# ═══════════════════════════════════════════════════════════════════════
+#  GAPS CRITIQUES — identifiés audit v1, à régler AVANT de taguer v1.0.0
+# ═══════════════════════════════════════════════════════════════════════
+
+## [ ] P33 — Auto-extraction KG à l'écriture (NER zéro-LLM)
+**Priorité : CRITIQUE — le gap architectural le plus important**
+**Objectif :** Quand un agent appelle `memory_save("Alice travaille chez Acme")`, MemOS crée automatiquement le fait KG `(Alice, works-at, Acme)` sans intervention de l'agent.
+
+Problème actuel : le KG temporel est une feature puissante mais reste vide en pratique parce qu'elle exige des appels explicites à `kg_add_fact`. Aucun agent ne le fait spontanément. Le KG n'est donc jamais peuplé sauf usage manuel.
+
+À implémenter dans `src/memos/kg_extractor.py` :
+- `KGExtractor` classe, zéro LLM, patterns + NER léger
+- Extraction de triplets depuis le contenu d'une mémoire :
+  - NER basique : personnes (PascalCase), organisations (Inc/Corp/Ltd/SAS), projets (patterns configurables)
+  - Relations patterns : "X travaille chez Y", "X is Y", "X uses Y", "X deployed to Y", "X fixed Y"
+  - Confiance : `EXTRACTED` si pattern match explicite, `AMBIGUOUS` si heuristique
+- `MemOS.learn()` appelle `KGExtractor.extract(content)` après chaque écriture
+  - Crée les faits KG automatiquement avec `confidence_label="EXTRACTED"` ou `"AMBIGUOUS"`
+  - `learn(..., auto_kg=False)` pour désactiver sur un appel spécifique
+- Config : `MEMOS_AUTO_KG=true` (défaut) / `MEMOS_AUTO_KG=false`
+- CLI : `memos extract-kg "<text>"` — preview des triplets qui seraient extraits
+- REST : `POST /api/v1/kg/extract` body `{"content": "..."}` → `{"facts": [...]}`
+- Tests : 30+ patterns, multilingue (FR/EN), edge cases (négations, conditionnels)
+
+---
+
+## [ ] P34 — Embeddings intégrés (zéro dépendances externes)
+**Priorité : HAUTE — bloque l'adoption**
+**Objectif :** `pip install memos && memos serve` donne un recall sémantique correct sans avoir besoin d'Ollama, ChromaDB, ni aucun service externe.
+
+Problème actuel : le backend JSON/memory utilise un recall basique (keyword match ou cosine sur TF-IDF). Pour un vrai recall sémantique, il faut Ollama + ChromaDB + modèle téléchargé. La friction d'installation est trop haute pour l'adoption.
+
+À implémenter :
+- Intégrer `sentence-transformers` comme option d'embedding légère (modèle `all-MiniLM-L6-v2`, 23MB)
+  - Alternative ONNX Runtime : même modèle sans dépendance torch (plus léger)
+- Nouveau backend hybride : `local` — JSON store + embeddings sentence-transformers en mémoire/SQLite
+  - `MemOS(backend="local")` — tout-en-un, aucune dépendance externe
+  - Vecteurs stockés dans SQLite (`~/.memos/vectors.db`)
+  - HNSW index en mémoire (bibliothèque `hnswlib` ou `usearch`, ~1MB)
+- `MEMOS_BACKEND=local` devient le défaut recommandé dans la doc
+- Install : `pip install memos` inclut `sentence-transformers` en dépendance principale (pas extras)
+  - Ou `pip install "memos[local]"` si on préfère garder le package minimal
+- Performance attendue : ~50ms/query pour 10k mémoires sur CPU standard
+
+---
+
+# ═══════════════════════════════════════════════════════════════════════
+#  SPRINT V1 — ordre d'exécution recommandé pour finir ce weekend
+# ═══════════════════════════════════════════════════════════════════════
+#
+#  Jour 1 (vendredi)
+#    P17  Auto-tagger zéro-LLM          (rapide, base pour P33)
+#    P33  Auto-extraction KG            (gap le plus important)
+#    P29  Déduplication                 (data quality)
+#
+#  Jour 2 (samedi)
+#    P20  Hybrid Retrieval BM25         (recall quality)
+#    P25  Brain Search unifié           (tout en un appel MCP)
+#    P28  API Authentication            (multi-agent)
+#
+#  Jour 3 (dimanche)
+#    P34  Embeddings intégrés           (friction d'adoption)
+#    P30  Namespace API                 (multi-agent REST)
+#    P32  PyPI + CHANGELOG + git tag    (ship it)
+#
+#  Post-v1 (semaine suivante, cron autonome)
+#    P18 P19 P21 P22 P23 P24 P26 P27 P31
+#
