@@ -1221,6 +1221,16 @@ def build_parser() -> argparse.ArgumentParser:
     bench.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
     bench.add_argument("--json", action="store_true", help="JSON output")
 
+    # benchmark-quality
+    bq = sub.add_parser("benchmark-quality", help="Run recall quality benchmarks (accuracy, MRR, NDCG)")
+    bq.add_argument("--noise", type=int, default=50, help="Noise memories to add (default: 50)")
+    bq.add_argument("--top", type=int, default=5, help="Top-K results per query (default: 5)")
+    bq.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility (default: 42)")
+    bq.add_argument("--no-decay", action="store_true", help="Skip decay behavior test")
+    bq.add_argument("--scalability", action="store_true", help="Run scalability test")
+    bq.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+    bq.add_argument("--json", action="store_true", help="JSON output")
+
     # cache-stats
     cache_p = sub.add_parser("cache-stats", help="Show embedding cache statistics")
     cache_p.add_argument("--json", action="store_true", help="JSON output")
@@ -1801,6 +1811,27 @@ def cmd_benchmark(ns: argparse.Namespace) -> None:
         recall_queries=ns.recall_queries,
         search_queries=ns.search_queries,
         warmup=ns.warmup,
+    )
+    if getattr(ns, 'json', False):
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(report.to_text())
+
+
+
+def cmd_benchmark_quality(ns: argparse.Namespace) -> None:
+    """Run recall quality benchmarks."""
+    from .benchmark_quality import run_quality_benchmark
+
+    report = run_quality_benchmark(
+        memories_per_category=10,
+        extra_noise=ns.noise,
+        top_k=ns.top,
+        seed=ns.seed,
+        run_decay=not ns.no_decay,
+        run_scalability=ns.scalability,
+        scalability_sizes=[50, 200, 500, 1000] if ns.scalability else None,
+        backend=ns.backend,
     )
     if getattr(ns, 'json', False):
         print(json.dumps(report.to_dict(), indent=2))
@@ -2518,6 +2549,7 @@ def main(argv: list[str] | None = None) -> None:
         "compact": cmd_compact,
         "cache-stats": cmd_cache_stats,
         "benchmark": cmd_benchmark,
+        "benchmark-quality": cmd_benchmark_quality,
         "tags": cmd_tags,
         "share-offer": cmd_share_offer,
         "share-accept": cmd_share_accept,

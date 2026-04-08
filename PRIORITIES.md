@@ -315,7 +315,8 @@ Notre wiki-compile actuel génère des pages par tag (snapshot statique). Le pat
 
 ### ---
 
-## [ ] P14 — Benchmark Suite (MemPalace-inspired)
+## [x] P14 — Benchmark Suite (MemPalace-inspired)
+Implemented v0.31.2 — QualityBenchmarkSuite, CLI `memos benchmark-quality`, Recall@K, MRR, NDCG@K, decay impact, scalability, 34 tests.
 **Objectif :** Suite de benchmarks reproductibles pour mesurer la qualité de recall.
 
 MemPalace publie des résultats LongMemEval. MemOS devrait :

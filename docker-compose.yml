@@ -18,15 +18,14 @@ services:
       - MEMOS_CHROMA_URL=http://chroma:8000
       # Client-side Ollama embeddings with SQLite cache — eliminates ~15s/query
       # penalty from Chroma's built-in ONNX embedder on ARM64 (Pi5, etc.).
+      # 172.23.0.1 = Docker bridge gateway (UFW rule required: from 172.23.0.0/16 to port 11434).
       # First deploy: delete the chroma-data volume and re-ingest (dimension change).
-      - MEMOS_EMBED_HOST=http://host.docker.internal:11434
+      - MEMOS_EMBED_HOST=http://172.23.0.1:11434
       - MEMOS_EMBED_MODEL=nomic-embed-text
     depends_on:
       chroma:
         condition: service_healthy
     restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   # --- Qdrant profile (use with: docker compose --profile qdrant up) ---
   memos-qdrant:
