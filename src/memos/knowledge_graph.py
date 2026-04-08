@@ -143,6 +143,20 @@ class KnowledgeGraph:
             """,
             (fact_id, subject, predicate, str(object), vf, vt, confidence, source, now),
         )
+        # Auto-upsert subject and object into the entities table so that
+        # stats()["total_entities"] and search_entities() reflect reality.
+        for entity_name in {subject, str(object)}:
+            existing = self._conn.execute(
+                "SELECT id FROM entities WHERE name=?", (entity_name,)
+            ).fetchone()
+            if existing is None:
+                self._conn.execute(
+                    """
+                    INSERT INTO entities (id, name, type, properties, created_at)
+                    VALUES (?, ?, 'auto', '{}', ?)
+                    """,
+                    (_short_id(), entity_name, now),
+                )
         self._conn.commit()
         return fact_id
 
@@ -175,7 +189,14 @@ class KnowledgeGraph:
                 (entity, t, t),
             )
             rows.extend(cur.fetchall())
-        return [_row_to_dict(r) for r in rows]
+        seen_ids: set[str] = set()
+        deduped: list[dict] = []
+        for r in rows:
+            d = _row_to_dict(r)
+            if d["id"] not in seen_ids:
+                seen_ids.add(d["id"])
+                deduped.append(d)
+        return deduped
 
     def query_predicate(
         self,
