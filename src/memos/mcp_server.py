@@ -100,6 +100,30 @@ TOOLS = [
             "required": ["entity"],
         },
     },
+    {
+        "name": "memory_decay",
+        "description": "Apply importance decay to memories. Dry-run by default. Use apply=true to persist changes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "apply": {"type": "boolean", "default": False, "description": "Apply decay (default: dry-run)"},
+                "min_age_days": {"type": "number", "description": "Minimum age in days to be eligible for decay"},
+                "floor": {"type": "number", "description": "Minimum importance after decay (default: 0.1)"},
+            },
+        },
+    },
+    {
+        "name": "memory_reinforce",
+        "description": "Boost a memory's importance. Use to reinforce frequently recalled or critical memories.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "string", "description": "Memory ID to reinforce"},
+                "strength": {"type": "number", "default": 0.05, "description": "Boost amount"},
+            },
+            "required": ["memory_id"],
+        },
+    },
 ]
 
 
@@ -209,6 +233,33 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
                 return _text(f"No timeline entries for: {entity}")
             lines = [f"[{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}" for f in facts]
             return _text(f"Timeline ({len(facts)} events):\n" + "\n".join(lines))
+
+        elif tool == "memory_decay":
+            items = memos._store.list_all(namespace=memos._namespace)
+            report = memos._decay.run_decay(
+                items,
+                min_age_days=args.get("min_age_days"),
+                floor=args.get("floor"),
+                dry_run=not args.get("apply", False),
+            )
+            if args.get("apply", False):
+                for item in items:
+                    memos._store.upsert(item, namespace=memos._namespace)
+            return _text(
+                f"Decay ({'APPLIED' if args.get('apply') else 'DRY RUN'}): "
+                f"{report.decayed}/{report.total} decayed, "
+                f"avg importance: {report.avg_importance_before:.3f} -> {report.avg_importance_after:.3f}"
+            )
+
+        elif tool == "memory_reinforce":
+            mem_id = args.get("memory_id", "")
+            item = memos._store.get(mem_id, namespace=memos._namespace)
+            if item is None:
+                return _error(f"Memory not found: {mem_id}")
+            old_imp = item.importance
+            new_imp = memos._decay.reinforce(item, strength=args.get("strength"))
+            memos._store.upsert(item, namespace=memos._namespace)
+            return _text(f"Reinforced [{item.id[:8]}] importance: {old_imp:.3f} -> {new_imp:.3f}")
 
         else:
             return _error(f"Unknown tool: {tool}")

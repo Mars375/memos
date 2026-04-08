@@ -963,4 +963,53 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         stats = memos.feedback_stats()
         return stats.to_dict()
 
+    # ── Decay & Reinforce API ──────────────────────────────
+
+    @app.post("/api/v1/decay/run")
+    async def api_decay_run(body: dict = None):
+        """Run importance decay on all memories.
+
+        Body (optional): {"dry_run": true, "min_age_days": 7, "floor": 0.1}
+        """
+        body = body or {}
+        items = memos._store.list_all(namespace=memos._namespace)
+        report = memos._decay.run_decay(
+            items,
+            min_age_days=body.get("min_age_days"),
+            floor=body.get("floor"),
+            dry_run=body.get("dry_run", True),
+        )
+        if not body.get("dry_run", True):
+            for item in items:
+                memos._store.upsert(item, namespace=memos._namespace)
+        return {
+            "status": "ok",
+            "total": report.total,
+            "decayed": report.decayed,
+            "avg_importance_before": round(report.avg_importance_before, 4),
+            "avg_importance_after": round(report.avg_importance_after, 4),
+            "details": report.details[:50],
+        }
+
+    @app.post("/api/v1/memories/{memory_id}/reinforce")
+    async def api_reinforce(memory_id: str, body: dict = None):
+        """Boost a memory's importance.
+
+        Body (optional): {"strength": 0.05}
+        """
+        body = body or {}
+        item = memos._store.get(memory_id, namespace=memos._namespace)
+        if item is None:
+            return {"status": "error", "message": f"Memory not found: {memory_id}"}
+        old_imp = item.importance
+        new_imp = memos._decay.reinforce(item, strength=body.get("strength"))
+        memos._store.upsert(item, namespace=memos._namespace)
+        return {
+            "status": "ok",
+            "id": item.id,
+            "importance_before": round(old_imp, 4),
+            "importance_after": round(new_imp, 4),
+        }
+
+
     return app

@@ -1212,6 +1212,18 @@ def build_parser() -> argparse.ArgumentParser:
     kg_stats = sub.add_parser("kg-stats", help="Show knowledge graph statistics")
     kg_stats.add_argument("--db", dest="kg_db", default=None)
 
+    # --- Decay & Reinforce ---
+    decay_p = sub.add_parser("decay", help="Apply importance decay to memories")
+    decay_p.add_argument("--apply", action="store_true", help="Apply decay (default is dry-run)")
+    decay_p.add_argument("--min-age-days", type=float, default=None, help="Min age in days to be eligible")
+    decay_p.add_argument("--floor", type=float, default=None, help="Minimum importance after decay")
+    decay_p.add_argument("--backend", default="memory", choices=["memory", "json", "chroma", "qdrant", "pinecone"])
+
+    reinforce_p = sub.add_parser("reinforce", help="Boost a memory's importance")
+    reinforce_p.add_argument("memory_id", help="Memory ID to reinforce")
+    reinforce_p.add_argument("--strength", type=float, default=None, help="Boost amount (default: 0.05)")
+    reinforce_p.add_argument("--backend", default="memory", choices=["memory", "json", "chroma", "qdrant", "pinecone"])
+
     return p
 
 
@@ -1854,6 +1866,48 @@ def cmd_mine(ns: argparse.Namespace) -> None:
             print(f"  [{', '.join(c['tags'])}] {c['content']}")
 
 
+
+
+def cmd_decay(ns: argparse.Namespace) -> None:
+    """Apply importance decay to memories."""
+    from .core import MemOS
+    m = _get_memos(ns)
+    items = m._store.list_all(namespace=m._namespace)
+    report = m._decay.run_decay(
+        items,
+        min_age_days=ns.min_age_days,
+        floor=ns.floor,
+        dry_run=not ns.apply,
+    )
+    # Persist changes if not dry-run
+    if ns.apply:
+        for item in items:
+            m._store.upsert(item, namespace=m._namespace)
+    mode = "APPLIED" if ns.apply else "DRY RUN"
+    print(f"Decay report ({mode}):")
+    print(f"  Total memories:    {report.total}")
+    print(f"  Decayed:           {report.decayed}")
+    print(f"  Avg importance:    {report.avg_importance_before:.3f} → {report.avg_importance_after:.3f}")
+    if report.details:
+        print("")
+        print("Top decayed:")
+        for d in report.details[:10]:
+            print(f"  [{d['id'][:8]}] {d['importance_before']:.3f} → {d['importance_after']:.3f} (age {d['age_days']}d)")
+
+
+def cmd_reinforce(ns: argparse.Namespace) -> None:
+    """Boost a memory's importance."""
+    from .core import MemOS
+    m = _get_memos(ns)
+    item = m._store.get(ns.memory_id, namespace=m._namespace)
+    if item is None:
+        print(f"Memory not found: {ns.memory_id}", file=sys.stderr)
+        sys.exit(1)
+    old_imp = item.importance
+    new_imp = m._decay.reinforce(item, strength=ns.strength)
+    m._store.upsert(item, namespace=m._namespace)
+    print(f"✓ Reinforced [{item.id[:8]}] importance: {old_imp:.3f} → {new_imp:.3f}")
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -1920,6 +1974,8 @@ def main(argv: list[str] | None = None) -> None:
         "kg-timeline": cmd_kg_timeline,
         "kg-invalidate": cmd_kg_invalidate,
         "kg-stats": cmd_kg_stats,
+        "decay": cmd_decay,
+        "reinforce": cmd_reinforce,
     }
     commands[ns.command](ns)
 
