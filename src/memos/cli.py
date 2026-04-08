@@ -1047,18 +1047,6 @@ def build_parser() -> argparse.ArgumentParser:
     fb_stats.add_argument("--json", action="store_true", help="JSON output")
     fb_stats.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone"])
 
-    # mcp-serve
-    mcp_serve_p = sub.add_parser("mcp-serve", help="Start MCP HTTP server (JSON-RPC 2.0)")
-    mcp_serve_p.add_argument("--port", type=int, default=8200, help="Port to listen on (default: 8200)")
-    mcp_serve_p.add_argument("--host", default="0.0.0.0", help="Host to bind to")
-    mcp_serve_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
-    mcp_serve_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
-
-    # mcp-stdio
-    mcp_stdio_p = sub.add_parser("mcp-stdio", help="Start MCP server over stdio (Claude Code / Cursor)")
-    mcp_stdio_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
-    mcp_stdio_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
-
     # wiki-compile
     wiki_compile_p = sub.add_parser("wiki-compile", help="Compile memories into markdown pages per tag")
     wiki_compile_p.add_argument("--tags", nargs="*", help="Only compile these tags")
@@ -1078,6 +1066,22 @@ def build_parser() -> argparse.ArgumentParser:
     wiki_read_p.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
     wiki_read_p.add_argument("--backend", default="memory", choices=["memory", "chroma", "qdrant", "pinecone", "json"])
     wiki_read_p.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
+    # mine
+    mine_p = sub.add_parser("mine", help="Smart mine — import files/conversations into memories")
+    mine_p.add_argument("paths", nargs="+", help="Files or directories to mine")
+    mine_p.add_argument("--format", choices=["auto", "claude", "chatgpt", "slack"], default="auto",
+                        help="Force format (default: auto-detect)")
+    mine_p.add_argument("--tags", nargs="*", help="Extra tags to apply to all chunks")
+    mine_p.add_argument("--chunk-size", type=int, default=800, dest="chunk_size",
+                        help="Max chars per chunk (default: 800)")
+    mine_p.add_argument("--chunk-overlap", type=int, default=100, dest="chunk_overlap",
+                        help="Overlap chars between chunks (default: 100)")
+    mine_p.add_argument("--dry-run", action="store_true", help="Preview without storing")
+    mine_p.add_argument("--verbose", "-v", action="store_true")
+    mine_p.add_argument("--backend", default="json", choices=["memory", "json", "chroma", "qdrant"])
+    mine_p.add_argument("--persist-path", dest="persist_path",
+                        default=str(Path.home() / ".memos" / "store.json"))
 
     return p
 
@@ -1665,6 +1669,56 @@ def cmd_wiki_read(ns: argparse.Namespace) -> None:
     print(content)
 
 
+def cmd_mine(ns: argparse.Namespace) -> None:
+    """Mine files or directories into memories (smart chunker + multi-format)."""
+    from .ingest.miner import Miner
+    memos = _get_memos(ns)
+    fmt = getattr(ns, "format", "auto")
+    dry_run = getattr(ns, "dry_run", False)
+    tags = getattr(ns, "tags") or []
+    chunk_size = getattr(ns, "chunk_size", 800)
+    chunk_overlap = getattr(ns, "chunk_overlap", 100)
+    verbose = getattr(ns, "verbose", False)
+
+    miner = Miner(
+        memos,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        dry_run=dry_run,
+        extra_tags=tags,
+    )
+
+    from pathlib import Path as _Path
+    total = __import__("memos.ingest.miner", fromlist=["MineResult"]).MineResult()
+
+    for path_str in ns.paths:
+        path = _Path(path_str).expanduser()
+        if verbose:
+            print(f"Mining: {path}")
+
+        if fmt == "claude":
+            r = miner.mine_claude_export(path, tags=tags)
+        elif fmt == "chatgpt":
+            r = miner.mine_chatgpt_export(path, tags=tags)
+        elif fmt == "slack":
+            r = miner.mine_slack_export(path, tags=tags)
+        else:
+            r = miner.mine_auto(path, tags=tags)
+
+        if r.errors and verbose:
+            for e in r.errors:
+                print(f"  [error] {e}", file=sys.stderr)
+
+        total.merge(r)
+
+    status = "would import" if dry_run else "imported"
+    print(f"\n✓ {total.imported} chunks {status}, {total.skipped_duplicates} duplicates skipped, {len(total.errors)} errors")
+    if dry_run and total.chunks:
+        print("\nSample chunks:")
+        for c in total.chunks[:5]:
+            print(f"  [{', '.join(c['tags'])}] {c['content']}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -1725,6 +1779,7 @@ def main(argv: list[str] | None = None) -> None:
         "wiki-compile": cmd_wiki_compile,
         "wiki-list": cmd_wiki_list,
         "wiki-read": cmd_wiki_read,
+        "mine": cmd_mine,
     }
     commands[ns.command](ns)
 
