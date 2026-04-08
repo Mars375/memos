@@ -214,7 +214,17 @@ class ChromaBackend(StorageBackend):
         n = col.count()
         if n == 0:
             return []
-        results = col.query(query_texts=[query], n_results=min(limit, n))
+        ef = self._get_ef()
+        if ef is not None:
+            # Pre-embed the query client-side (cached) and pass query_embeddings
+            # directly to avoid any server-side ONNX re-embedding (slow on ARM64).
+            try:
+                vec = ef.embed_query([query])[0]
+                results = col.query(query_embeddings=[vec], n_results=min(limit, n))
+            except Exception:
+                results = col.query(query_texts=[query], n_results=min(limit, n))
+        else:
+            results = col.query(query_texts=[query], n_results=min(limit, n))
         if not results["ids"]:
             return []
         return [self._doc_to_item(results, 0, i) for i in range(len(results["ids"][0]))]
