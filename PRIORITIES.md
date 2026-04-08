@@ -544,10 +544,112 @@ Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes 
 
 ---
 # ═══════════════════════════════════════════════════════
+#  FUSION — Second Brain style Obsidian (mempalace + Karpathy + graphify)
+#  Ces 3 priorités transforment les features séparées en un cerveau unifié.
+# ═══════════════════════════════════════════════════════
+
+## [ ] P25 — Unified Brain Search (Memories + Wiki + KG en une requête)
+**Objectif :** Une seule requête cherche dans les 3 couches simultanément, résultats rankés par pertinence avec source label.
+
+Actuellement : `recall` cherche dans les mémoires, `wiki-living search` cherche dans les pages wiki, le KG est interrogé séparément. Un agent doit faire 3 appels pour tout voir.
+
+À implémenter dans `src/memos/brain.py` :
+- `BrainSearch` classe
+- `search(query: str, top_k=10) -> BrainSearchResult`
+  ```python
+  BrainSearchResult:
+    memories: list[ScoredMemory]      # semantic recall
+    wiki_pages: list[WikiHit]         # living wiki fulltext
+    kg_facts: list[KGFact]            # facts liés aux entités détectées
+    entities: list[str]               # entités extraites de la query
+  ```
+- Ranking fusionné : score normalisé par source, interleaving intelligent
+- REST : `POST /api/v1/brain/search` body `{"query": "...", "top_k": 10}`
+- MCP tool : `brain_search` — remplace les appels séparés `memory_search` + wiki + KG pour les agents
+- CLI : `memos brain-search "<query>"` — output structuré (memories | wiki | kg sections)
+- Dashboard : barre de recherche globale en haut du dashboard D3.js connectée à ce endpoint
+
+Inspiré de :
+- **graphify** : subgraph extraction par entité détectée
+- **Karpathy** : index.md comme point d'entrée unique
+- **mempalace** : hybrid retrieval (semantic + keyword)
+
+---
+
+## [ ] P26 — Graph ↔ Wiki Bridge (Dashboard cliquable → Wiki pages)
+**Objectif :** Connecter le dashboard D3.js et le wiki vivant — cliquer un nœud ouvre sa page wiki ; les pages wiki montrent leurs voisins de graphe.
+
+Actuellement : le dashboard D3.js affiche les nœuds/arêtes du KG mais ils sont "morts" (pas de lien). Les pages wiki existent mais sont inaccessibles depuis le graphe.
+
+À implémenter :
+**Côté API :**
+- `GET /api/v1/brain/entity/{name}` — page complète d'une entité :
+  ```json
+  {
+    "entity": "Alice",
+    "wiki_page": "...",          // contenu markdown du wiki vivant
+    "memories": [...],           // top-5 mémoires liées
+    "kg_facts": [...],           // tous les faits KG actifs
+    "kg_neighbors": [...],       // entités directement liées
+    "backlinks": [...],          // pages wiki qui mentionnent cette entité
+    "confidence_labels": {...}   // EXTRACTED/INFERRED/AMBIGUOUS counts
+  }
+  ```
+- `GET /api/v1/brain/entity/{name}/graph` — sous-graphe JSON (ego network depth=2) pour D3.js
+
+**Côté Dashboard (JS inline dans `api/__init__.py`) :**
+- Clic sur un nœud D3.js → appel `GET /api/v1/brain/entity/{name}` → slide-in panel latéral
+- Panel affiche : wiki page (rendu markdown) + top mémoires + bouton "open full page"
+- Backlinks : liste des autres entités qui référencent cette entité → clic = navigation
+
+**Wiki pages :**
+- Ajouter section `## Graph Neighbors` auto-générée dans chaque page wiki vivant
+- Ajouter frontmatter `kg_facts_count` et `backlinks_count`
+
+Inspiré de :
+- **graphify** : entity detail view avec faits + neighbours
+- **Karpathy** : god nodes + backlinks navigation
+- **Obsidian** : graph view cliquable → page
+
+---
+
+## [ ] P27 — Obsidian Vault Export (`[[wikilinks]]` + graph.json)
+**Objectif :** Exporter tout le Second Brain MemOS comme un vault Obsidian standard — ouvrable directement dans Obsidian, Logseq, Foam, etc.
+
+À implémenter dans `src/memos/export_obsidian.py` :
+- `ObsidianExporter` classe
+- `export(output_dir: str)` — génère la structure :
+  ```
+  vault/
+  ├── _index.md          # catalogue (liens vers toutes les pages)
+  ├── _log.md            # journal d'activité
+  ├── _graph.json        # format Obsidian graph data
+  ├── entities/
+  │   ├── Alice.md       # page entité avec [[backlinks]]
+  │   └── Project-X.md
+  ├── memories/
+  │   ├── decisions.md   # mémoires groupées par type-tag
+  │   └── milestones.md
+  └── kg/
+      └── facts.md       # tous les faits KG en table markdown
+  ```
+- Format `[[wikilinks]]` dans chaque page — liens inter-pages auto-générés depuis les entités détectées
+- Frontmatter YAML standard Obsidian : `tags`, `aliases`, `created`, `modified`
+- `graph.json` : format compatible Obsidian graph plugin (nodes + edges avec weights)
+- CLI : `memos export --format obsidian --output ./vault/`
+- REST : `GET /api/v1/export/obsidian` → ZIP download du vault complet
+
+Inspiré de :
+- **graphify** : subgraph export, entity confidence labels dans le frontmatter
+- **Karpathy** : structure index.md + community pages + god nodes
+- **mempalace** : verbatim storage → contenu fidèle, pas de réécriture LLM
+
+---
+# ═══════════════════════════════════════════════════════
 #  V1 RELEASE CHECKLIST — les 5 bloquants avant de taguer v1.0.0
 # ═══════════════════════════════════════════════════════
 
-## [ ] P25 — API Authentication (Bearer Token + Namespace Keys)
+## [ ] P28 — API Authentication (Bearer Token + Namespace Keys)
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Sécuriser l'API REST et isoler les namespaces par agent.
 
@@ -571,7 +673,7 @@ Config docker-compose :
 
 ---
 
-## [ ] P26 — Memory Deduplication (Near-duplicate Detection)
+## [ ] P29 — Memory Deduplication (Near-duplicate Detection)
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Empêcher l'accumulation de mémoires dupliquées lors des re-imports.
 
@@ -592,7 +694,7 @@ Sans dédup, miner le même fichier deux fois double les mémoires → recall br
 
 ---
 
-## [ ] P27 — Namespace Management API
+## [ ] P30 — Namespace Management API
 **Priorité : HAUTE — bloquant v1 multi-agent**
 **Objectif :** API REST complète pour gérer les namespaces — indispensable pour 5 agents OpenClaw.
 
@@ -610,7 +712,7 @@ Actuellement : les namespaces existent en CLI mais invisible depuis l'API → au
 
 ---
 
-## [ ] P28 — Advanced Recall Filters (Date, Importance, Tag Logic)
+## [ ] P31 — Advanced Recall Filters (Date, Importance, Tag Logic)
 **Priorité : HAUTE — qualité v1**
 **Objectif :** Recall structuré pour les requêtes agent complexes — pas juste query+tags+top_k.
 
@@ -635,7 +737,7 @@ Actuellement : les namespaces existent en CLI mais invisible depuis l'API → au
 
 ---
 
-## [ ] P29 — PyPI Release + README v1
+## [ ] P32 — PyPI Release + README v1
 **Priorité : HAUTE — condition nécessaire pour v1.0.0**
 **Objectif :** `pip install memos-agent` fonctionne. Le README est la documentation de référence.
 
