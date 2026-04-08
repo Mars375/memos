@@ -15,9 +15,9 @@ def mem():
 
 
 def test_tools_list(mem):
-    assert len(TOOLS) == 4
+    assert len(TOOLS) == 6
     names = {t["name"] for t in TOOLS}
-    assert names == {"memory_search", "memory_save", "memory_forget", "memory_stats"}
+    assert names == {"memory_search", "memory_save", "memory_forget", "memory_stats", "memory_decay", "memory_reinforce"}
 
 
 def test_dispatch_search(mem):
@@ -72,7 +72,7 @@ async def test_http_tools_list(mem):
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        assert len(r.json()["result"]["tools"]) == 4
+        assert len(r.json()["result"]["tools"]) == 6
 
 
 @pytest.mark.asyncio
