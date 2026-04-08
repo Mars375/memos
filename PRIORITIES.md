@@ -133,3 +133,140 @@ Validation :
 memos ingest --format claude ~/.claude/projects/.../conversation.json
 memos ingest --format chatgpt ~/Downloads/chatgpt-export.zip
 ```
+
+---
+
+## [x] P9 — Memory Decay & Reinforcement Engine
+Implémenté v0.31.0 — DecayEngine.reinforce(), run_decay(), CLI decay/reinforce, REST /api/v1/decay/run + /memories/{id}/reinforce, MCP memory_decay/memory_reinforce, 36 tests.
+**Objectif** : Simulation organique de l'oubli — les mémoires inutilisées déclinent, les fréquemment rappelées se renforcent.
+
+Le cerveau humain oublie naturellement ce qui n'est pas utilisé. Memos a déjà `importance` et `prune_expired`, mais pas de mécanisme de **décroissance temporelle** ni de **renforcement par rappel**.
+
+À implémenter dans `src/memos/decay.py` :
+- `DecayEngine` classe avec politiques configurables
+- `decay_policy` : Ebbinghaus forgetting curve (exponential decay : `importance *= e^(-λt)`)
+- `reinforce(memory_id, strength=0.1)` — bump importance quand un recall touche cette mémoire
+- `auto_reinforce=True` — chaque recall renforce automatiquement les résultats
+- `run_decay(min_age_days=7, floor=0.1)` — applique la décroissance à toutes les mémoires
+- Integration dans `recall()` : si `auto_reinforce=True`, chaque résultat de recall gagne +0.05 importance
+- Integration dans `stats()` : afficher `avg_reinforcements`, `total_decayed`, `reinforced_count`
+- CLI : `memos decay --apply`, `memos decay --dry-run`, `memos reinforce <id>`
+- REST : `POST /api/v1/decay/run`, `POST /api/v1/memories/{id}/reinforce`
+- MCP tools : `memory_decay`, `memory_reinforce`
+
+Config dans `~/.memos/memos.json` :
+```json
+{
+  "decay": {
+    "enabled": true,
+    "lambda": 0.01,
+    "min_age_days": 7,
+    "floor": 0.1,
+    "auto_reinforce": true,
+    "reinforce_strength": 0.05
+  }
+}
+```
+
+Validation :
+```bash
+memos learn "important fact" --importance 0.9
+memos recall "important"  # auto-reinforce bumps importance
+memos decay --dry-run     # shows what would decay
+memos decay --apply       # applies decay
+memos stats               # shows decay metrics
+```
+
+---
+
+## [ ] P10 — Knowledge Graph ↔ Memory Bridge
+**Objectif** : Connecter le Knowledge Graph (faits typés) aux mémoires (texte libre) pour un rappel enrichi.
+
+Actuellement, le KG et les mémoires sont deux mondes séparés. Le bridge permet :
+- Quand on `recall`, les faits KG liés aux entités mentionnées sont aussi retournés
+- Quand on `learn`, on peut optionnellement extraire des faits (subject-predicate-object) via patterns
+
+À implémenter dans `src/memos/kg_bridge.py` :
+- `KGBridge` classe qui connecte `MemOS` + `KnowledgeGraph`
+- `recall_enriched(query, top=10)` → recall normal + faits KG liés aux top entités détectées
+- `learn_and_extract(content, tags=None)` → learn + heuristique d'extraction de faits
+  - Pattern : `"X is Y"`, `"X works at Y"`, `"X → Y"`, `"from: X to: Y"`
+  - Stocke les faits extraits dans le KG avec `source=memos:{memory_id}`
+- `link_fact_to_memory(fact_id, memory_id)` → jointure explicite
+- CLI : `memos recall --enriched "Alice"` (retourne mémoires + faits KG)
+- REST : `GET /api/v1/recall/enriched?q=X`
+- MCP tool : `memory_recall_enriched`
+
+Validation :
+```bash
+memos learn "Alice leads the infrastructure team at Acme Corp since January"
+memos kg-add "Alice" "leads" "infrastructure-team" --source auto
+memos recall --enriched "Alice"  # retourne mémoires + faits KG en un seul call
+```
+
+---
+
+## [ ] P11 — Recall Analytics Dashboard
+**Objectif** : Tableau de bord d'analyse des patterns de rappel — quoi, quand, succès/échec.
+
+À implémenter dans `src/memos/analytics.py` :
+- `RecallAnalytics` classe avec SQLite backend (`~/.memos/analytics.db`)
+- `track_recall(query, results, latency_ms)` — log chaque recall
+- `top_recalled(n=20)` — mémoires les plus rappelées
+- `recall_success_rate(days=7)` — % de recalls qui retournent au moins 1 résultat
+- `query_patterns(n=20)` — queries les plus fréquentes
+- `latency_stats()` — p50, p95, p99 des temps de recall
+- `daily_activity(days=30)` — recalls par jour (pour sparkline)
+- `zero_result_queries(n=20)` — queries sans résultat (candidats pour learn)
+- CLI : `memos analytics top`, `memos analytics patterns`, `memos analytics latency`
+- REST : `GET /api/v1/analytics/top`, `GET /api/v1/analytics/patterns`, etc.
+- Dashboard : section analytics dans la page web existante (chart.js)
+- Auto-track : intégrer dans `MemOS.recall()` si analytics activé
+
+Config :
+```json
+{
+  "analytics": {
+    "enabled": true,
+    "retention_days": 90
+  }
+}
+```
+
+Validation :
+```bash
+memos recall "test query 1"
+memos recall "test query 2"
+memos analytics top        # shows most recalled memories
+memos analytics patterns   # shows query patterns
+memos analytics latency    # shows p50/p95/p99
+```
+
+---
+
+## [ ] P12 — Memory Conflict Resolution (Multi-instance Sync)
+**Objectif** : Détecter et résoudre les conflits quand deux instances MemOS partagent des mémoires.
+
+Cas d'usage : Agent A et Agent B ont chacun leur MemOS. Ils synchronisent. Si les deux ont modifié la même mémoire → conflit.
+
+À implémenter dans `src/memos/conflict.py` :
+- `ConflictDetector` classe
+- `detect_conflicts(local: MemOS, remote_envelope: MemoryEnvelope)` → liste de conflits
+- `Conflict` dataclass : `memory_id, local_version, remote_version, conflict_type`
+- `ConflictType` enum : `CONTENT_CHANGED`, `TAGS_CHANGED`, `IMPORTANCE_CHANGED`, `DELETED_MODIFIED`
+- `ResolutionStrategy` enum : `LOCAL_WINS`, `REMOTE_WINS`, `MERGE`, `MANUAL`
+- `resolve(conflict, strategy)` → applique la résolution
+- `merge_versions(local, remote)` → tente un merge intelligent (union des tags, contenu le plus récent)
+- CLI : `memos sync-check <remote.json>`, `memos sync-apply <remote.json> --strategy merge`
+- REST : `POST /api/v1/sync/check`, `POST /api/v1/sync/apply`
+- MCP tools : `memory_sync_check`, `memory_sync_apply`
+
+Validation :
+```bash
+# Export instance A
+memos export --format json > /tmp/instance_a.json
+# On instance B, check for conflicts
+memos sync-check /tmp/instance_a.json
+# Apply with merge strategy
+memos sync-apply /tmp/instance_a.json --strategy merge
+```

@@ -352,6 +352,30 @@ def test_add_fact_entities_deduped(kg: KnowledgeGraph) -> None:
     assert len(alice_rows) == 1, "Entity 'Alice' should appear exactly once in entities table"
 
 
+def test_add_fact_populates_entities_table(kg: KnowledgeGraph) -> None:
+    """Regression: add_fact() must upsert subject and object into entities."""
+    kg.add_fact("Alice", "works_on", "ProjectX")
+    s = kg.stats()
+    assert s["total_entities"] >= 2, (
+        f"Expected at least 2 entities after add_fact, got {s['total_entities']}"
+    )
+    results = kg.search_entities("Alice")
+    assert len(results) >= 1, "search_entities('Alice') should return at least 1 result"
+    names = {r["name"] for r in results}
+    assert "Alice" in names
+
+
+def test_query_both_direction_no_duplicates(kg: KnowledgeGraph) -> None:
+    """Regression: query(direction='both') must not return duplicates when subject == object."""
+    # Alice is both subject and object of the same fact
+    kg.add_fact("Alice", "knows", "Alice")
+    facts = kg.query("Alice", direction="both")
+    ids = [f["id"] for f in facts]
+    assert len(ids) == len(set(ids)), (
+        f"Duplicate fact IDs returned by query(direction='both'): {ids}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # 11. CLI command tests (argparse-level)
 # ---------------------------------------------------------------------------
