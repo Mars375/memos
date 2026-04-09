@@ -1559,6 +1559,50 @@ def build_parser() -> argparse.ArgumentParser:
     mine_p.add_argument("--no-cache", dest="no_cache", action="store_true",
                         help="Disable incremental cache for this run")
 
+    # mine-conversation
+    mine_conv_p = sub.add_parser(
+        "mine-conversation",
+        help="Mine a speaker-attributed transcript file into MemOS",
+    )
+    mine_conv_p.add_argument("path", help="Path to transcript file")
+    mine_conv_p.add_argument(
+        "--per-speaker",
+        dest="per_speaker",
+        action="store_true",
+        default=True,
+        help="Store each speaker under a dedicated namespace (default: on)",
+    )
+    mine_conv_p.add_argument(
+        "--no-per-speaker",
+        dest="per_speaker",
+        action="store_false",
+        help="Store all turns in a single namespace",
+    )
+    mine_conv_p.add_argument(
+        "--namespace-prefix",
+        dest="namespace_prefix",
+        default="conv",
+        help="Prefix for per-speaker namespaces (default: conv)",
+    )
+    mine_conv_p.add_argument(
+        "--tags",
+        default="",
+        help="Comma-separated extra tags",
+    )
+    mine_conv_p.add_argument(
+        "--importance",
+        type=float,
+        default=0.6,
+        help="Memory importance (default: 0.6)",
+    )
+    mine_conv_p.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=False,
+        help="Preview without storing",
+    )
+
     # mine-status
     mine_status_p = sub.add_parser("mine-status", help="Show incremental mine cache status")
     mine_status_p.add_argument("paths", nargs="*", help="Specific paths to inspect (default: all)")
@@ -2506,6 +2550,41 @@ def cmd_mine(ns: argparse.Namespace) -> None:
             print(f"  [{', '.join(c['tags'])}] {c['content']}")
 
 
+def cmd_mine_conversation(ns: argparse.Namespace) -> None:
+    """Mine a speaker-attributed transcript into MemOS."""
+    from .ingest.conversation import ConversationMiner
+
+    memos = _get_memos(ns)
+    extra_tags = [t.strip() for t in (ns.tags or "").split(",") if t.strip()]
+
+    miner = ConversationMiner(
+        memos,
+        dry_run=ns.dry_run,
+    )
+    result = miner.mine_conversation(
+        ns.path,
+        namespace_prefix=ns.namespace_prefix,
+        per_speaker=ns.per_speaker,
+        tags=extra_tags or None,
+        importance=ns.importance,
+    )
+
+    if result.errors:
+        for err in result.errors:
+            print(f"Error: {err}", file=__import__("sys").stderr)
+
+    mode = "per-speaker" if ns.per_speaker else "combined"
+    print(
+        f"Speakers: {', '.join(result.speakers) if result.speakers else 'none'}\n"
+        f"Mode: {mode}\n"
+        f"Imported: {result.imported}  |  "
+        f"Duplicates: {result.skipped_duplicates}  |  "
+        f"Skipped (short): {result.skipped_empty}"
+    )
+    if ns.dry_run:
+        print("[dry-run: nothing stored]")
+
+
 def cmd_mine_status(ns: argparse.Namespace) -> None:
     """Show the incremental mine cache."""
     from .ingest.cache import MinerCache
@@ -2973,6 +3052,7 @@ def main(argv: list[str] | None = None) -> None:
         "wiki-living": cmd_wiki_living,
         "wiki-graph": cmd_wiki_graph,
         "mine": cmd_mine,
+        "mine-conversation": cmd_mine_conversation,
         "mine-status": cmd_mine_status,
         "kg-add": cmd_kg_add,
         "kg-query": cmd_kg_query,

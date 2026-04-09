@@ -296,6 +296,74 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             payload["chunks"] = result.chunks
         return payload
 
+    @app.post("/api/v1/mine/conversation")
+    async def api_mine_conversation(body: dict):
+        """Parse a transcript text and ingest per-speaker into MemOS.
+
+        Body:
+            text (str): raw transcript content (mutually exclusive with path)
+            path (str): server-side file path (optional)
+            per_speaker (bool): store under per-speaker namespaces (default true)
+            namespace_prefix (str): namespace prefix (default "conv")
+            tags (list[str]): extra tags
+            importance (float): base importance (default 0.6)
+            dry_run (bool): preview without storing (default false)
+        """
+        from ..__init__ import __version__  # noqa: F401 — keep import clean
+        from ..ingest.conversation import ConversationMiner, parse_transcript
+        import tempfile, os
+
+        text_body = body.get("text", "")
+        path_body = body.get("path", "")
+
+        if not text_body and not path_body:
+            return {"status": "error", "message": "Either 'text' or 'path' is required"}
+
+        per_speaker = bool(body.get("per_speaker", True))
+        namespace_prefix = str(body.get("namespace_prefix", "conv"))
+        extra_tags = body.get("tags") or []
+        importance = float(body.get("importance", 0.6))
+        dry_run = bool(body.get("dry_run", False))
+
+        miner = ConversationMiner(memos, dry_run=dry_run)
+
+        if text_body:
+            # Write to temp file so ConversationMiner.mine_conversation() can read it
+            try:
+                fd, tmp_path = tempfile.mkstemp(suffix=".txt", prefix="memos_conv_")
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(text_body)
+                result = miner.mine_conversation(
+                    tmp_path,
+                    namespace_prefix=namespace_prefix,
+                    per_speaker=per_speaker,
+                    tags=extra_tags or None,
+                    importance=importance,
+                )
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+        else:
+            result = miner.mine_conversation(
+                path_body,
+                namespace_prefix=namespace_prefix,
+                per_speaker=per_speaker,
+                tags=extra_tags or None,
+                importance=importance,
+            )
+
+        payload = {
+            "status": "ok" if not result.errors else "partial",
+            "imported": result.imported,
+            "skipped_duplicates": result.skipped_duplicates,
+            "skipped_empty": result.skipped_empty,
+            "speakers": result.speakers,
+            "errors": result.errors,
+        }
+        return payload
+
     @app.post("/api/v1/recall")
     async def api_recall(body: dict):
         return await routes["recall"](body)

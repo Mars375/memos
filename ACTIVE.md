@@ -1,20 +1,22 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P22 DONE, chantier ACTIVE
+## Statut : ✅ P23 DONE, chantier ACTIVE
 
-**Dernière session** : 2026-04-09 — P22 URL Ingest
-**Version** : 0.37.0
-**Tests** : 1342 passed
+**Dernière session** : 2026-04-09 — P23 Speaker Ownership
+**Version** : 0.38.0
+**Tests** : 1364 passed
 
 ## Dernière action
-- **P22 terminée** : ingestion d'URL multi-source sans setup manuel
-- `src/memos/ingest/url.py` — `URLIngestor` avec routing arXiv, X/Twitter, PDF et webpage HTML
-- Core : `MemOS.ingest_url()`
-- CLI : `memos ingest-url <url> [--tags ...] [--dry-run]`
-- REST : `POST /api/v1/ingest/url`
-- Support PDF : extraction via PyMuPDF si dispo, fallback zéro-dépendance pour PDFs simples
-- Validation : `python -m pytest -x -q` → **1342 passed**
+- **P23 terminée** : ingestion de transcripts multi-speaker avec attribution par namespace
+- `src/memos/ingest/conversation.py` — `ConversationMiner` + `parse_transcript()`
+  - Formats supportés : `Speaker: message`, `[HH:MM] Speaker: message`, `**Speaker:**` markdown
+  - Mode `per_speaker=True` : namespace = `{prefix}:{speaker_slug}` par speaker
+  - Tags auto : `speaker:{name}`, `conversation`, `date:{YYYY-MM-DD}`
+  - Namespace restauré après mine (pas de pollution de l'état)
+- CLI : `memos mine-conversation <path> [--per-speaker] [--no-per-speaker] [--namespace-prefix PREFIX] [--dry-run]`
+- REST : `POST /api/v1/mine/conversation` (body: `text` ou `path`, `per_speaker`, `namespace_prefix`, `tags`, `importance`)
+- 22 tests dans `tests/test_conversation_miner.py`
 
 ## Prochaine étape
-- **P23 — Speaker Ownership** (prochaine priorité OPEN dans `PRIORITIES.md`)
-- **P33 — Auto-extraction KG à l'écriture** reste critique sprint V1 et doit être tirée très haut dans les prochaines sessions
+- **P24 — Memory Compression** (AAAK pour mémoires décayées)
+- **P33 — Auto-extraction KG à l'écriture** reste critique sprint V1
