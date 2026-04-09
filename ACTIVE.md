@@ -1,21 +1,19 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P1-P20 DONE
+## Statut : ✅ P1-P21 DONE
 
-**Dernière session** : 2026-04-09 — P20 Hybrid Retrieval
-**Version** : 0.36.0
-**Tests** : 165 passed
+**Dernière session** : 2026-04-09 — P21 Community Wiki
+**Version** : 0.33.0
+**Tests** : 1334 passed
 
 ## Dernière action
-- **P20 terminée** : Hybrid Retrieval — Semantic + BM25 keyword re-ranking
-- `src/memos/retrieval/hybrid.py` — BM25 (in-house, 0 deps), HybridRetriever, keyword_score
-- `MemOS.recall()` : nouveau param `retrieval_mode` ("semantic" | "hybrid" | "keyword")
-  - `hybrid` : semantic top-50 → BM25 rerank → blend alpha*semantic + (1-alpha)*bm25 → top-K
-  - `keyword` : pure TF overlap scoring sur tous les items
-- API `POST /api/v1/recall` : accepte `retrieval_mode`
-- CLI : `memos recall "<query>" --mode hybrid|keyword|semantic`
-- 25 nouveaux tests (BM25, tokenizer, normalize, keyword_score, HybridRetriever)
+- **P21 terminée** : Community Wiki navigable basée sur le knowledge graph
+- `src/memos/wiki_graph.py` — `GraphWikiEngine`, détection de communautés, pages markdown, index, log, god-nodes
+- CLI : `memos wiki-graph [--output DIR] [--update] [--community ID] [--db PATH]`
+- Génération : `index.md`, `log.md`, `god-nodes.md`, `communities/<id>.md`
+- Update incrémental : réécrit seulement les pages modifiées, garde un log append-only
+- Validation : nouveaux tests `tests/test_wiki_graph.py`, CLI vérifiée, suite complète + smoke test verts
 
 ## Prochaine étape
-- P21 — Community Wiki (Leiden Graph + Index Navigable)
+- P22 — URL Ingest (Tweet, arXiv, PDF, Webpage)
 - P33 — Auto-extraction KG à l'écriture (NER zéro-LLM) — CRITIQUE sprint V1

@@ -474,7 +474,7 @@ Inspiré de mempalace : semantic top-50 → BM25 rerank → top-K final.
 
 ---
 
-## [ ] P21 — Community Wiki (Leiden Graph + Index Navigable)
+## [x] P21 — Community Wiki (Leiden Graph + Index Navigable)
 **Objectif :** Wiki navigable organisé par communautés de concepts, inspiré du LLM wiki pattern de Karpathy.
 
 Karpathy : 71x moins de tokens vs fichiers bruts, navigation communauté→page→backlinks.

@@ -1499,6 +1499,13 @@ def build_parser() -> argparse.ArgumentParser:
     wl_stats.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone", "json"])
     wl_stats.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
 
+    # wiki-graph
+    wg = sub.add_parser("wiki-graph", help="Generate or read graph community wiki pages from the knowledge graph")
+    wg.add_argument("--output", dest="output", help="Output directory (default: alongside kg.db in wiki/graph)")
+    wg.add_argument("--community", help="Read an existing community page by ID")
+    wg.add_argument("--update", action="store_true", help="Incrementally update only changed pages")
+    wg.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
+
     # mine
     mine_p = sub.add_parser("mine", help="Smart mine — import files/conversations into memories")
     mine_p.add_argument("paths", nargs="+", help="Files or directories to mine")
@@ -2844,6 +2851,35 @@ def cmd_wiki_living(ns: argparse.Namespace) -> None:
         wl_sp.print_help()
 
 
+def cmd_wiki_graph(ns: argparse.Namespace) -> None:
+    """Generate or read graph-community wiki pages."""
+    from .wiki_graph import GraphWikiEngine
+
+    kg = _get_kg(ns)
+    try:
+        engine = GraphWikiEngine(kg, output_dir=getattr(ns, "output", None))
+        community_id = getattr(ns, "community", None)
+        if community_id:
+            content = engine.read_community(community_id)
+            if content is None:
+                print(f"No graph community found for '{community_id}'.", file=sys.stderr)
+                sys.exit(1)
+            print(content)
+            return
+
+        result = engine.build(update=getattr(ns, "update", False))
+        print("Graph wiki built:")
+        print(f"  Communities: {result.community_count}")
+        print(f"  Facts indexed: {result.facts_indexed}")
+        print(f"  Pages written: {result.pages_written}")
+        print(f"  Pages skipped: {result.pages_skipped}")
+        print(f"  Pages removed: {result.pages_removed}")
+        print(f"  God nodes: {result.god_nodes}")
+        print(f"  Output: {result.output_dir}")
+    finally:
+        kg.close()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -2907,6 +2943,7 @@ def main(argv: list[str] | None = None) -> None:
         "wiki-list": cmd_wiki_list,
         "wiki-read": cmd_wiki_read,
         "wiki-living": cmd_wiki_living,
+        "wiki-graph": cmd_wiki_graph,
         "mine": cmd_mine,
         "mine-status": cmd_mine_status,
         "kg-add": cmd_kg_add,
