@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any, Optional
 
+from .kg_extractor import KGExtractor
 from .models import MemoryItem, RecallResult, MemoryStats, FeedbackEntry, FeedbackStats, generate_id
 from .retrieval.engine import RetrievalEngine
 from .storage.base import StorageBackend
@@ -163,6 +165,17 @@ class MemOS:
             retention_days=kwargs.get("analytics_retention_days", 90),
         )
 
+        # Automatic KG extraction after learn()
+        self._kg_db_path = kwargs.get("kg_db_path")
+        self._auto_kg = kwargs.get("auto_kg")
+        if self._auto_kg is None:
+            self._auto_kg = os.environ.get("MEMOS_AUTO_KG", "true").strip().lower() not in {
+                "0", "false", "no", "off"
+            }
+        self._kg_extractor = KGExtractor(
+            project_patterns=kwargs.get("kg_project_patterns"),
+        )
+
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
     @property
@@ -244,6 +257,7 @@ class MemOS:
         importance: float = 0.5,
         metadata: Optional[dict[str, Any]] = None,
         ttl: Optional[float] = None,
+        auto_kg: Optional[bool] = None,
     ) -> MemoryItem:
         """Store a new memory."""
         self._check_acl("write")
@@ -277,6 +291,11 @@ class MemOS:
         self._retrieval.index(item)
         self._versioning.record_version(item, source="learn")
 
+        if auto_kg is None:
+            auto_kg = bool(self._auto_kg)
+        if auto_kg:
+            self._auto_extract_kg(item)
+
         # Emit event
         self._events.emit_sync("learned", {
             "id": item.id,
@@ -287,6 +306,32 @@ class MemOS:
         }, namespace=self._namespace)
 
         return item
+
+    def _auto_extract_kg(self, item: MemoryItem) -> None:
+        """Best-effort KG extraction after a learn() write."""
+        facts = self._kg_extractor.extract(item.content)
+        if not facts:
+            return
+
+        try:
+            from .knowledge_graph import KnowledgeGraph
+
+            kg = KnowledgeGraph(db_path=self._kg_db_path)
+            try:
+                for fact in facts:
+                    kg.add_fact(
+                        subject=fact.subject,
+                        predicate=fact.predicate,
+                        object=fact.object,
+                        confidence=fact.confidence,
+                        confidence_label=fact.confidence_label,
+                        source=f"memos:{item.id}",
+                    )
+            finally:
+                kg.close()
+        except Exception:
+            # KG extraction should enrich the write path, never block it.
+            return
 
     def batch_learn(
         self,

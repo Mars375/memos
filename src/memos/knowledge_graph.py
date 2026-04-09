@@ -63,6 +63,8 @@ class KnowledgeGraph:
     Pass db_path=":memory:" for in-memory (useful for tests).
     """
 
+    VALID_LABELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
+
     def __init__(self, db_path: str | Path | None = None) -> None:
         if db_path is None:
             db_path = Path.home() / ".memos" / "kg.db"
@@ -98,6 +100,7 @@ class KnowledgeGraph:
                 valid_from      REAL,
                 valid_to        REAL,
                 confidence      REAL NOT NULL DEFAULT 1.0,
+                confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED',
                 source          TEXT,
                 created_at      REAL NOT NULL,
                 invalidated_at  REAL
@@ -112,6 +115,15 @@ class KnowledgeGraph:
         """)
         self._conn.commit()
 
+        # Migration: add confidence_label column if missing (existing DBs)
+        try:
+            cols = [r[1] for r in self._conn.execute("PRAGMA table_info(triples)").fetchall()]
+            if "confidence_label" not in cols:
+                self._conn.execute("ALTER TABLE triples ADD COLUMN confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED'")
+                self._conn.commit()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -124,12 +136,18 @@ class KnowledgeGraph:
         valid_from: str | float | None = None,
         valid_to: str | float | None = None,
         confidence: float = 1.0,
+        confidence_label: str = "EXTRACTED",
         source: str | None = None,
     ) -> str:
         """Add a triple to the knowledge graph.
 
         Returns the ID of the new triple.
         """
+        if confidence_label not in self.VALID_LABELS:
+            raise ValueError(
+                f"Invalid confidence_label {confidence_label!r}. "
+                f"Must be one of {self.VALID_LABELS}"
+            )
         fact_id = _short_id()
         now = time.time()
         vf = _parse_date(valid_from)
@@ -138,10 +156,10 @@ class KnowledgeGraph:
             """
             INSERT INTO triples
                 (id, subject, predicate, object, valid_from, valid_to,
-                 confidence, source, created_at, invalidated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                 confidence, confidence_label, source, created_at, invalidated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
             """,
-            (fact_id, subject, predicate, str(object), vf, vt, confidence, source, now),
+            (fact_id, subject, predicate, str(object), vf, vt, confidence, confidence_label, source, now),
         )
         # Auto-upsert subject and object into the entities table so that
         # stats()["total_entities"] and search_entities() reflect reality.
@@ -266,6 +284,39 @@ class KnowledgeGraph:
             "active_facts": active_facts,
             "invalidated_facts": invalidated_facts,
         }
+
+    def query_by_label(
+        self,
+        label: str,
+        active_only: bool = True,
+    ) -> List[dict]:
+        """Return all facts with the given confidence_label."""
+        if label not in self.VALID_LABELS:
+            raise ValueError(
+                f"Invalid label {label!r}. Must be one of {self.VALID_LABELS}"
+            )
+        if active_only:
+            cur = self._conn.execute(
+                "SELECT * FROM triples WHERE confidence_label=? AND invalidated_at IS NULL",
+                (label,),
+            )
+        else:
+            cur = self._conn.execute(
+                "SELECT * FROM triples WHERE confidence_label=?",
+                (label,),
+            )
+        return [_row_to_dict(r) for r in cur.fetchall()]
+
+    def label_stats(self) -> dict:
+        """Return counts of facts by confidence_label."""
+        cur = self._conn.execute(
+            "SELECT confidence_label, COUNT(*) as cnt FROM triples "
+            "WHERE invalidated_at IS NULL GROUP BY confidence_label"
+        )
+        counts = {label: 0 for label in self.VALID_LABELS}
+        for row in cur.fetchall():
+            counts[row[0]] = row[1]
+        return counts
 
     def close(self) -> None:
         """Close the SQLite connection."""
@@ -443,6 +494,66 @@ class KnowledgeGraph:
         return paths[0] if paths else None
 
     # ------------------------------------------------------------------
+    # Inference engine
+    # ------------------------------------------------------------------
+
+    def infer_transitive(
+        self,
+        predicate: str,
+        inferred_predicate: str | None = None,
+        max_depth: int = 3,
+    ) -> List[str]:
+        """Derive INFERRED facts via transitive closure on a predicate.
+
+        Example: if A-manages->B and B-manages->C, creates A-manages_transitive->C.
+        """
+        if inferred_predicate is None:
+            inferred_predicate = predicate + "_transitive"
+
+        cur = self._conn.execute(
+            "SELECT subject, object FROM triples WHERE predicate=? AND invalidated_at IS NULL",
+            (predicate,),
+        )
+        edges = [(r[0], r[1]) for r in cur.fetchall()]
+
+        adj: dict[str, list[str]] = {}
+        for s, o in edges:
+            adj.setdefault(s, []).append(o)
+
+        new_ids: list[str] = []
+        now = time.time()
+        seen_pairs: set[tuple[str, str]] = set(edges)
+
+        for start in adj:
+            frontier = list(adj.get(start, []))
+            for _ in range(max_depth - 1):
+                next_frontier: list[str] = []
+                for node in frontier:
+                    for target in adj.get(node, []):
+                        pair = (start, target)
+                        if pair not in seen_pairs:
+                            seen_pairs.add(pair)
+                            existing = self._conn.execute(
+                                "SELECT id FROM triples WHERE subject=? AND predicate=? AND object=? AND invalidated_at IS NULL",
+                                (start, inferred_predicate, target),
+                            ).fetchone()
+                            if existing is None:
+                                fact_id = _short_id()
+                                self._conn.execute(
+                                    "INSERT INTO triples "
+                                    "(id, subject, predicate, object, confidence, confidence_label, source, created_at, invalidated_at) "
+                                    "VALUES (?, ?, ?, ?, 0.7, 'INFERRED', 'inference:transitive', ?, NULL)",
+                                    (fact_id, start, inferred_predicate, target, now),
+                                )
+                                new_ids.append(fact_id)
+                        next_frontier.append(target)
+                frontier = next_frontier
+
+        if new_ids:
+            self._conn.commit()
+        return new_ids
+
+    # ------------------------------------------------------------------
     # Context manager support
     # ------------------------------------------------------------------
 
@@ -470,6 +581,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "valid_from": row["valid_from"],
         "valid_to": row["valid_to"],
         "confidence": row["confidence"],
+        "confidence_label": row["confidence_label"],
         "source": row["source"],
         "created_at": row["created_at"],
         "invalidated_at": row["invalidated_at"],

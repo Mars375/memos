@@ -32,6 +32,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
                 tags=body.get("tags"),
                 importance=body.get("importance", 0.5),
                 metadata=body.get("metadata"),
+                auto_kg=body.get("auto_kg"),
             )
             return {"status": "ok", "id": item.id, "tags": item.tags}
         except ValueError as e:
@@ -220,12 +221,16 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         )
 
     if memos is None:
-        memos = MemOS(**kwargs)
+        memos = MemOS(kg_db_path=kg_db_path, **kwargs)
+    elif kg_db_path and getattr(memos, "_kg_db_path", None) is None:
+        memos._kg_db_path = kg_db_path
 
+    from ..kg_extractor import KGExtractor
     from ..knowledge_graph import KnowledgeGraph
     from ..kg_bridge import KGBridge
     _kg = KnowledgeGraph(db_path=kg_db_path)
     _kg_bridge = KGBridge(memos, _kg)
+    _kg_extractor = KGExtractor()
 
     app = FastAPI(
         title="MemOS",
@@ -255,6 +260,15 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             return {"status": "ok", **payload}
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
+
+    @app.post("/api/v1/kg/extract")
+    async def api_kg_extract(body: dict):
+        """Preview KG facts that would be extracted from text."""
+        content = body.get("content", "").strip()
+        if not content:
+            return {"status": "error", "message": "content is required"}
+        facts = [fact.to_dict() for fact in _kg_extractor.extract(content)]
+        return {"status": "ok", "facts": facts, "count": len(facts)}
 
     @app.post("/api/v1/learn/batch")
     async def api_batch_learn(body: dict):

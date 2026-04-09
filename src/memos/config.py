@@ -36,6 +36,7 @@ DEFAULTS: dict[str, Any] = {
     "embed_model": "nomic-embed-text",
     "embed_port": 11434,
     "persist_path": "",
+    "kg_db_path": "",
     "pinecone_api_key": "",
     "pinecone_environment": "",
     "pinecone_index_name": "memos",
@@ -50,6 +51,7 @@ DEFAULTS: dict[str, Any] = {
     "consolidation_threshold": 0.75,
     "max_chunk_size": 2000,
     "api_key": "",
+    "auto_kg": True,
 }
 
 ENV_MAP: dict[str, str] = {
@@ -63,6 +65,7 @@ ENV_MAP: dict[str, str] = {
     "embed_host": "MEMOS_EMBED_HOST",
     "embed_model": "MEMOS_EMBED_MODEL",
     "persist_path": "MEMOS_PERSIST_PATH",
+    "kg_db_path": "MEMOS_KG_DB",
     "pinecone_api_key": "MEMOS_PINECONE_API_KEY",
     "pinecone_environment": "MEMOS_PINECONE_ENVIRONMENT",
     "pinecone_index_name": "MEMOS_PINECONE_INDEX_NAME",
@@ -72,6 +75,7 @@ ENV_MAP: dict[str, str] = {
     "host": "MEMOS_HOST",
     "port": "MEMOS_PORT",
     "api_key": "MEMOS_API_KEY",
+    "auto_kg": "MEMOS_AUTO_KG",
 }
 
 
@@ -116,7 +120,7 @@ def resolve(cli_args: dict[str, Any] | None = None) -> dict[str, Any]:
             # Type coercion for known int/bool keys
             if key in ("chroma_port", "embed_port", "port", "qdrant_port", "vector_size") and val:
                 result[key] = int(val)
-            elif key in ("sanitize", "pinecone_serverless"):
+            elif key in ("sanitize", "pinecone_serverless", "auto_kg"):
                 result[key] = val.lower() not in ("0", "false", "no")
             else:
                 result[key] = val

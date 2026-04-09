@@ -1,22 +1,23 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P23 DONE, chantier ACTIVE
+## Statut : ✅ P33 DONE, chantier ACTIVE
 
-**Dernière session** : 2026-04-09 — P23 Speaker Ownership
-**Version** : 0.38.0
-**Tests** : 1364 passed
+**Dernière session** : 2026-04-09 — P33 Auto-extraction KG à l'écriture
+**Version** : 0.39.0
+**Tests** : 1416 passed
 
 ## Dernière action
-- **P23 terminée** : ingestion de transcripts multi-speaker avec attribution par namespace
-- `src/memos/ingest/conversation.py` — `ConversationMiner` + `parse_transcript()`
-  - Formats supportés : `Speaker: message`, `[HH:MM] Speaker: message`, `**Speaker:**` markdown
-  - Mode `per_speaker=True` : namespace = `{prefix}:{speaker_slug}` par speaker
-  - Tags auto : `speaker:{name}`, `conversation`, `date:{YYYY-MM-DD}`
-  - Namespace restauré après mine (pas de pollution de l'état)
-- CLI : `memos mine-conversation <path> [--per-speaker] [--no-per-speaker] [--namespace-prefix PREFIX] [--dry-run]`
-- REST : `POST /api/v1/mine/conversation` (body: `text` ou `path`, `per_speaker`, `namespace_prefix`, `tags`, `importance`)
-- 22 tests dans `tests/test_conversation_miner.py`
+- **P33 terminée** : auto-extraction KG au write, sans LLM
+- `src/memos/kg_extractor.py` — extracteur FR/EN zéro-LLM
+  - Patterns explicites : `works_at`, `is`, `uses`, `deployed_to`, `fixed`
+  - Fallback heuristique `AMBIGUOUS` + garde-fous négations/conditionnels
+  - NER léger title-case/acronymes + patterns projet configurables
+- `MemOS.learn(..., auto_kg=False)` pour désactiver sur un write spécifique
+- Config : `MEMOS_AUTO_KG`, `MEMOS_KG_DB`
+- CLI : `memos extract-kg "..."`
+- REST : `POST /api/v1/kg/extract` + `POST /api/v1/learn` accepte `auto_kg`
+- Validation : `python -m pytest -x -q` → **1416 passed**
 
 ## Prochaine étape
 - **P24 — Memory Compression** (AAAK pour mémoires décayées)
-- **P33 — Auto-extraction KG à l'écriture** reste critique sprint V1
+- **P34 — Embeddings intégrés** ensuite, pour réduire la friction d’adoption

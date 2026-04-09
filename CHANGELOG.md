@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.39.0 (2026-04-09) — Auto KG Extraction on Write
+
+### New Features
+
+- **Auto KG extraction in `MemOS.learn()`**
+  - New zero-LLM `KGExtractor` with explicit FR/EN relation patterns
+  - Automatic fact creation on every write, with `auto_kg=False` escape hatch per call
+  - `MEMOS_AUTO_KG` and `MEMOS_KG_DB` config support
+- **Preview surfaces**
+  - CLI: `memos extract-kg "..."`
+  - API: `POST /api/v1/kg/extract`
+  - `POST /api/v1/learn` now accepts `auto_kg`
+- **KG bridge refresh**
+  - `learn_and_extract()` now reuses the shared extractor and avoids duplicate fact insertion
+
+### Tests
+
+- 56 focused extractor/bridge tests added or refreshed
+- Full suite: **1416 tests passing**
+
+---
+
 ## v0.14.0 (2026-04-07) — Memory Compaction + Embedding Cache
 
 ### New Features

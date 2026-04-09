@@ -35,6 +35,8 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         "vector_size": getattr(ns, "vector_size", None),
         "embed_host": getattr(ns, "embed_host", None),
         "embed_model": getattr(ns, "embed_model", None),
+        "kg_db_path": getattr(ns, "kg_db", None),
+        "auto_kg": False if getattr(ns, "no_auto_kg", False) else None,
         "sanitize": not getattr(ns, "no_sanitize", False) or None,
     }
     cfg = resolve({k: v for k, v in cli_overrides.items() if v is not None})
@@ -72,6 +74,10 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         kwargs["embed_model"] = cfg["embed_model"]
     if cfg.get("persist_path"):
         kwargs["persist_path"] = cfg["persist_path"]
+    if cfg.get("kg_db_path"):
+        kwargs["kg_db_path"] = cfg["kg_db_path"]
+    if cfg.get("auto_kg") is not None:
+        kwargs["auto_kg"] = cfg["auto_kg"]
     if not cfg.get("sanitize", True):
         kwargs["sanitize"] = False
     # Default "memory" backend auto-persists to .memos/store.json
@@ -133,9 +139,34 @@ def cmd_learn(ns: argparse.Namespace) -> None:
     ttl = None
     if hasattr(ns, 'ttl') and ns.ttl:
         ttl = parse_ttl(ns.ttl)
-    item = memos.learn(content, tags=tags, importance=ns.importance, ttl=ttl)
+    item = memos.learn(
+        content,
+        tags=tags,
+        importance=ns.importance,
+        ttl=ttl,
+        auto_kg=False if getattr(ns, "no_auto_kg", False) else None,
+    )
     ttl_str = f", ttl={ns.ttl}" if ns.ttl else ""
     print(f"✓ Learned [{item.id[:8]}...] ({len(item.content)} chars, tags={item.tags}{ttl_str})")
+
+
+def cmd_extract_kg(ns: argparse.Namespace) -> None:
+    """Preview KG facts extracted from a text snippet."""
+    from .kg_extractor import KGExtractor
+
+    facts = [fact.to_dict() for fact in KGExtractor().extract(ns.content)]
+    if getattr(ns, "json", False):
+        print(json.dumps({"facts": facts, "count": len(facts)}, indent=2))
+        return
+    if not facts:
+        print("No facts extracted.")
+        return
+    for fact in facts:
+        print(
+            f"  {fact['subject']} -{fact['predicate']}-> {fact['object']} "
+            f"[{fact['confidence_label']}, conf={fact['confidence']:.2f}]"
+        )
+    print(f"\n{len(facts)} fact(s)")
 
 
 def cmd_batch_learn(ns: argparse.Namespace) -> None:
@@ -562,6 +593,8 @@ def cmd_serve(ns: argparse.Namespace) -> None:
         else:
             kwargs["chroma_host"] = getattr(ns, "chroma_host", "localhost")
             kwargs["chroma_port"] = getattr(ns, "chroma_port", 8000)
+    if getattr(ns, "kg_db", None):
+        kwargs["kg_db_path"] = ns.kg_db
 
     app = create_fastapi_app(**kwargs)
     uvicorn.run(app, host=ns.host, port=ns.port)
@@ -1046,6 +1079,12 @@ def build_parser() -> argparse.ArgumentParser:
     learn.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
     learn.add_argument("--no-sanitize", action="store_true")
     learn.add_argument("--ttl", help="Time-to-live (e.g., 30m, 2h, 7d, 3600)")
+    learn.add_argument("--no-auto-kg", action="store_true", help="Disable automatic KG extraction for this write")
+    learn.add_argument("--kg-db", dest="kg_db", default=None, help="Path to kg.db for auto-extracted facts")
+
+    extract_kg = sub.add_parser("extract-kg", help="Preview KG facts that would be extracted from text")
+    extract_kg.add_argument("content", help="Text to analyze")
+    extract_kg.add_argument("--json", action="store_true", help="JSON output")
 
     # batch-learn
     batch_learn = sub.add_parser("batch-learn", help="Store multiple memories from JSON")
@@ -1212,6 +1251,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
     serve.add_argument("--chroma-host", default="localhost")
     serve.add_argument("--chroma-port", type=int, default=8000)
+    serve.add_argument("--kg-db", dest="kg_db", default=os.environ.get("MEMOS_KG_DB"), help="Path to kg.db")
 
     # mcp-serve (HTTP JSON-RPC 2.0)
     mcp_serve = sub.add_parser("mcp-serve", help="Start MCP server (HTTP JSON-RPC 2.0) for agent integration")
@@ -2996,6 +3036,7 @@ def main(argv: list[str] | None = None) -> None:
     commands = {
         "init": cmd_init,
         "learn": cmd_learn,
+        "extract-kg": cmd_extract_kg,
         "batch-learn": cmd_batch_learn,
         "recall": cmd_recall,
         "search": cmd_search,

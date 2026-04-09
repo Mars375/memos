@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .kg_extractor import KGExtractor
 from .knowledge_graph import KnowledgeGraph
 
 _ENTITY_PATTERN = re.compile(
@@ -25,6 +26,7 @@ class KGBridge:
     def __init__(self, memos: Any, kg: KnowledgeGraph | None = None) -> None:
         self._memos = memos
         self._kg = kg or KnowledgeGraph()
+        self._extractor = KGExtractor()
 
     @property
     def kg(self) -> KnowledgeGraph:
@@ -70,27 +72,38 @@ class KGBridge:
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Learn a memory and extract simple KG facts from the content."""
-        item = self._memos.learn(
-            content,
-            tags=tags,
-            importance=importance,
-            metadata=metadata,
-        )
+        try:
+            item = self._memos.learn(
+                content,
+                tags=tags,
+                importance=importance,
+                metadata=metadata,
+                auto_kg=False,
+            )
+        except TypeError:
+            item = self._memos.learn(
+                content,
+                tags=tags,
+                importance=importance,
+                metadata=metadata,
+            )
         facts = []
-        for subject, predicate, obj in self.extract_facts(content):
+        for extracted in self._extractor.extract(content):
             fact_id = self._kg.add_fact(
-                subject=subject,
-                predicate=predicate,
-                object=obj,
-                confidence_label="AMBIGUOUS",
+                subject=extracted.subject,
+                predicate=extracted.predicate,
+                object=extracted.object,
+                confidence=extracted.confidence,
+                confidence_label=extracted.confidence_label,
                 source=f"memos:{item.id}",
             )
             facts.append({
                 "id": fact_id,
-                "subject": subject,
-                "predicate": predicate,
-                "object": obj,
-                "confidence_label": "AMBIGUOUS",
+                "subject": extracted.subject,
+                "predicate": extracted.predicate,
+                "object": extracted.object,
+                "confidence": extracted.confidence,
+                "confidence_label": extracted.confidence_label,
                 "source": f"memos:{item.id}",
             })
         return {
@@ -174,21 +187,8 @@ class KGBridge:
     @staticmethod
     def extract_facts(content: str) -> list[tuple[str, str, str]]:
         """Extract a small set of subject-predicate-object triples from text."""
-        facts: list[tuple[str, str, str]] = []
-        for line in re.split(r"[\n\r]+", content):
-            line = line.strip()
-            if not line:
-                continue
-            for predicate, pattern in _FACT_PATTERNS:
-                match = pattern.search(line)
-                if not match:
-                    continue
-                subject = " ".join(match.group("subject").split()).strip(" ,.;:")
-                obj = " ".join(match.group("object").split()).strip(" ,.;:")
-                if subject and obj:
-                    facts.append((subject, predicate, obj))
-                    break
-        return facts
+        extractor = KGExtractor()
+        return [(fact.subject, fact.predicate, fact.object) for fact in extractor.extract(content)]
 
     @staticmethod
     def _serialize_memory(item: Any) -> dict[str, Any]:

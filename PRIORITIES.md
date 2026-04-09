@@ -755,8 +755,9 @@ Actuellement : les namespaces existent en CLI mais invisible depuis l'API → au
 #  GAPS CRITIQUES — identifiés audit v1, à régler AVANT de taguer v1.0.0
 # ═══════════════════════════════════════════════════════════════════════
 
-## [ ] P33 — Auto-extraction KG à l'écriture (NER zéro-LLM)
+## [x] P33 — Auto-extraction KG à l'écriture (NER zéro-LLM)
 **Priorité : CRITIQUE — le gap architectural le plus important**
+Implémenté v0.39.0 — `KGExtractor` FR/EN zéro-LLM, auto-extraction dans `MemOS.learn()`, preview CLI/API, `MEMOS_AUTO_KG`, `auto_kg=False`, 56 tests ciblés.
 **Objectif :** Quand un agent appelle `memory_save("Alice travaille chez Acme")`, MemOS crée automatiquement le fait KG `(Alice, works-at, Acme)` sans intervention de l'agent.
 
 Problème actuel : le KG temporel est une feature puissante mais reste vide en pratique parce qu'elle exige des appels explicites à `kg_add_fact`. Aucun agent ne le fait spontanément. Le KG n'est donc jamais peuplé sauf usage manuel.
