@@ -15,7 +15,7 @@ def mem():
 
 
 def test_tools_list(mem):
-    assert len(TOOLS) == 14  # 4 memory + 3 kg + 1 bridge + 2 decay/reinforce + 2 context-stack (P7) + 2 sync (P12)
+    assert len(TOOLS) == 15  # 4 memory + 3 kg + 1 bridge + 2 decay/reinforce + 2 context-stack (P7) + 2 sync (P12) + 1 brain_search (P25)
     names = {t["name"] for t in TOOLS}
     assert {"memory_search", "memory_save", "memory_forget", "memory_stats"}.issubset(names)
     assert {"kg_add_fact", "kg_query_entity", "kg_timeline"}.issubset(names)
@@ -75,7 +75,7 @@ async def test_http_tools_list(mem):
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        assert len(r.json()["result"]["tools"]) == 14  # + 2 sync (P12)
+        assert len(r.json()["result"]["tools"]) == 15  # + 2 sync (P12)
 
 
 @pytest.mark.asyncio

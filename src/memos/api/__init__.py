@@ -458,6 +458,34 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def api_compress(body: dict):
         return await routes["compress"](body)
 
+    @app.post("/api/v1/brain/search")
+    async def api_brain_search(body: dict):
+        """Unified search across memories, wiki pages, and KG facts.
+
+        Body:
+            query (str, required): Search query
+            top_k (int): Max results per layer (default 10)
+            include_memories (bool): Search memories (default true)
+            include_wiki (bool): Search wiki pages (default true)
+            include_kg (bool): Search KG facts (default true)
+
+        Returns:
+            Fused result with memories, wiki_pages, kg_facts, entities, context.
+        """
+        from ..brain import BrainSearch
+        query = body.get("query", "").strip()
+        if not query:
+            return {"status": "error", "message": "query is required"}
+        brain = BrainSearch(memos)
+        result = brain.search(
+            query,
+            top_k=int(body.get("top_k", 10)),
+            include_memories=bool(body.get("include_memories", True)),
+            include_wiki=bool(body.get("include_wiki", True)),
+            include_kg=bool(body.get("include_kg", True)),
+        )
+        return {"status": "ok", **result.to_dict()}
+
     @app.get("/api/v1/stats")
     async def api_stats():
         return await routes["stats"]()

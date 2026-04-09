@@ -254,6 +254,25 @@ TOOLS = [
             "required": ["envelope"],
         },
     },
+    {
+        "name": "brain_search",
+        "description": (
+            "Unified brain search across all knowledge layers — memories, wiki pages, and KG facts. "
+            "One query returns fused results from all three sources plus a ready-to-inject context string. "
+            "This is the recommended search tool for agents."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "top_k": {"type": "integer", "default": 10, "description": "Max results per layer"},
+                "include_memories": {"type": "boolean", "default": True, "description": "Include memories in results"},
+                "include_wiki": {"type": "boolean", "default": True, "description": "Include wiki pages in results"},
+                "include_kg": {"type": "boolean", "default": True, "description": "Include KG facts in results"},
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 
@@ -443,6 +462,21 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
             top = int(args.get("top", 10))
             output = cs.context_for(query=query, max_chars=max_chars, top=top)
             return _text(output)
+
+        elif tool == "brain_search":
+            from .brain import BrainSearch
+            query = args.get("query", "").strip()
+            if not query:
+                return _error("query is required")
+            brain = BrainSearch(memos)
+            result = brain.search(
+                query,
+                top_k=int(args.get("top_k", 10)),
+                include_memories=bool(args.get("include_memories", True)),
+                include_wiki=bool(args.get("include_wiki", True)),
+                include_kg=bool(args.get("include_kg", True)),
+            )
+            return _text(result.context)
 
         elif tool == "memory_sync_check":
             from .conflict import ConflictDetector

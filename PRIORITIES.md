@@ -550,7 +550,8 @@ Livré dans `src/memos/compression.py` :
 #  Ces 3 priorités transforment les features séparées en cerveau unique.
 # ═══════════════════════════════════════════════════════════════════════
 
-## [ ] P25 — Unified Brain Search (une requête → tout le savoir)
+## [x] P25 — Unified Brain Search (une requête → tout le savoir)
+**Implemented v0.41.0** — `BrainSearch` class, `brain.search()`, CLI `memos brain-search`, REST `POST /api/v1/brain/search`, MCP `brain_search`, 26 tests.
 **Objectif :** Un agent ne doit pas savoir si la réponse est dans une mémoire, un fait KG, ou une page wiki. MemOS cherche dans les 3 et retourne un résultat fusionné.
 
 Problème actuel : `recall` cherche dans les mémoires, `wiki-living search` cherche dans les pages wiki, le KG est interrogé séparément. 3 appels distincts pour avoir la vue complète.

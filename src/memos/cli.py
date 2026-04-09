@@ -1843,6 +1843,15 @@ def build_parser() -> argparse.ArgumentParser:
     reinforce_p.add_argument("--strength", type=float, default=None, help="Boost amount (default: 0.05)")
     reinforce_p.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "json", "chroma", "qdrant", "pinecone"])
 
+    brain_search_p = sub.add_parser("brain-search", help="Unified search across memories, wiki pages, and KG facts")
+    brain_search_p.add_argument("query", help="Search query")
+    brain_search_p.add_argument("--top-k", type=int, default=10, help="Max results per layer (default 10)")
+    brain_search_p.add_argument("--no-memories", action="store_true", help="Exclude memories from search")
+    brain_search_p.add_argument("--no-wiki", action="store_true", help="Exclude wiki pages from search")
+    brain_search_p.add_argument("--no-kg", action="store_true", help="Exclude KG facts from search")
+    brain_search_p.add_argument("--context-only", action="store_true", help="Only print the context string")
+    brain_search_p.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "json", "chroma", "qdrant", "pinecone"])
+
     return p
 
 
@@ -2927,6 +2936,44 @@ def cmd_reinforce(ns: argparse.Namespace) -> None:
     m._store.upsert(item, namespace=m._namespace)
     print(f"✓ Reinforced [{item.id[:8]}] importance: {old_imp:.3f} → {new_imp:.3f}")
 
+def cmd_brain_search(ns: argparse.Namespace) -> None:
+    """Unified brain search across memories, wiki, and KG."""
+    from .brain import BrainSearch
+    memos = _get_memos(ns)
+    brain = BrainSearch(memos)
+    result = brain.search(
+        ns.query,
+        top_k=ns.top_k,
+        include_memories=not ns.no_memories,
+        include_wiki=not ns.no_wiki,
+        include_kg=not ns.no_kg,
+    )
+    if ns.context_only:
+        print(result.context)
+        return
+    print(f"Brain Search: \"{ns.query}\"")
+    print(f"  Entities: {', '.join(result.entities) or '(none)'}")
+    print(f"  Total hits: {result.total_hits} (memories={len(result.memories)}, wiki={len(result.wiki_pages)}, kg={len(result.kg_facts)})")
+    print()
+    if result.memories:
+        print(f"### Memories ({len(result.memories)})")
+        for m in result.memories:
+            tag_str = f" [{', '.join(m.tags[:3])}]" if m.tags else ""
+            print(f"  [{m.score:.3f}] {m.content[:120]}{tag_str}")
+        print()
+    if result.wiki_pages:
+        print(f"### Wiki Pages ({len(result.wiki_pages)})")
+        for w in result.wiki_pages:
+            print(f"  {w.entity} ({w.type}): {w.snippet[:100]}")
+        print()
+    if result.kg_facts:
+        print(f"### KG Facts ({len(result.kg_facts)})")
+        for f in result.kg_facts:
+            print(f"  {f.subject} → {f.predicate} → {f.object} [{f.confidence_label}]")
+        print()
+    if not result.total_hits:
+        print("No results found across any knowledge layer.")
+
 def cmd_wiki_living(ns: argparse.Namespace) -> None:
     """Living wiki commands."""
     from .wiki_living import LivingWikiEngine
@@ -3152,6 +3199,7 @@ def main(argv: list[str] | None = None) -> None:
         "classify": cmd_classify,
         "decay": cmd_decay,
         "reinforce": cmd_reinforce,
+        "brain-search": cmd_brain_search,
     }
     commands[ns.command](ns)
 
