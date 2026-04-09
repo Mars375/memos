@@ -1,19 +1,19 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ TOUTES PRIORITÉS DONE (P1-P15)
+## Statut : ✅ P1-P18 DONE
 
-**Dernière session** : 2026-04-08 23:22 — P15 KG Path Queries
-**Version** : 0.32.0
-**Tests** : 1195 passed (dont 23 P15 kg-paths)
+**Dernière session** : 2026-04-09 — P18 Confidence Labels KG
+**Version** : 0.34.0
+**Tests** : 72 passed (test_knowledge_graph.py) — +14 P18 tests
 
 ## Dernière action
-- **P15 terminée** : Module `KnowledgeGraph.find_paths/shortest_path/neighbors`
-- CLI : `memos kg-path`, `memos kg-neighbors`
-- REST : `GET /api/v1/kg/paths`, `GET /api/v1/kg/neighbors`
-- 23 tests (neighbors, find_paths, shortest_path, CLI)
+- **P18 terminée** : Confidence Labels KG — EXTRACTED / INFERRED / AMBIGUOUS
+- `KnowledgeGraph.query_by_label()`, `label_stats()`, `infer_transitive()` — déjà présents
+- `KGBridge.infer()` ajouté — wraps `infer_transitive()` pour règles d'inférence transitives
+- Dashboard : panel "KG Confidence Labels" avec chips colorés + overlay facts par label
+- REST `/api/v1/kg/labels` — label_stats + facts par label (déjà présent)
+- 14 nouveaux tests : label validation, query_by_label, label_stats, infer_transitive
 
 ## Prochaine étape
-- Vérifier issues GitHub ouvertes (`gh issue list`)
-- Améliorer quality/docs/perf
-- Envisager v0.32.0 release tag
-- Watchlist items restants: verbatim first mode, Graphify multimodal pipeline
+- P19 — Miner Incrémental (SHA-256 Cache + --update)
+- P33 — Auto-extraction KG à l'écriture (NER zéro-LLM) — CRITIQUE sprint V1

@@ -422,7 +422,7 @@ Inspiré de mempalace : 96.6% accuracy sans extraction LLM. Catégories :
 
 ---
 
-## [ ] P18 — Confidence Labels KG (EXTRACTED / INFERRED / AMBIGUOUS)
+## [x] P18 — Confidence Labels KG (EXTRACTED / INFERRED / AMBIGUOUS)
 **Objectif :** Ajouter un champ `confidence_label` sur les triplets KG pour indiquer l'origine de la connaissance.
 
 Inspiré de Graphify : distinguer ce qui est explicitement dit vs inféré vs ambigu.

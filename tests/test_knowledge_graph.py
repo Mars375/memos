@@ -408,6 +408,126 @@ def test_query_both_direction_no_duplicates(kg: KnowledgeGraph) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 11. Confidence Labels — P18
+# ---------------------------------------------------------------------------
+
+
+def test_add_fact_label_default(kg: KnowledgeGraph) -> None:
+    """add_fact() defaults to EXTRACTED label."""
+    kg.add_fact("A", "rel", "B")
+    facts = kg.query("A")
+    assert facts[0]["confidence_label"] == "EXTRACTED"
+
+
+def test_add_fact_label_inferred(kg: KnowledgeGraph) -> None:
+    """add_fact() stores custom confidence_label."""
+    kg.add_fact("A", "rel", "B", confidence_label="INFERRED")
+    facts = kg.query("A")
+    assert facts[0]["confidence_label"] == "INFERRED"
+
+
+def test_add_fact_label_ambiguous(kg: KnowledgeGraph) -> None:
+    kg.add_fact("A", "rel", "B", confidence_label="AMBIGUOUS")
+    facts = kg.query("A")
+    assert facts[0]["confidence_label"] == "AMBIGUOUS"
+
+
+def test_add_fact_label_invalid(kg: KnowledgeGraph) -> None:
+    """Invalid confidence_label raises ValueError."""
+    with pytest.raises(ValueError, match="Invalid confidence_label"):
+        kg.add_fact("A", "rel", "B", confidence_label="UNKNOWN")
+
+
+def test_query_by_label_extracted(kg: KnowledgeGraph) -> None:
+    kg.add_fact("A", "rel", "B", confidence_label="EXTRACTED")
+    kg.add_fact("C", "rel", "D", confidence_label="INFERRED")
+    results = kg.query_by_label("EXTRACTED")
+    assert len(results) == 1
+    assert results[0]["subject"] == "A"
+    assert results[0]["confidence_label"] == "EXTRACTED"
+
+
+def test_query_by_label_inferred(kg: KnowledgeGraph) -> None:
+    kg.add_fact("A", "rel", "B", confidence_label="INFERRED")
+    kg.add_fact("C", "rel", "D", confidence_label="EXTRACTED")
+    results = kg.query_by_label("INFERRED")
+    assert len(results) == 1
+    assert results[0]["subject"] == "A"
+
+
+def test_query_by_label_invalid(kg: KnowledgeGraph) -> None:
+    with pytest.raises(ValueError):
+        kg.query_by_label("BOGUS")
+
+
+def test_query_by_label_excludes_invalidated(kg: KnowledgeGraph) -> None:
+    fid = kg.add_fact("A", "rel", "B", confidence_label="EXTRACTED")
+    kg.invalidate(fid)
+    results = kg.query_by_label("EXTRACTED", active_only=True)
+    assert len(results) == 0
+
+
+def test_query_by_label_include_invalidated(kg: KnowledgeGraph) -> None:
+    fid = kg.add_fact("A", "rel", "B", confidence_label="EXTRACTED")
+    kg.invalidate(fid)
+    results = kg.query_by_label("EXTRACTED", active_only=False)
+    assert len(results) == 1
+
+
+def test_label_stats_empty(kg: KnowledgeGraph) -> None:
+    stats = kg.label_stats()
+    assert stats == {"EXTRACTED": 0, "INFERRED": 0, "AMBIGUOUS": 0}
+
+
+def test_label_stats_counts(kg: KnowledgeGraph) -> None:
+    kg.add_fact("A", "rel", "B", confidence_label="EXTRACTED")
+    kg.add_fact("C", "rel", "D", confidence_label="EXTRACTED")
+    kg.add_fact("E", "rel", "F", confidence_label="INFERRED")
+    stats = kg.label_stats()
+    assert stats["EXTRACTED"] == 2
+    assert stats["INFERRED"] == 1
+    assert stats["AMBIGUOUS"] == 0
+
+
+def test_label_stats_excludes_invalidated(kg: KnowledgeGraph) -> None:
+    fid = kg.add_fact("A", "rel", "B", confidence_label="EXTRACTED")
+    kg.add_fact("C", "rel", "D", confidence_label="EXTRACTED")
+    kg.invalidate(fid)
+    stats = kg.label_stats()
+    assert stats["EXTRACTED"] == 1
+
+
+def test_infer_transitive_creates_inferred_facts(kg: KnowledgeGraph) -> None:
+    """infer_transitive() creates INFERRED facts for A→B, B→C chains."""
+    kg.add_fact("Alice", "manages", "Bob")
+    kg.add_fact("Bob", "manages", "Carol")
+    new_ids = kg.infer_transitive("manages")
+    assert len(new_ids) >= 1
+    inferred = kg.query_by_label("INFERRED")
+    assert len(inferred) >= 1
+    subjects = {f["subject"] for f in inferred}
+    assert "Alice" in subjects
+
+
+def test_infer_transitive_custom_predicate(kg: KnowledgeGraph) -> None:
+    kg.add_fact("A", "emploie", "B")
+    kg.add_fact("B", "emploie", "C")
+    new_ids = kg.infer_transitive("emploie", inferred_predicate="emploie_indirect")
+    assert len(new_ids) >= 1
+    inferred = kg.query_by_label("INFERRED")
+    assert any(f["predicate"] == "emploie_indirect" for f in inferred)
+
+
+def test_infer_transitive_idempotent(kg: KnowledgeGraph) -> None:
+    """Running infer_transitive twice should not create duplicate facts."""
+    kg.add_fact("A", "rel", "B")
+    kg.add_fact("B", "rel", "C")
+    ids1 = kg.infer_transitive("rel")
+    ids2 = kg.infer_transitive("rel")
+    assert len(ids2) == 0, "Second run should not create new facts"
+
+
+# ---------------------------------------------------------------------------
 # 11. CLI command tests (argparse-level)
 # ---------------------------------------------------------------------------
 

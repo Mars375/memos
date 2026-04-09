@@ -27,6 +27,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .stat-chip .val{font-size:1.3em;font-weight:700;color:var(--accent2);}
   .stat-chip .lbl{font-size:.65em;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.06em;}
   #tags-panel{padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;max-height:150px;overflow-y:auto;}
+  #kg-labels-panel{padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  #kg-labels-panel h3{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:8px;}
+  .label-chip{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:3px 10px;font-size:.75em;cursor:pointer;margin:2px;border:1px solid transparent;transition:all .15s;user-select:none;font-weight:500;}
+  .label-chip:hover{opacity:.85;}
+  .label-chip.lc-extracted{background:#7c6ff722;border-color:#7c6ff744;color:#a78bfa;}
+  .label-chip.lc-inferred{background:#f9731622;border-color:#f9731644;color:#fb923c;}
+  .label-chip.lc-ambiguous{background:#64748b22;border-color:#64748b44;color:#94a3b8;}
+  .label-chip .lc-count{font-size:.85em;opacity:.7;}
+  #kg-facts-overlay{display:none;position:absolute;top:0;left:300px;right:0;bottom:0;background:var(--bg2);z-index:50;overflow-y:auto;padding:20px;}
+  #kg-facts-overlay h2{font-size:.95em;color:var(--accent2);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+  .kgf-row{background:var(--bg3);border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:.8em;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .kgf-subj{color:var(--accent2);font-weight:600;}
+  .kgf-pred{color:var(--text2);font-style:italic;}
+  .kgf-obj{color:var(--text);}
+  .kgf-src{font-size:.72em;color:var(--text2);margin-left:auto;}
   #tags-panel h3{font-size:.7em;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:8px;}
   .tag-chip{display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:.75em;cursor:pointer;margin:2px;transition:all .15s;user-select:none;}
   .tag-chip:hover{border-color:var(--accent);}
@@ -92,6 +107,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <h3>Filter by tag</h3>
     <div id="tags-list"></div>
   </div>
+  <div id="kg-labels-panel">
+    <h3>KG Confidence Labels</h3>
+    <div id="kg-labels-list"><span style="color:var(--text2);font-size:.75em">Loading…</span></div>
+  </div>
   <div id="analytics-panel">
     <h3>Recall analytics</h3>
     <div class="analytics-grid">
@@ -116,10 +135,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <button class="btn btn-primary" onclick="addMemory()" style="width:100%">Learn</button>
   </div>
 </div>
-<div id="graph-area">
+<div id="graph-area" style="position:relative;">
   <div id="loading"><div class="spin"></div>Loading graph&hellip;</div>
   <svg id="graph-svg"></svg>
   <div id="tt"></div>
+  <div id="kg-facts-overlay">
+    <h2><span id="kg-overlay-title">KG Facts</span><button class="btn" style="background:var(--bg3);color:var(--text)" onclick="closeKGOverlay()">&#x2715; Close</button></h2>
+    <div id="kg-facts-list"></div>
+  </div>
   <div id="controls">
     <button class="cb" onclick="zoomIn()">+</button>
     <button class="cb" onclick="zoomOut()">&minus;</button>
@@ -347,8 +370,73 @@ async function refreshGraph(){
   }
 }
 
+async function loadKGLabels(){
+  try{
+    const r=await fetch(API+'/kg/labels').then(res=>res.json());
+    const stats=r.label_stats||{};
+    const container=document.getElementById('kg-labels-list');
+    container.textContent='';
+    const defs=[
+      {key:'EXTRACTED',cls:'lc-extracted',icon:'\u2295'},
+      {key:'INFERRED',cls:'lc-inferred',icon:'\u21e2'},
+      {key:'AMBIGUOUS',cls:'lc-ambiguous',icon:'~'},
+    ];
+    defs.forEach(({key,cls,icon})=>{
+      const chip=document.createElement('span');
+      chip.className='label-chip '+cls;
+      chip.title='Click to browse '+key+' facts';
+      chip.textContent=icon+' '+key+' ';
+      const cnt=document.createElement('span');
+      cnt.className='lc-count';
+      cnt.textContent=String(stats[key]||0);
+      chip.appendChild(cnt);
+      chip.onclick=()=>openKGOverlay(key);
+      container.appendChild(chip);
+    });
+  }catch(e){
+    document.getElementById('kg-labels-list').textContent='';
+  }
+}
+
+async function openKGOverlay(label){
+  document.getElementById('kg-overlay-title').textContent=label+' Facts';
+  const listEl=document.getElementById('kg-facts-list');
+  listEl.textContent='Loading\u2026';
+  document.getElementById('kg-facts-overlay').style.display='block';
+  try{
+    const r=await fetch(API+'/kg/labels?label='+encodeURIComponent(label)).then(res=>res.json());
+    const facts=r.facts||[];
+    listEl.textContent='';
+    if(!facts.length){
+      const empty=document.createElement('span');
+      empty.style.cssText='color:var(--text2);font-size:.8em';
+      empty.textContent='No facts with this label.';
+      listEl.appendChild(empty);
+      return;
+    }
+    facts.forEach(f=>{
+      const row=document.createElement('div');
+      row.className='kgf-row';
+      const subj=document.createElement('span');subj.className='kgf-subj';subj.textContent=f.subject||'';
+      const pred=document.createElement('span');pred.className='kgf-pred';pred.textContent='\u2013'+(f.predicate||'')+'\u2192';
+      const obj=document.createElement('span');obj.className='kgf-obj';obj.textContent=f.object||'';
+      row.appendChild(subj);row.appendChild(pred);row.appendChild(obj);
+      if(f.source){const src=document.createElement('span');src.className='kgf-src';src.textContent=f.source;row.appendChild(src);}
+      listEl.appendChild(row);
+    });
+  }catch(e){
+    listEl.textContent='Error loading facts.';
+  }
+}
+
+function closeKGOverlay(){
+  document.getElementById('kg-facts-overlay').style.display='none';
+}
+
 refreshGraph();
+loadKGLabels();
 setInterval(refreshGraph,60000);
+setInterval(loadKGLabels,60000);
 </script>
 </body>
 </html>"""

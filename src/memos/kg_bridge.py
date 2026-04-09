@@ -82,6 +82,7 @@ class KGBridge:
                 subject=subject,
                 predicate=predicate,
                 object=obj,
+                confidence_label="AMBIGUOUS",
                 source=f"memos:{item.id}",
             )
             facts.append({
@@ -89,6 +90,7 @@ class KGBridge:
                 "subject": subject,
                 "predicate": predicate,
                 "object": obj,
+                "confidence_label": "AMBIGUOUS",
                 "source": f"memos:{item.id}",
             })
         return {
@@ -96,6 +98,23 @@ class KGBridge:
             "facts": facts,
             "fact_count": len(facts),
         }
+
+    def infer(
+        self,
+        predicate: str,
+        inferred_predicate: str | None = None,
+        max_depth: int = 3,
+    ) -> list[str]:
+        """Run transitive inference on *predicate* and return new fact IDs.
+
+        Example: if A-emploie->B and B-emploie->C, creates A-emploie_indirect->C
+        with confidence_label='INFERRED'.
+        """
+        return self._kg.infer_transitive(
+            predicate,
+            inferred_predicate=inferred_predicate,
+            max_depth=max_depth,
+        )
 
     def link_fact_to_memory(self, fact_id: str, memory_id: str) -> str:
         """Create an explicit bridge fact linking a KG fact to a memory."""
