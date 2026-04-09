@@ -1570,20 +1570,49 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Disable incremental cache for this run")
 
     # mine-conversation
-    mine_conv_p = sub.add_parser("mine-conversation", help="Mine a conversation file with speaker attribution")
-    mine_conv_p.add_argument("path", help="Conversation file to mine")
-    mine_conv_p.add_argument("--per-speaker", dest="per_speaker", action="store_true", default=True,
-                             help="Store each speaker in a separate namespace (default: True)")
-    mine_conv_p.add_argument("--no-per-speaker", dest="per_speaker", action="store_false",
-                             help="Store all turns in the current namespace")
-    mine_conv_p.add_argument("--namespace-prefix", dest="namespace_prefix", default="conv",
-                             help="Namespace prefix for per-speaker storage (default: conv)")
-    mine_conv_p.add_argument("--tags", nargs="*", help="Extra tags to apply")
-    mine_conv_p.add_argument("--importance", type=float, default=0.55, help="Memory importance (default: 0.55)")
-    mine_conv_p.add_argument("--dry-run", action="store_true", help="Preview without storing")
-    mine_conv_p.add_argument("--backend", default="json", choices=["memory", "json", "chroma", "qdrant"])
-    mine_conv_p.add_argument("--persist-path", dest="persist_path",
-                             default=str(Path.home() / ".memos" / "store.json"))
+    mine_conv_p = sub.add_parser(
+        "mine-conversation",
+        help="Mine a speaker-attributed transcript file into MemOS",
+    )
+    mine_conv_p.add_argument("path", help="Path to transcript file")
+    mine_conv_p.add_argument(
+        "--per-speaker",
+        dest="per_speaker",
+        action="store_true",
+        default=True,
+        help="Store each speaker under a dedicated namespace (default: on)",
+    )
+    mine_conv_p.add_argument(
+        "--no-per-speaker",
+        dest="per_speaker",
+        action="store_false",
+        help="Store all turns in a single namespace",
+    )
+    mine_conv_p.add_argument(
+        "--namespace-prefix",
+        dest="namespace_prefix",
+        default="conv",
+        help="Prefix for per-speaker namespaces (default: conv)",
+    )
+    mine_conv_p.add_argument(
+        "--tags",
+        default="",
+        help="Comma-separated extra tags",
+    )
+    mine_conv_p.add_argument(
+        "--importance",
+        type=float,
+        default=0.6,
+        help="Memory importance (default: 0.6)",
+    )
+    mine_conv_p.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=False,
+        help="Preview without storing",
+    )
+>>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 
     # mine-status
     mine_status_p = sub.add_parser("mine-status", help="Show incremental mine cache status")
@@ -2539,39 +2568,39 @@ def cmd_mine(ns: argparse.Namespace) -> None:
 
 
 def cmd_mine_conversation(ns: argparse.Namespace) -> None:
-    """Mine a conversation file with speaker attribution."""
-    from .miner.conversation import ConversationMiner
+    """Mine a speaker-attributed transcript into MemOS."""
+    from .ingest.conversation import ConversationMiner
+
     memos = _get_memos(ns)
-    dry_run = getattr(ns, "dry_run", False)
-    tags = getattr(ns, "tags") or []
-    importance = getattr(ns, "importance", 0.55)
-    per_speaker = getattr(ns, "per_speaker", True)
-    namespace_prefix = getattr(ns, "namespace_prefix", "conv")
+    extra_tags = [t.strip() for t in (ns.tags or "").split(",") if t.strip()]
 
     miner = ConversationMiner(
         memos,
-        namespace_prefix=namespace_prefix,
-        per_speaker=per_speaker,
-        extra_tags=tags,
-        dry_run=dry_run,
+        dry_run=ns.dry_run,
     )
     result = miner.mine_conversation(
         ns.path,
-        tags=tags,
-        importance=importance,
-        per_speaker=per_speaker,
+        namespace_prefix=ns.namespace_prefix,
+        per_speaker=ns.per_speaker,
+        tags=extra_tags or None,
+        importance=ns.importance,
     )
 
-    status = "would import" if dry_run else "imported"
-    print(f"\n✓ {result.imported} chunks {status}")
-    print(f"  Speakers detected: {', '.join(result.speakers_detected)}")
-    print(f"  Turns parsed: {result.turns_total}")
-    if result.skipped_duplicates:
-        print(f"  Duplicates skipped: {result.skipped_duplicates}")
     if result.errors:
-        print(f"  Errors: {len(result.errors)}")
-        for e in result.errors:
-            print(f"    [error] {e}", file=sys.stderr)
+        for err in result.errors:
+            print(f"Error: {err}", file=__import__("sys").stderr)
+
+    mode = "per-speaker" if ns.per_speaker else "combined"
+    print(
+        f"Speakers: {', '.join(result.speakers) if result.speakers else 'none'}\n"
+        f"Mode: {mode}\n"
+        f"Imported: {result.imported}  |  "
+        f"Duplicates: {result.skipped_duplicates}  |  "
+        f"Skipped (short): {result.skipped_empty}"
+    )
+    if ns.dry_run:
+        print("[dry-run: nothing stored]")
+>>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 
 
 def cmd_mine_status(ns: argparse.Namespace) -> None:
