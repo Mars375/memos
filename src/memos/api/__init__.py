@@ -86,6 +86,13 @@ def create_api(memos: MemOS) -> dict[str, Any]:
             "pruned_ids": [item.id for item in pruned],
         }
 
+    async def compress(body: dict) -> dict:
+        result = memos.compress(
+            threshold=float(body.get("threshold", 0.1)),
+            dry_run=bool(body.get("dry_run", False)),
+        )
+        return {"status": "ok", **result}
+
     async def stats(_body: dict = None) -> dict:
         s = memos.stats()
         return {
@@ -193,6 +200,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         "batch_learn": batch_learn,
         "recall": recall,
         "prune": prune,
+        "compress": compress,
         "stats": stats,
         "analytics_top": analytics_top,
         "analytics_patterns": analytics_patterns,
@@ -445,6 +453,10 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     @app.post("/api/v1/prune")
     async def api_prune(body: dict):
         return await routes["prune"](body)
+
+    @app.post("/api/v1/compress")
+    async def api_compress(body: dict):
+        return await routes["compress"](body)
 
     @app.get("/api/v1/stats")
     async def api_stats():

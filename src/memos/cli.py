@@ -506,6 +506,33 @@ def cmd_prune(ns: argparse.Namespace) -> None:
             print(f"  - [{c.id[:8]}] {c.content[:80]}")
 
 
+def cmd_compress(ns: argparse.Namespace) -> None:
+    """Compress low-importance memories into grouped summaries."""
+    memos = _get_memos(ns)
+    result = memos.compress(
+        threshold=ns.threshold,
+        dry_run=ns.dry_run,
+    )
+    if getattr(ns, "json", False):
+        print(json.dumps(result, indent=2))
+        return
+
+    mode = "DRY RUN" if ns.dry_run else "APPLIED"
+    print(f"Compression report ({mode}):")
+    print(f"  Compressed memories: {result['compressed_count']}")
+    print(f"  Summary memories:    {result['summary_count']}")
+    print(f"  Freed bytes:         {result['freed_bytes']}")
+    print(f"  Skipped:             {result['skipped_count']}")
+    if result["groups"]:
+        print("")
+        print("Groups:")
+        for group in result["groups"][:10]:
+            print(
+                f"  [{group['group_key']}] {group['source_count']} → 1 "
+                f"({group['source_bytes']}B → {group['summary_bytes']}B)"
+            )
+
+
 def cmd_prune_expired(ns: argparse.Namespace) -> None:
     """Remove expired memories."""
     memos = _get_memos(ns)
@@ -1177,6 +1204,12 @@ def build_parser() -> argparse.ArgumentParser:
     prune.add_argument("--dry-run", action="store_true")
     prune.add_argument("--verbose", "-v", action="store_true")
     prune.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    compress_p = sub.add_parser("compress", help="Compress low-importance memories into grouped summaries")
+    compress_p.add_argument("--threshold", type=float, default=0.1, help="Importance threshold (default: 0.1)")
+    compress_p.add_argument("--dry-run", action="store_true", help="Preview only")
+    compress_p.add_argument("--json", action="store_true", help="JSON output")
+    compress_p.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "json", "chroma", "qdrant", "pinecone"])
 
     # consolidate
     cons = sub.add_parser("consolidate", help="Find and merge duplicate memories")
@@ -3046,6 +3079,7 @@ def main(argv: list[str] | None = None) -> None:
         "get": cmd_get,
         "prune-expired": cmd_prune_expired,
         "prune": cmd_prune,
+        "compress": cmd_compress,
         "mcp-serve": cmd_mcp_serve,
         "mcp-stdio": cmd_mcp_stdio,
         "serve": cmd_serve,

@@ -30,6 +30,7 @@ from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .migration import MigrationEngine, MigrationReport, _create_backend
+from .compression import MemoryCompressor
 
 
 class MemOS:
@@ -1279,6 +1280,37 @@ class MemOS:
             }, namespace=self._namespace)
 
         return report.to_dict()
+
+    def compress(
+        self,
+        *,
+        threshold: float = 0.1,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Compress low-importance memories into grouped summaries."""
+        self._check_acl("write")
+
+        items = self._store.list_all(namespace=self._namespace)
+        result = MemoryCompressor().compress(items, threshold=threshold)
+
+        if not dry_run and result.compressed_count > 0:
+            for item_id in result.deleted_ids:
+                self._store.delete(item_id, namespace=self._namespace)
+
+            for summary in result.summaries:
+                self._store.upsert(summary, namespace=self._namespace)
+                self._retrieval.index(summary)
+                self._versioning.record_version(summary, source="compression")
+
+            self._events.emit_sync("compressed", {
+                "compressed_count": result.compressed_count,
+                "summary_count": result.summary_count,
+                "freed_bytes": result.freed_bytes,
+                "threshold": threshold,
+                "deleted_ids": result.deleted_ids,
+            }, namespace=self._namespace)
+
+        return result.to_dict()
 
     def cache_stats(self) -> dict[str, Any] | None:
         """Get embedding cache statistics. Returns None if caching disabled."""

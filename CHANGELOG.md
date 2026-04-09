@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.40.0 (2026-04-09) — Memory Compression
+
+### New Features
+
+- **Memory compression for decayed memories**
+  - New `MemoryCompressor` groups low-importance memories by shared tags
+  - Generates aggregated summary memories with `compressed` metadata and tags
+  - Dry-run and apply mode via `MemOS.compress()`
+- **New surfaces**
+  - CLI: `memos compress [--threshold 0.1] [--dry-run]`
+  - API: `POST /api/v1/compress`
+
+### Tests
+
+- 7 focused compression tests added
+- Full suite: **1424 tests passing**
+
 ## v0.39.0 (2026-04-09) — Auto KG Extraction on Write
 
 ### New Features

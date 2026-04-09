@@ -527,23 +527,20 @@ Actuellement : toutes les lignes d'un transcript vont dans le même namespace.
 
 ---
 
-## [ ] P24 — Memory Compression (AAAK pour mémoires décayées)
+## [x] P24 — Memory Compression (AAAK pour mémoires décayées)
+Implémenté v0.40.0 — `MemoryCompressor`, `MemOS.compress()`, CLI `memos compress`, REST `POST /api/v1/compress`, 7 tests.
 **Objectif :** Compresser les mémoires très décayées (importance < 0.1) en résumés agrégés.
 
 Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes qui polluent le recall.
 
-À implémenter dans `src/memos/compression.py` :
-- `MemoryCompressor` classe
-- `compress(items: list[MemoryItem], threshold=0.1) -> CompressionResult`
-  - Grouper les mémoires décayées par tags communs
-  - Pour chaque groupe : créer une mémoire résumé (concaténation des contenus, importance = 0.15)
-  - Supprimer les originaux
-  - Retourner `CompressionResult(compressed_count, summary_count, freed_bytes)`
-- Mode sans LLM : concaténation simple avec séparateur (`" | "`)
-- Mode LLM optionnel : résumé via Ollama si disponible
+Livré dans `src/memos/compression.py` :
+- `MemoryCompressor` + `CompressionResult`
+- Groupement des mémoires décayées par tags communs dominants
+- Génération d’une mémoire résumé (concaténation sans LLM, tags partagés + `compressed`, importance = 0.15)
+- Métadonnées `compression` pour tracer les IDs sources, le seuil et le mode
+- `MemOS.compress(threshold=0.1, dry_run=...)` pour dry-run ou application réelle
 - CLI : `memos compress [--dry-run] [--threshold 0.1]`
 - REST : `POST /api/v1/compress` body `{"threshold": 0.1, "dry_run": true}`
-- Cron : auto-compression hebdomadaire si mémoires décayées > 100
 
 ---
 # ═══════════════════════════════════════════════════════════════════════
