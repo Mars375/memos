@@ -269,6 +269,33 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         """
         return await routes["batch_learn"](body)
 
+    @app.post("/api/v1/ingest/url")
+    async def api_ingest_url(body: dict):
+        """Fetch a URL and ingest it into memory."""
+        url = body.get("url", "").strip()
+        if not url:
+            return {"status": "error", "message": "url is required"}
+        result = memos.ingest_url(
+            url,
+            tags=body.get("tags"),
+            importance=float(body.get("importance", 0.5)),
+            max_chunk=int(body.get("max_chunk", 2000)),
+            dry_run=bool(body.get("dry_run", False)),
+        )
+        head_meta = result.chunks[0].get("metadata", {}) if result.chunks else {}
+        payload = {
+            "status": "ok" if not result.errors else "partial",
+            "url": url,
+            "total_chunks": result.total_chunks,
+            "skipped": result.skipped,
+            "errors": result.errors,
+            "source_type": head_meta.get("source_type"),
+            "title": head_meta.get("title"),
+        }
+        if body.get("dry_run"):
+            payload["chunks"] = result.chunks
+        return payload
+
     @app.post("/api/v1/recall")
     async def api_recall(body: dict):
         return await routes["recall"](body)

@@ -910,6 +910,39 @@ class MemOS:
 
         return result
 
+    def ingest_url(
+        self,
+        url: str,
+        *,
+        tags: list[str] | None = None,
+        importance: float = 0.5,
+        max_chunk: int = 2000,
+        dry_run: bool = False,
+    ) -> "IngestResult":
+        """Fetch a URL, extract its contents, and store it as memories."""
+        from .ingest.url import URLIngestor
+
+        result = URLIngestor().ingest(
+            url,
+            tags=tags,
+            importance=importance,
+            max_chunk=max_chunk,
+        )
+
+        if not dry_run:
+            for chunk in result.chunks:
+                try:
+                    self.learn(
+                        chunk["content"],
+                        tags=chunk.get("tags", []),
+                        importance=chunk.get("importance", importance),
+                        metadata=chunk.get("metadata", {}),
+                    )
+                except Exception as e:
+                    result.errors.append(f"Failed to store chunk: {e}")
+
+        return result
+
     def export_json(self, *, include_metadata: bool = True) -> dict:
         """Export all memories as a JSON-serializable dict."""
         items = self._store.list_all()

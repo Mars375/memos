@@ -492,7 +492,8 @@ Karpathy : 71x moins de tokens vs fichiers bruts, navigation communauté→page�
 
 ---
 
-## [ ] P22 — URL Ingest (Tweet, arXiv, PDF, Webpage)
+## [x] P22 — URL Ingest (Tweet, arXiv, PDF, Webpage)
+Implemented v0.37.0 — `URLIngestor`, `MemOS.ingest_url()`, CLI `memos ingest-url`, REST `POST /api/v1/ingest/url`, support arXiv/X/PDF/webpage, 8 tests.
 **Objectif :** `memos ingest-url <url>` — ingère n'importe quelle URL dans MemOS sans setup manuel.
 
 Sources supportées :

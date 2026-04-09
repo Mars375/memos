@@ -709,6 +709,25 @@ def cmd_ingest(ns: argparse.Namespace) -> None:
                 print(f"  ⚠ {err}", file=sys.stderr)
 
 
+def cmd_ingest_url(ns: argparse.Namespace) -> None:
+    """Fetch a URL and ingest its contents into memory."""
+    memos = _get_memos(ns)
+    tags = ns.tags.split(",") if ns.tags else None
+    result = memos.ingest_url(
+        ns.url,
+        tags=tags,
+        importance=ns.importance,
+        max_chunk=ns.max_chunk,
+        dry_run=ns.dry_run,
+    )
+    source_type = result.chunks[0].get("metadata", {}).get("source_type", "unknown") if result.chunks else "unknown"
+    label = "DRY-RUN " if ns.dry_run else ""
+    print(f"{label}{ns.url}: {result.total_chunks} chunks, {result.skipped} skipped ({source_type})")
+    if result.errors:
+        for err in result.errors:
+            print(f"  ⚠ {err}", file=sys.stderr)
+
+
 def cmd_migrate(ns: argparse.Namespace) -> None:
     """Migrate memories to a different backend."""
     memos = _get_memos(ns)
@@ -1136,6 +1155,14 @@ def build_parser() -> argparse.ArgumentParser:
     ing.add_argument("--dry-run", action="store_true", help="Parse only, don't store")
     ing.add_argument("--max-chunk", type=int, default=2000, help="Max chars per chunk")
     ing.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    ing_url = sub.add_parser("ingest-url", help="Import a URL into memory")
+    ing_url.add_argument("url", help="HTTP(S) or file:// URL to ingest")
+    ing_url.add_argument("--tags", "-t", help="Comma-separated tags to add")
+    ing_url.add_argument("--importance", "-i", type=float, default=0.5)
+    ing_url.add_argument("--dry-run", action="store_true", help="Fetch and parse only, don't store")
+    ing_url.add_argument("--max-chunk", type=int, default=2000, help="Max chars per chunk")
+    ing_url.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # export
     exp = sub.add_parser("export", help="Export all memories to JSON or Parquet")
@@ -2906,6 +2933,7 @@ def main(argv: list[str] | None = None) -> None:
         "subscribe": cmd_subscribe,
         "consolidate": cmd_consolidate,
         "ingest": cmd_ingest,
+        "ingest-url": cmd_ingest_url,
         "export": cmd_export,
         "import": cmd_import,
         "migrate": cmd_migrate,
