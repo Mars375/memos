@@ -62,12 +62,14 @@ class TestCLIFunctional:
         data = json.loads(cfg.read_text())
         assert data["backend"] == "memory"
 
-    def test_init_no_overwrite(self, tmp_path):
+    def test_init_no_overwrite(self, tmp_path, capsys):
         d = tmp_path / "memos_data"
         d.mkdir()
         (d / "memos.json").write_text("{}")
-        with pytest.raises(SystemExit):
-            main(["init", str(d)])
+        main(["init", str(d)])
+        out = capsys.readouterr().out
+        assert "Already initialized" in out
+        assert json.loads((d / "memos.json").read_text()) == {}
 
     def test_init_force(self, tmp_path):
         d = tmp_path / "memos_data"

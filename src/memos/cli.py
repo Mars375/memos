@@ -108,8 +108,8 @@ def cmd_init(ns: argparse.Namespace) -> None:
     path.mkdir(parents=True, exist_ok=True)
     cfg = path / "memos.json"
     if cfg.exists() and not ns.force:
-        print(f"Already initialized: {cfg}", file=sys.stderr)
-        sys.exit(1)
+        print(f"Already initialized: {cfg}")
+        return
     config = {
         "backend": getattr(ns, "backend", "memory"),
         "version": __version__,
