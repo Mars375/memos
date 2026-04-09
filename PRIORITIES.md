@@ -457,7 +457,7 @@ Inspiré de mempalace verbatim storage : éviter les re-imports redondants.
 
 ---
 
-## [ ] P20 — Hybrid Retrieval (Semantic + Keyword BM25)
+## [x] P20 — Hybrid Retrieval (Semantic + Keyword BM25)
 **Objectif :** Réduire de ~30% le bruit dans le recall en combinant recherche sémantique et keyword.
 
 Inspiré de mempalace : semantic top-50 → BM25 rerank → top-K final.

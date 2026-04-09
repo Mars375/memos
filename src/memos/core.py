@@ -394,16 +394,50 @@ class MemOS:
         min_score: float = 0.0,
         filter_after: Optional[float] = None,
         filter_before: Optional[float] = None,
+        retrieval_mode: str = "semantic",
     ) -> list[RecallResult]:
-        """Retrieve memories relevant to a query."""
+        """Retrieve memories relevant to a query.
+
+        Args:
+            retrieval_mode: "semantic" (default), "hybrid" (semantic + BM25),
+                            or "keyword" (pure keyword TF overlap).
+        """
+        from .retrieval.hybrid import HybridRetriever
+        _VALID_MODES = ("semantic", "keyword", "hybrid")
+        if retrieval_mode not in _VALID_MODES:
+            raise ValueError(f"retrieval_mode must be one of {_VALID_MODES}, got {retrieval_mode!r}")
         self._check_acl("read")
         started = time.perf_counter()
         final_results: list[RecallResult] = []
 
         try:
-            # Try retrieval engine for hybrid search (supports Qdrant native)
+            # keyword-only mode: skip semantic engine entirely
+            if retrieval_mode == "keyword":
+                all_items = self._store.list_all(namespace=self._namespace)
+                if filter_tags:
+                    tag_set = set(t.lower() for t in filter_tags)
+                    all_items = [i for i in all_items if tag_set & set(t.lower() for t in i.tags)]
+                candidates = [
+                    RecallResult(item=item, score=0.0, match_reason="keyword")
+                    for item in all_items if not item.is_expired
+                ]
+                if filter_after is not None:
+                    candidates = [r for r in candidates if r.item.created_at >= filter_after]
+                if filter_before is not None:
+                    candidates = [r for r in candidates if r.item.created_at <= filter_before]
+                retriever = HybridRetriever()
+                keyword_results = retriever.keyword_recall(query, candidates, top=top, min_score=min_score)
+                for r in keyword_results:
+                    r.item.touch()
+                    self._store.upsert(r.item, namespace=self._namespace)
+                    self._events.emit_sync("recalled", {"id": r.item.id, "query": query, "score": r.score, "tags": r.item.tags}, namespace=self._namespace)
+                final_results = keyword_results
+                return final_results
+
+            # Try retrieval engine for semantic/hybrid search (supports Qdrant native)
+            semantic_top = 50 if retrieval_mode == "hybrid" else top
             engine_results = self._retrieval.search(
-                query, top=top, filter_tags=filter_tags,
+                query, top=semantic_top, filter_tags=filter_tags,
                 namespace=self._namespace,
             )
 
@@ -435,6 +469,10 @@ class MemOS:
                     if decayed >= min_score:
                         r.score = decayed
                         adjusted.append(r)
+
+                if retrieval_mode == "hybrid" and adjusted:
+                    adjusted = HybridRetriever().rerank(query, adjusted)
+
                 final_results = sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
             else:
                 # Fallback: basic keyword search

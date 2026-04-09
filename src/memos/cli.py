@@ -221,9 +221,11 @@ def cmd_recall(ns: argparse.Namespace) -> None:
                 print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}")
             print(f"\n{len(facts)} fact(s)")
         return
+    retrieval_mode = getattr(ns, "retrieval_mode", "semantic") or "semantic"
     results = memos.recall(
         ns.query, top=ns.top, min_score=ns.min_score,
         filter_tags=filter_tags, filter_after=filter_after, filter_before=filter_before,
+        retrieval_mode=retrieval_mode,
     )
     if not results:
         if fmt == "json":
@@ -1046,6 +1048,9 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--enriched", action="store_true", help="Augment recall with KG facts")
     recall.add_argument("--kg-db", dest="kg_db", default=None, help="Path to kg.db")
     recall.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+    recall.add_argument("--mode", dest="retrieval_mode", default="semantic",
+                        choices=["semantic", "keyword", "hybrid"],
+                        help="Retrieval mode: semantic (default), keyword (BM25 only), hybrid (semantic+BM25)")
 
     # search
     search_p = sub.add_parser("search", help="Keyword-only search across memories (no embeddings)")

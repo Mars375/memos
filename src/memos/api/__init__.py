@@ -44,6 +44,9 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         from datetime import datetime as _dt
         filter_after = _dt.fromisoformat(_after).timestamp() if _after else None
         filter_before = _dt.fromisoformat(_before).timestamp() if _before else None
+        retrieval_mode = body.get("retrieval_mode", "semantic")
+        if retrieval_mode not in ("semantic", "keyword", "hybrid"):
+            return {"status": "error", "message": f"Invalid retrieval_mode. Must be semantic, keyword, or hybrid."}
         results = memos.recall(
             query=body["query"],
             top=body.get("top", 5),
@@ -51,6 +54,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
             min_score=body.get("min_score", 0.0),
             filter_after=filter_after,
             filter_before=filter_before,
+            retrieval_mode=retrieval_mode,
         )
         return {
             "status": "ok",
@@ -438,6 +442,9 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         if not subject or not predicate or not obj:
             return {"status": "error", "message": "subject, predicate and object are required"}
         try:
+            confidence_label = body.get("confidence_label", "EXTRACTED")
+            if confidence_label not in KnowledgeGraph.VALID_LABELS:
+                return {"status": "error", "message": f"Invalid confidence_label. Must be one of {KnowledgeGraph.VALID_LABELS}"}
             fact_id = _kg.add_fact(
                 subject=subject,
                 predicate=predicate,
@@ -445,9 +452,10 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                 valid_from=body.get("valid_from"),
                 valid_to=body.get("valid_to"),
                 confidence=float(body.get("confidence", 1.0)),
+                confidence_label=confidence_label,
                 source=body.get("source"),
             )
-            return {"status": "ok", "id": fact_id}
+            return {"status": "ok", "id": fact_id, "confidence_label": confidence_label}
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
@@ -479,6 +487,32 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def kg_stats():
         """Return knowledge graph statistics."""
         return _kg.stats()
+
+    @app.get("/api/v1/kg/labels")
+    async def kg_labels(label: Optional[str] = None, active_only: bool = True):
+        """Return label stats or facts filtered by confidence label."""
+        if label:
+            if label not in KnowledgeGraph.VALID_LABELS:
+                return {"status": "error", "message": f"Invalid label. Must be one of {KnowledgeGraph.VALID_LABELS}"}
+            facts = _kg.query_by_label(label, active_only=active_only)
+            return {"status": "ok", "label": label, "facts": facts, "count": len(facts)}
+        return {"status": "ok", "label_stats": _kg.label_stats()}
+
+    @app.post("/api/v1/kg/infer")
+    async def kg_infer(body: dict):
+        """Infer transitive facts for a predicate."""
+        predicate = body.get("predicate", "").strip()
+        if not predicate:
+            return {"status": "error", "message": "predicate is required"}
+        try:
+            new_ids = _kg.infer_transitive(
+                predicate=predicate,
+                inferred_predicate=body.get("inferred_predicate"),
+                max_depth=int(body.get("max_depth", 3)),
+            )
+            return {"status": "ok", "inferred_count": len(new_ids), "fact_ids": new_ids}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
 
     @app.get("/api/v1/kg/paths")
     async def kg_paths(
