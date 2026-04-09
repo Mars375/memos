@@ -239,6 +239,8 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     _kg = KnowledgeGraph(db_path=kg_db_path)
     _kg_bridge = KGBridge(memos, _kg)
     _kg_extractor = KGExtractor()
+    memos._kg = _kg
+    memos._kg_bridge = _kg_bridge
 
     app = FastAPI(
         title="MemOS",
@@ -485,6 +487,27 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             include_kg=bool(body.get("include_kg", True)),
         )
         return {"status": "ok", **result.to_dict()}
+
+    @app.get("/api/v1/brain/entity/{name}")
+    async def api_brain_entity(name: str, memory_top: int = 5, neighbor_top: int = 12):
+        """Return a unified entity view: wiki, memories, facts, neighbors, backlinks."""
+        from ..brain import BrainSearch
+
+        if not name.strip():
+            return {"status": "error", "message": "entity name is required"}
+        brain = BrainSearch(memos)
+        result = brain.entity_detail(name, memory_top=memory_top, neighbor_top=neighbor_top)
+        return {"status": "ok", **result.to_dict()}
+
+    @app.get("/api/v1/brain/entity/{name}/subgraph")
+    async def api_brain_entity_subgraph(name: str, depth: int = 2):
+        """Return an ego subgraph for an entity, ready for D3 consumption."""
+        from ..brain import BrainSearch
+
+        if not name.strip():
+            return {"status": "error", "message": "entity name is required"}
+        brain = BrainSearch(memos)
+        return {"status": "ok", **brain.entity_subgraph(name, depth=depth)}
 
     @app.get("/api/v1/stats")
     async def api_stats():
@@ -888,13 +911,18 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
 
     @app.get("/api/v1/graph")
-    async def api_graph(min_shared_tags: int = 1, limit: int = 500):
-        """Return memory graph: nodes + edges based on shared tags."""
+    async def api_graph(min_shared_tags: int = 1, limit: int = 500, kind: str = "memory"):
+        """Return either the memory graph or the entity graph for the dashboard."""
+        if kind == "entity":
+            from ..brain import BrainSearch
+
+            brain = BrainSearch(memos)
+            return brain.entity_graph(limit=limit)
+
         import time as _time
         items = memos._store.list_all(namespace=memos._namespace)
         now = _time.time()
 
-        # Build nodes
         nodes = []
         for item in items[:limit]:
             if item.is_expired:
@@ -910,9 +938,9 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                 "age_days": round(age_days, 1),
                 "access_count": item.access_count,
                 "primary_tag": item.tags[0] if item.tags else "__untagged__",
+                "kind": "memory",
             })
 
-        # Build edges based on shared tags
         edges = []
         tag_to_ids: dict[str, list[str]] = {}
         for n in nodes:
@@ -933,7 +961,6 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                             "weight": 1,
                         })
                     else:
-                        # Increment weight for multiple shared tags
                         for e in edges:
                             if e["source"] == key[0] and e["target"] == key[1]:
                                 e["weight"] += 1
@@ -948,6 +975,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             "nodes": nodes,
             "edges": edges,
             "meta": {
+                "graph_kind": "memory",
                 "total_nodes": len(nodes),
                 "total_edges": len(edges),
                 "total_memories": stats.total_memories,

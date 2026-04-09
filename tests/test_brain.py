@@ -15,6 +15,7 @@ from memos.brain import (
     _extract_entities,
 )
 from memos.core import MemOS
+from memos.knowledge_graph import KnowledgeGraph
 
 
 @pytest.fixture
@@ -190,6 +191,49 @@ class TestBrainSearch:
         brain = BrainSearch(memos)
         result = brain.search("attribute")
         assert len(result.memories) >= 1
+
+    def test_entity_detail_enriches_wiki_page_and_neighbors(self, memos, tmp_dir):
+        kg_path = os.path.join(tmp_dir, "kg.db")
+        memos._kg_db_path = kg_path
+        memos._kg = KnowledgeGraph(db_path=kg_path)
+
+        memos.learn("Alice works at Acme and mentors Bob", tags=["team"], auto_kg=False)
+        memos.learn("Bob ships Project Phoenix with Alice", tags=["project"], auto_kg=False)
+
+        memos._kg.add_fact(subject="Alice", predicate="works_at", object="Acme", confidence_label="EXTRACTED")
+        memos._kg.add_fact(subject="Alice", predicate="mentors", object="Bob", confidence_label="EXTRACTED")
+        memos._kg.add_fact(subject="Bob", predicate="works_on", object="Project Phoenix", confidence_label="EXTRACTED")
+
+        brain = BrainSearch(memos)
+        detail = brain.entity_detail("Alice")
+
+        assert detail.entity == "Alice"
+        assert detail.community is not None
+        assert any(neighbor.entity == "Acme" for neighbor in detail.kg_neighbors)
+        assert any(memory.id for memory in detail.memories)
+        assert "## Graph Neighbors" in detail.wiki_page
+
+        page = brain._get_wiki().read_page("Alice")
+        assert page is not None
+        assert "## Graph Neighbors" in page
+        assert "top_memories:" in page
+
+    def test_entity_subgraph_returns_ego_network(self, memos, tmp_dir):
+        kg_path = os.path.join(tmp_dir, "kg.db")
+        memos._kg_db_path = kg_path
+        memos._kg = KnowledgeGraph(db_path=kg_path)
+
+        memos._kg.add_fact(subject="Alice", predicate="works_at", object="Acme", confidence_label="EXTRACTED")
+        memos._kg.add_fact(subject="Alice", predicate="mentors", object="Bob", confidence_label="EXTRACTED")
+        memos._kg.add_fact(subject="Bob", predicate="works_on", object="Project Phoenix", confidence_label="EXTRACTED")
+
+        brain = BrainSearch(memos)
+        subgraph = brain.entity_subgraph("Alice", depth=2)
+
+        assert subgraph["center"] == "Alice"
+        assert subgraph["depth"] == 2
+        assert any(node["id"] == "Project Phoenix" for node in subgraph["nodes"])
+        assert subgraph["total_edges"] >= 2
 
 
 # ---------------------------------------------------------------------------

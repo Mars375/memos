@@ -577,36 +577,16 @@ Problème actuel : `recall` cherche dans les mémoires, `wiki-living search` che
 
 ---
 
-## [ ] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+## [x] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+Implémenté v0.42.0 — `BrainSearch.entity_detail/entity_subgraph/entity_graph`, routes REST `/api/v1/brain/entity/*`, dashboard D3.js orienté entités avec slide-in panel, wiki enrichi (`Graph Neighbors`, frontmatter `community/kg_facts_count/backlinks_count/top_memories`), god nodes visibles, 32 tests ciblés + suite complète verte (1453 passed).
 **Objectif :** Chaque entité connue de MemOS a une vue unifiée — mémoires + faits KG + page wiki + voisins de graphe. Le dashboard D3.js devient navigable, pas juste visuel.
 
-Actuellement : les nœuds D3.js sont des points morts. Les pages wiki existent mais ne sont pas connectées au graphe. Les faits KG ne sont pas liés aux mémoires qui les mentionnent.
-
-À implémenter :
-**API :**
-- `GET /api/v1/brain/entity/{name}` — vue complète :
-  ```json
-  {
-    "entity": "Alice",
-    "wiki_page": "...",             // page wiki vivante (Karpathy)
-    "memories": [...],              // top-5 mémoires liées (mempalace verbatim)
-    "kg_facts": [...],              // faits actifs avec confidence_label (graphify)
-    "kg_neighbors": [...],          // entités voisines (graphify path queries)
-    "backlinks": [...],             // autres entités qui mentionnent celle-ci
-    "community": "..."              // communauté Leiden d'appartenance
-  }
-  ```
-- `GET /api/v1/brain/entity/{name}/subgraph` — ego network depth=2 pour D3.js
-
-**Dashboard :**
-- Clic sur un nœud D3.js → slide-in panel avec la vue entity detail
-- Panel : wiki page rendu markdown + top mémoires + faits KG (colorés par confidence_label)
-- Backlinks cliquables → navigation entre entités
-- Nœuds "god nodes" (3+ communautés) mis en évidence visuellement
-
-**Wiki pages :**
-- Section `## Graph Neighbors` auto-générée (voisins KG directs)
-- Frontmatter enrichi : `community`, `kg_facts_count`, `backlinks_count`, `top_memories`
+Livré :
+- `GET /api/v1/brain/entity/{name}` — vue complète entity/wiki/KG/memories/backlinks/community
+- `GET /api/v1/brain/entity/{name}/subgraph` — ego network depth=2 prêt pour D3.js
+- `/api/v1/graph?kind=entity` — graphe d’entités annoté par communauté
+- Dashboard : clic sur une entité → panel latéral markdown + faits + voisins + backlinks + top memories
+- Wiki vivant enrichi à la demande avec section `## Graph Neighbors` et frontmatter relié au graphe
 
 ---
 

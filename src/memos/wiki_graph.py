@@ -93,49 +93,16 @@ class GraphWikiEngine:
         self.init()
         result = GraphWikiResult(output_dir=str(self._output_dir))
 
-        facts = self._load_facts()
+        analysis = self.analyze()
+        facts = analysis["facts"]
+        communities = analysis["communities"]
+        degrees = analysis["degrees"]
+        facts_by_community = analysis["facts_by_community"]
+        cross_facts_by_community = analysis["cross_facts_by_community"]
+        backlinks = analysis["backlinks"]
+        god_nodes = analysis["god_nodes"]
+
         result.facts_indexed = len(facts)
-
-        adjacency: dict[str, set[str]] = defaultdict(set)
-        nodes: set[str] = set()
-        for fact in facts:
-            subject = fact["subject"]
-            obj = fact["object"]
-            nodes.add(subject)
-            nodes.add(obj)
-            if subject != obj:
-                adjacency[subject].add(obj)
-                adjacency[obj].add(subject)
-            else:
-                adjacency.setdefault(subject, set())
-
-        bridge_nodes = self._find_bridge_nodes(nodes, adjacency)
-        communities = self._detect_communities(nodes, adjacency, bridge_nodes=bridge_nodes)
-        entity_to_community = {
-            entity: community.community_id
-            for community in communities
-            for entity in community.entities
-        }
-        degrees = {node: len(adjacency.get(node, set())) for node in nodes}
-
-        facts_by_community: dict[str, list[dict]] = defaultdict(list)
-        cross_facts_by_community: dict[str, list[dict]] = defaultdict(list)
-        backlinks: dict[str, set[str]] = defaultdict(set)
-
-        for fact in facts:
-            src = entity_to_community.get(fact["subject"])
-            dst = entity_to_community.get(fact["object"])
-            if not src or not dst:
-                continue
-            if src == dst:
-                facts_by_community[src].append(fact)
-            else:
-                cross_facts_by_community[src].append(fact)
-                cross_facts_by_community[dst].append(fact)
-                backlinks[src].add(dst)
-                backlinks[dst].add(src)
-
-        god_nodes = self._detect_god_nodes(adjacency, entity_to_community, bridge_nodes)
         result.god_nodes = len(god_nodes)
 
         for community in communities:
@@ -186,6 +153,64 @@ class GraphWikiEngine:
         result.pages_written += 1  # append-only log always changes
         result.community_count = len(communities)
         return result
+
+    def analyze(self) -> dict:
+        """Return graph-community analysis without writing wiki files."""
+        facts = self._load_facts()
+
+        adjacency: dict[str, set[str]] = defaultdict(set)
+        nodes: set[str] = set()
+        for fact in facts:
+            subject = fact["subject"]
+            obj = fact["object"]
+            nodes.add(subject)
+            nodes.add(obj)
+            if subject != obj:
+                adjacency[subject].add(obj)
+                adjacency[obj].add(subject)
+            else:
+                adjacency.setdefault(subject, set())
+
+        bridge_nodes = self._find_bridge_nodes(nodes, adjacency)
+        communities = self._detect_communities(nodes, adjacency, bridge_nodes=bridge_nodes)
+        entity_to_community = {
+            entity: community.community_id
+            for community in communities
+            for entity in community.entities
+        }
+        degrees = {node: len(adjacency.get(node, set())) for node in nodes}
+
+        facts_by_community: dict[str, list[dict]] = defaultdict(list)
+        cross_facts_by_community: dict[str, list[dict]] = defaultdict(list)
+        backlinks: dict[str, set[str]] = defaultdict(set)
+
+        for fact in facts:
+            src = entity_to_community.get(fact["subject"])
+            dst = entity_to_community.get(fact["object"])
+            if not src or not dst:
+                continue
+            if src == dst:
+                facts_by_community[src].append(fact)
+            else:
+                cross_facts_by_community[src].append(fact)
+                cross_facts_by_community[dst].append(fact)
+                backlinks[src].add(dst)
+                backlinks[dst].add(src)
+
+        god_nodes = self._detect_god_nodes(adjacency, entity_to_community, bridge_nodes)
+
+        return {
+            "facts": facts,
+            "adjacency": {node: sorted(neighbors) for node, neighbors in adjacency.items()},
+            "bridge_nodes": sorted(bridge_nodes),
+            "communities": communities,
+            "entity_to_community": entity_to_community,
+            "degrees": degrees,
+            "facts_by_community": facts_by_community,
+            "cross_facts_by_community": cross_facts_by_community,
+            "backlinks": backlinks,
+            "god_nodes": god_nodes,
+        }
 
     def read_community(self, community_id: str) -> Optional[str]:
         """Read a generated community page by its identifier."""
