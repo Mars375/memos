@@ -827,9 +827,11 @@ def cmd_kg_add(ns: argparse.Namespace) -> None:
             valid_from=ns.valid_from,
             valid_to=ns.valid_to,
             confidence=ns.confidence,
+            confidence_label=getattr(ns, 'confidence_label', 'EXTRACTED'),
             source=ns.source,
         )
-        print(f"✓ Fact added [{fact_id}]: {ns.subject} -{ns.predicate}-> {ns.object}")
+        _label = getattr(ns, 'confidence_label', 'EXTRACTED')
+        print(f"✓ Fact added [{fact_id}]: {ns.subject} -{ns.predicate}-> {ns.object} [{_label}]")
     finally:
         kg.close()
 
@@ -849,7 +851,8 @@ def cmd_kg_query(ns: argparse.Namespace) -> None:
                 vf = datetime.fromtimestamp(f["valid_from"]).strftime("%Y-%m-%d") if f["valid_from"] else "?"
                 vt = datetime.fromtimestamp(f["valid_to"]).strftime("%Y-%m-%d") if f["valid_to"] else "?"
                 bounds = f" [{vf} → {vt}]"
-            print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{bounds} (conf={f['confidence']:.2f}){inv}")
+            label = f.get('confidence_label', 'EXTRACTED')
+            print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{bounds} (conf={f['confidence']:.2f}, label={label}){inv}")
         print(f"\n{len(facts)} fact(s)")
     finally:
         kg.close()
@@ -868,7 +871,8 @@ def cmd_kg_timeline(ns: argparse.Namespace) -> None:
         for f in facts:
             ts = datetime.fromtimestamp(f["created_at"]).strftime("%Y-%m-%d %H:%M")
             inv = " [INVALIDATED]" if f["invalidated_at"] else ""
-            print(f"  {ts}  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{inv}")
+            label = f.get('confidence_label', 'EXTRACTED')
+            print(f"  {ts}  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']} [{label}]{inv}")
         print(f"\n{len(facts)} event(s)")
     finally:
         kg.close()
@@ -897,6 +901,44 @@ def cmd_kg_stats(ns: argparse.Namespace) -> None:
         print(f"  Active facts:       {s['active_facts']}")
         print(f"  Invalidated facts:  {s['invalidated_facts']}")
         print(f"  Total entities:     {s['total_entities']}")
+        ls = kg.label_stats()
+        parts = ", ".join(f"{k}={v}" for k, v in ls.items())
+        print(f"  By label:           {parts}")
+    finally:
+        kg.close()
+
+
+def cmd_kg_infer(ns: argparse.Namespace) -> None:
+    """Infer transitive facts for a predicate."""
+    kg = _get_kg(ns)
+    try:
+        new_ids = kg.infer_transitive(
+            predicate=ns.predicate,
+            inferred_predicate=ns.inferred_predicate,
+            max_depth=ns.max_depth,
+        )
+        if new_ids:
+            for fid in new_ids:
+                print(f"  ✓ Inferred fact [{fid}]")
+            print(f"\n{len(new_ids)} inferred fact(s)")
+        else:
+            print("No new facts inferred.")
+    finally:
+        kg.close()
+
+
+def cmd_kg_labels(ns: argparse.Namespace) -> None:
+    """Show facts filtered by confidence label."""
+    kg = _get_kg(ns)
+    try:
+        facts = kg.query_by_label(ns.label, active_only=not ns.show_all)
+        if not facts:
+            print(f"No facts with label: {ns.label}")
+            return
+        for f in facts:
+            inv = " [INVALIDATED]" if f.get("invalidated_at") else ""
+            print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']} (conf={f['confidence']:.2f}){inv}")
+        print(f"\n{len(facts)} fact(s) with label {ns.label}")
     finally:
         kg.close()
 
@@ -1468,6 +1510,22 @@ def build_parser() -> argparse.ArgumentParser:
     mine_p.add_argument("--backend", default="json", choices=["memory", "json", "chroma", "qdrant"])
     mine_p.add_argument("--persist-path", dest="persist_path",
                         default=str(Path.home() / ".memos" / "store.json"))
+    mine_p.add_argument("--update", action="store_true",
+                        help="Re-mine files even if cached, replacing old memories")
+    mine_p.add_argument("--diff", action="store_true",
+                        help="Only mine chunks not previously seen for each file")
+    mine_p.add_argument("--cache-db", dest="cache_db",
+                        default=str(Path.home() / ".memos" / "mine-cache.db"),
+                        help="Path to mine cache SQLite DB (default: ~/.memos/mine-cache.db)")
+    mine_p.add_argument("--no-cache", dest="no_cache", action="store_true",
+                        help="Disable incremental cache for this run")
+
+    # mine-status
+    mine_status_p = sub.add_parser("mine-status", help="Show incremental mine cache status")
+    mine_status_p.add_argument("paths", nargs="*", help="Specific paths to inspect (default: all)")
+    mine_status_p.add_argument("--cache-db", dest="cache_db",
+                               default=str(Path.home() / ".memos" / "mine-cache.db"),
+                               help="Path to mine cache SQLite DB")
 
     # kg-add
     kg_add = sub.add_parser("kg-add", help="Add a fact to the knowledge graph")
@@ -1481,6 +1539,9 @@ def build_parser() -> argparse.ArgumentParser:
     kg_add.add_argument("--confidence", type=float, default=1.0,
                         help="Confidence 0.0-1.0 (default 1.0)")
     kg_add.add_argument("--source", default=None, help="Source label")
+    kg_add.add_argument("--label", dest="confidence_label", default="EXTRACTED",
+                        choices=["EXTRACTED", "INFERRED", "AMBIGUOUS"],
+                        help="Confidence label (default: EXTRACTED)")
     kg_add.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
 
     # kg-query
@@ -1519,6 +1580,22 @@ def build_parser() -> argparse.ArgumentParser:
     kg_nbrs.add_argument("--depth", type=int, default=1, help="Neighborhood depth (default: 1)")
     kg_nbrs.add_argument("--direction", choices=["both", "subject", "object"], default="both")
     kg_nbrs.add_argument("--db", dest="kg_db", default=None)
+
+    # kg-infer
+    kg_infer = sub.add_parser("kg-infer", help="Infer transitive facts for a predicate")
+    kg_infer.add_argument("predicate", help="Predicate to infer transitivity on (e.g. 'manages')")
+    kg_infer.add_argument("--as", dest="inferred_predicate", default=None,
+                          help="Name for inferred predicate (default: <predicate>_transitive)")
+    kg_infer.add_argument("--max-depth", type=int, default=3, help="Max inference depth (default: 3)")
+    kg_infer.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
+
+    # kg-labels
+    kg_labels = sub.add_parser("kg-labels", help="Show facts by confidence label")
+    kg_labels.add_argument("label", choices=["EXTRACTED", "INFERRED", "AMBIGUOUS"],
+                           help="Confidence label to filter by")
+    kg_labels.add_argument("--all", dest="show_all", action="store_true",
+                           help="Include invalidated facts")
+    kg_labels.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
 
     # ---- Palace (P6) ----
     palace_db_help = "Path to palace.db (default: ~/.memos/palace.db)"
@@ -2327,6 +2404,15 @@ def cmd_mine(ns: argparse.Namespace) -> None:
     chunk_size = getattr(ns, "chunk_size", 800)
     chunk_overlap = getattr(ns, "chunk_overlap", 100)
     verbose = getattr(ns, "verbose", False)
+    use_update = getattr(ns, "update", False)
+    use_diff = getattr(ns, "diff", False)
+    no_cache = getattr(ns, "no_cache", False)
+    cache_db = getattr(ns, "cache_db", str(Path.home() / ".memos" / "mine-cache.db"))
+
+    cache = None
+    if not no_cache and not dry_run:
+        from .ingest.cache import MinerCache
+        cache = MinerCache(cache_db)
 
     miner = Miner(
         memos,
@@ -2334,6 +2420,8 @@ def cmd_mine(ns: argparse.Namespace) -> None:
         chunk_overlap=chunk_overlap,
         dry_run=dry_run,
         extra_tags=tags,
+        cache=cache,
+        update=use_update,
     )
 
     from pathlib import Path as _Path
@@ -2356,8 +2444,10 @@ def cmd_mine(ns: argparse.Namespace) -> None:
             r = miner.mine_telegram_export(path, tags=tags)
         elif fmt == "openclaw":
             r = miner.mine_openclaw(path, tags=tags)
+        elif path.is_dir():
+            r = miner.mine_directory(path, tags=tags, diff=use_diff)
         else:
-            r = miner.mine_auto(path, tags=tags)
+            r = miner.mine_file(path, tags=tags, diff=use_diff)
 
         if r.errors and verbose:
             for e in r.errors:
@@ -2365,12 +2455,44 @@ def cmd_mine(ns: argparse.Namespace) -> None:
 
         total.merge(r)
 
+    if cache:
+        cache.close()
+
     status = "would import" if dry_run else "imported"
-    print(f"\n✓ {total.imported} chunks {status}, {total.skipped_duplicates} duplicates skipped, {len(total.errors)} errors")
+    cached_msg = f", {total.skipped_cached} cached" if total.skipped_cached else ""
+    print(f"\n✓ {total.imported} chunks {status}, {total.skipped_duplicates} duplicates skipped{cached_msg}, {len(total.errors)} errors")
     if dry_run and total.chunks:
         print("\nSample chunks:")
         for c in total.chunks[:5]:
             print(f"  [{', '.join(c['tags'])}] {c['content']}")
+
+
+def cmd_mine_status(ns: argparse.Namespace) -> None:
+    """Show the incremental mine cache."""
+    from .ingest.cache import MinerCache
+    import datetime as _dt
+
+    cache_db = getattr(ns, "cache_db", str(Path.home() / ".memos" / "mine-cache.db"))
+    with MinerCache(cache_db) as cache:
+        paths = getattr(ns, "paths", [])
+        if paths:
+            entries = [e for p in paths for e in [cache.get(str(Path(p).expanduser().resolve()))] if e]
+        else:
+            entries = cache.list_all()
+            stats = cache.stats()
+            print(f"Cache: {cache_db}")
+            print(f"Files: {stats['cached_files']}  |  Memories: {stats['total_memories']}\n")
+
+        if not entries:
+            print("No cached files.")
+            return
+
+        for e in entries:
+            mined = _dt.datetime.fromtimestamp(e["mined_at"]).strftime("%Y-%m-%d %H:%M")
+            mem_count = len(e["memory_ids"])
+            chunk_count = len(e["chunk_hashes"])
+            print(f"  {e['path']}")
+            print(f"    sha256={e['sha256'][:12]}…  mined={mined}  memories={mem_count}  chunks={chunk_count}")
 
 
 def _get_palace(ns: argparse.Namespace):
@@ -2781,6 +2903,7 @@ def main(argv: list[str] | None = None) -> None:
         "wiki-read": cmd_wiki_read,
         "wiki-living": cmd_wiki_living,
         "mine": cmd_mine,
+        "mine-status": cmd_mine_status,
         "kg-add": cmd_kg_add,
         "kg-query": cmd_kg_query,
         "kg-timeline": cmd_kg_timeline,
@@ -2788,6 +2911,8 @@ def main(argv: list[str] | None = None) -> None:
         "kg-stats": cmd_kg_stats,
         "kg-path": cmd_kg_path,
         "kg-neighbors": cmd_kg_neighbors,
+        "kg-infer": cmd_kg_infer,
+        "kg-labels": cmd_kg_labels,
         "palace-init": cmd_palace_init,
         "palace-wing-create": cmd_palace_wing_create,
         "palace-wing-list": cmd_palace_wing_list,

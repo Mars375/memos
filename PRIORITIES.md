@@ -442,7 +442,7 @@ Labels :
 
 ---
 
-## [ ] P19 — Miner Incrémental (SHA-256 Cache + --update)
+## [x] P19 — Miner Incrémental (SHA-256 Cache + --update)
 **Objectif :** `memos mine` ne re-minera pas les fichiers déjà minés — SHA-256 cache persistant.
 
 Inspiré de mempalace verbatim storage : éviter les re-imports redondants.

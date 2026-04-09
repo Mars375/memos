@@ -33,13 +33,16 @@ class MineResult:
     imported: int = 0
     skipped_duplicates: int = 0
     skipped_empty: int = 0
+    skipped_cached: int = 0
     errors: List[str] = field(default_factory=list)
     chunks: List[dict] = field(default_factory=list)  # populated in dry_run
+    memory_ids: List[str] = field(default_factory=list)
 
     def __str__(self) -> str:
         return (
             f"MineResult(imported={self.imported}, "
             f"dupes={self.skipped_duplicates}, "
+            f"cached={self.skipped_cached}, "
             f"empty={self.skipped_empty}, "
             f"errors={len(self.errors)})"
         )
@@ -48,8 +51,10 @@ class MineResult:
         self.imported += other.imported
         self.skipped_duplicates += other.skipped_duplicates
         self.skipped_empty += other.skipped_empty
+        self.skipped_cached += other.skipped_cached
         self.errors.extend(other.errors)
         self.chunks.extend(other.chunks)
+        self.memory_ids.extend(other.memory_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +768,8 @@ class Miner:
         dry_run: bool = False,
         extra_tags: Optional[List[str]] = None,
         batch_size: int = 20,
+        cache: Optional[Any] = None,
+        update: bool = False,
     ) -> None:
         self._memos = memos
         self._chunk_size = chunk_size
@@ -770,6 +777,8 @@ class Miner:
         self._dry_run = dry_run
         self._extra_tags = extra_tags or []
         self._batch_size = batch_size
+        self._cache = cache
+        self._update = update
         # In-memory dedup set (hash → True)
         self._seen_hashes: set[str] = set()
 
@@ -797,8 +806,14 @@ class Miner:
         base_tags: List[str],
         source_path: Optional[Path] = None,
         importance: float = 0.5,
+        known_hashes: Optional[set] = None,
     ) -> MineResult:
-        """Chunk text and store each chunk."""
+        """Chunk text and store each chunk.
+
+        Args:
+            known_hashes: If provided (--diff mode), skip chunks whose content
+                          hash is already in this set.
+        """
         result = MineResult()
         chunks = chunk_text(text, size=self._chunk_size, overlap=self._chunk_overlap)
 
@@ -808,6 +823,14 @@ class Miner:
             if len(chunk.strip()) < 20:
                 result.skipped_empty += 1
                 continue
+
+            ch = content_hash(chunk)
+
+            # --diff: skip chunks already in the persisted cache
+            if known_hashes is not None and ch in known_hashes:
+                result.skipped_cached += 1
+                continue
+
             if self._is_duplicate(chunk):
                 result.skipped_duplicates += 1
                 continue
@@ -839,8 +862,10 @@ class Miner:
     def _flush_batch(self, batch: List[tuple], result: MineResult) -> None:
         for content, tags, importance in batch:
             try:
-                self._memos.learn(content, tags=tags, importance=importance)
+                item = self._memos.learn(content, tags=tags, importance=importance)
                 result.imported += 1
+                if item is not None:
+                    result.memory_ids.append(item.id)
             except Exception as exc:
                 result.errors.append(str(exc))
 
@@ -853,9 +878,15 @@ class Miner:
         path: str | Path,
         tags: Optional[List[str]] = None,
         importance: float = 0.5,
+        diff: bool = False,
     ) -> MineResult:
-        """Mine a single text/markdown/code file."""
-        path = Path(path).expanduser()
+        """Mine a single text/markdown/code file.
+
+        Args:
+            diff: If True, only mine chunks not previously seen for this file
+                  (requires cache to be set).
+        """
+        path = Path(path).expanduser().resolve()
         result = MineResult()
 
         if not path.exists():
@@ -863,15 +894,68 @@ class Miner:
             return result
 
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            raw_bytes = path.read_bytes()
+            text = raw_bytes.decode("utf-8", errors="replace")
         except Exception as exc:
             result.errors.append(f"Read error {path}: {exc}")
             return result
 
+        file_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+
+        # Cache: skip entirely if file is unchanged (unless --update)
+        if self._cache is not None and not self._update and not diff:
+            if self._cache.is_fresh(str(path), file_sha256):
+                result.skipped_cached += 1
+                return result
+
+        # --update: delete memories from the previous mine of this file
+        if self._cache is not None and self._update:
+            entry = self._cache.get(str(path))
+            if entry and entry["memory_ids"]:
+                for mid in entry["memory_ids"]:
+                    try:
+                        self._memos.forget(mid)
+                    except Exception:
+                        pass
+
+        # --diff: collect hashes already stored for this file
+        known_hashes: Optional[set] = None
+        if diff and self._cache is not None:
+            known_hashes = self._cache.get_chunk_hashes(str(path))
+
         base_tags = list(tags or [])
         base_tags += detect_room(path, text)
 
-        result.merge(self._mine_chunks(text, base_tags, source_path=path, importance=importance))
+        chunk_result = self._mine_chunks(
+            text, base_tags, source_path=path, importance=importance,
+            known_hashes=known_hashes,
+        )
+        result.merge(chunk_result)
+
+        # Record in cache after mining (skip in dry_run)
+        if self._cache is not None and not self._dry_run:
+            # Compute all chunk hashes for this file (union of old + new for diff mode)
+            all_chunk_hashes: List[str] = []
+            for c in chunk_text(text, size=self._chunk_size, overlap=self._chunk_overlap):
+                if len(c.strip()) >= 20:
+                    all_chunk_hashes.append(content_hash(c))
+            if diff and known_hashes:
+                # preserve hashes from previous mine that weren't overwritten
+                merged = set(known_hashes) | set(all_chunk_hashes)
+                all_chunk_hashes = list(merged)
+
+            existing = self._cache.get(str(path))
+            existing_ids: List[str] = (existing["memory_ids"] if existing else [])
+            if self._update:
+                existing_ids = []
+            all_ids = existing_ids + result.memory_ids
+            self._cache.record(
+                str(path),
+                file_sha256,
+                memory_ids=all_ids,
+                chunk_hashes=all_chunk_hashes,
+            )
+
         return result
 
     def mine_directory(
@@ -881,6 +965,7 @@ class Miner:
         extensions: Optional[set] = None,
         importance: float = 0.5,
         max_files: int = 500,
+        diff: bool = False,
     ) -> MineResult:
         """Mine all files in a directory recursively."""
         directory = Path(directory).expanduser()
@@ -892,7 +977,7 @@ class Miner:
 
         files = list(iter_files(directory, extensions=extensions, max_files=max_files))
         for f in files:
-            r = self.mine_file(f, tags=tags, importance=importance)
+            r = self.mine_file(f, tags=tags, importance=importance, diff=diff)
             result.merge(r)
 
         return result
