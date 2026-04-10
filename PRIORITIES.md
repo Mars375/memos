@@ -512,12 +512,13 @@ Sources supportées :
 ---
 
 ## [x] P23 — Speaker Ownership (Conversation Miner)
-Implemented v0.38.0 — ConversationMiner, parse_conversation, CLI `mine-conversation`, REST `POST /api/v1/mine/conversation`, 54 tests.
+**Implemented v0.38.0** — `ConversationMiner`, `parse_transcript()`, CLI `memos mine-conversation`, REST `POST /api/v1/mine/conversation`, 22 tests.
+>>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 **Objectif :** Dans le conversation miner, attribuer chaque mémoire au bon speaker.
 
 Actuellement : toutes les lignes d'un transcript vont dans le même namespace.
 
-À implémenter dans `src/memos/miner/conversation.py` :
+À implémenter dans `src/memos/ingest/conversation.py` :
 - Parsing des formats courants : `Speaker: message`, `[HH:MM] Speaker: message`, markdown bold `**Speaker:**`
 - `mine_conversation(path, namespace_prefix="conv", per_speaker=True)`
   - Si `per_speaker=True` : namespace = `{namespace_prefix}:{speaker}` par speaker
