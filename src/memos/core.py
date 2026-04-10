@@ -22,8 +22,8 @@ from .versioning.engine import VersioningEngine
 from .versioning.models import MemoryVersion, VersionDiff
 from .namespaces.acl import NamespaceACL, Role
 from .cache.embedding_cache import EmbeddingCache
-from .cache.embedding_cache import EmbeddingCache
 from .analytics import RecallAnalytics
+from .embeddings import LocalEmbedder
 from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
@@ -95,6 +95,11 @@ class MemOS:
         elif backend == "json":
             p = persist_path or ".memos/store.json"
             store = JsonFileBackend(path=p)
+        elif backend == "local":
+            # Local-first: JSON storage + built-in sentence-transformers embeddings
+            # No external services needed for semantic recall.
+            p = persist_path or ".memos/store.json"
+            store = JsonFileBackend(path=p)
         else:
             if persist_path:
                 store = JsonFileBackend(path=persist_path)
@@ -109,11 +114,23 @@ class MemOS:
             self._store = store
 
         # Retrieval
+        retrieval_embedder = None
+        retrieval_model = embed_model
+        if backend == "local":
+            local_model = kwargs.get("local_model") or "all-MiniLM-L6-v2"
+            retrieval_embedder = LocalEmbedder(
+                model=local_model,
+                device=kwargs.get("local_device"),
+                normalize=kwargs.get("local_normalize", True),
+            )
+            retrieval_model = local_model
+
         self._retrieval = RetrievalEngine(
             store=self._store,
             embed_host=embed_host,
-            embed_model=embed_model,
+            embed_model=retrieval_model,
             semantic_weight=kwargs.get("semantic_weight", 0.6),
+            embedder=retrieval_embedder,
         )
 
         # Decay

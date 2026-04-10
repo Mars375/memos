@@ -93,16 +93,17 @@ class KnowledgeGraph:
             );
 
             CREATE TABLE IF NOT EXISTS triples (
-                id              TEXT PRIMARY KEY,
-                subject         TEXT NOT NULL,
-                predicate       TEXT NOT NULL,
-                object          TEXT NOT NULL,
-                valid_from      REAL,
-                valid_to        REAL,
-                confidence      REAL NOT NULL DEFAULT 1.0,
-                source          TEXT,
-                created_at      REAL NOT NULL,
-                invalidated_at  REAL
+                id                TEXT PRIMARY KEY,
+                subject           TEXT NOT NULL,
+                predicate         TEXT NOT NULL,
+                object            TEXT NOT NULL,
+                valid_from        REAL,
+                valid_to          REAL,
+                confidence        REAL NOT NULL DEFAULT 1.0,
+                confidence_label  TEXT NOT NULL DEFAULT 'EXTRACTED',
+                source            TEXT,
+                created_at        REAL NOT NULL,
+                invalidated_at    REAL
             );
 
             CREATE INDEX IF NOT EXISTS idx_triples_subject   ON triples(subject);
@@ -390,6 +391,72 @@ class KnowledgeGraph:
             "invalidated_facts": invalidated_facts,
         }
 
+    def query_by_label(self, confidence_label: str, active_only: bool = True) -> List[dict]:
+        """Return facts filtered by confidence label."""
+        if confidence_label not in self.VALID_LABELS:
+            raise ValueError(f"Invalid confidence_label: {confidence_label!r}")
+        sql = "SELECT * FROM triples WHERE confidence_label=?"
+        params: list[object] = [confidence_label]
+        if active_only:
+            sql += " AND invalidated_at IS NULL"
+        sql += " ORDER BY created_at ASC"
+        cur = self._conn.execute(sql, params)
+        return [_row_to_dict(r) for r in cur.fetchall()]
+
+    def label_stats(self) -> dict[str, int]:
+        """Return active fact counts per confidence label."""
+        stats = {label: 0 for label in self.VALID_LABELS}
+        cur = self._conn.execute(
+            "SELECT confidence_label, COUNT(*) AS count FROM triples WHERE invalidated_at IS NULL GROUP BY confidence_label"
+        )
+        for row in cur.fetchall():
+            label = row["confidence_label"]
+            if label in stats:
+                stats[label] = int(row["count"])
+        return stats
+
+    def infer_transitive(
+        self,
+        predicate: str,
+        inferred_predicate: str | None = None,
+    ) -> List[str]:
+        """Infer simple transitive links for a predicate."""
+        target_predicate = inferred_predicate or predicate
+        active_rows = self._conn.execute(
+            "SELECT * FROM triples WHERE predicate=? AND invalidated_at IS NULL",
+            (predicate,),
+        ).fetchall()
+        facts = [_row_to_dict(row) for row in active_rows]
+        existing = {
+            (fact["subject"], fact["predicate"], fact["object"])
+            for fact in [_row_to_dict(row) for row in self._conn.execute(
+                "SELECT * FROM triples WHERE invalidated_at IS NULL"
+            ).fetchall()]
+        }
+        new_ids: List[str] = []
+        for left in facts:
+            for right in facts:
+                if left["object"] != right["subject"]:
+                    continue
+                subject = left["subject"]
+                obj = right["object"]
+                if subject == obj:
+                    continue
+                triple = (subject, target_predicate, obj)
+                if triple in existing:
+                    continue
+                new_id = self.add_fact(
+                    subject,
+                    target_predicate,
+                    obj,
+                    confidence=min(float(left["confidence"]), float(right["confidence"])),
+                    confidence_label="INFERRED",
+                    source=f"infer:{predicate}",
+                )
+                existing.add(triple)
+                new_ids.append(new_id)
+        return new_ids
+
     def close(self) -> None:
         """Close the SQLite connection."""
         self._conn.close()
@@ -593,6 +660,7 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
         "valid_from": row["valid_from"],
         "valid_to": row["valid_to"],
         "confidence": row["confidence"],
+        "confidence_label": row["confidence_label"],
         "source": row["source"],
         "created_at": row["created_at"],
         "invalidated_at": row["invalidated_at"],
