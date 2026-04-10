@@ -1146,6 +1146,33 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                 headers={"X-Memos-Total": str(result["total"]), "X-Memos-Size": str(result["size_bytes"])},
             )
 
+    @app.get("/api/v1/export/markdown")
+    async def api_export_markdown(update: bool = False):
+        """Export all knowledge as a downloadable Markdown ZIP bundle."""
+        import shutil
+        import tempfile
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+
+        archive = tempfile.NamedTemporaryFile(prefix="memos-markdown-", suffix=".zip", delete=False)
+        archive.close()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            export_dir = Path(tmp_dir) / "knowledge"
+            result = memos.export_markdown(str(export_dir), update=update)
+            base_name = archive.name[:-4] if archive.name.endswith(".zip") else archive.name
+            zip_path = shutil.make_archive(base_name, "zip", root_dir=export_dir)
+
+        return FileResponse(
+            zip_path,
+            media_type="application/zip",
+            filename=f"memos-markdown-export-{int(time.time())}.zip",
+            headers={
+                "X-Memos-Total": str(result["memories_total"]),
+                "X-Memos-Entities": str(result["entities_total"]),
+                "X-Memos-Communities": str(result["communities_total"]),
+            },
+        )
+
     # Async consolidation
     @app.post("/api/v1/consolidate")
     async def api_consolidate(body: dict):

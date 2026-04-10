@@ -590,7 +590,8 @@ Livré :
 
 ---
 
-## [ ] P27 — Knowledge Export Universel (Markdown interopérable)
+## [x] P27 — Knowledge Export Universel (Markdown interopérable)
+Implémenté v0.43.0 — `MarkdownExporter`, export portable `INDEX.md/LOG.md/entities/memories/communities`, mode incrémental, CLI `memos export --format markdown`, API ZIP `GET /api/v1/export/markdown`.
 **Objectif :** Exporter tout le knowledge de MemOS en markdown portable — lisible par n'importe quel outil (Obsidian, Logseq, Foam, simple lecteur de fichiers, autre agent).
 
 Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledge de MemOS, utile pour backup, migration, partage entre agents, ou audit humain.

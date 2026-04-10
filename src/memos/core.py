@@ -59,6 +59,7 @@ class MemOS:
         **kwargs,
     ) -> None:
         self._backend_name = backend
+        self._persist_path = persist_path
         # Storage
         if backend == "chroma":
             import os as _os
@@ -1089,6 +1090,27 @@ class MemOS:
             "total": result["total"],
             "path": result["path"],
             "size_bytes": result["size_bytes"],
+        }, namespace=self._namespace)
+
+        return result
+
+    def export_markdown(
+        self,
+        path: str,
+        *,
+        update: bool = False,
+    ) -> dict:
+        """Export all knowledge to a portable Markdown directory."""
+        from .export_markdown import MarkdownExporter
+
+        exporter = MarkdownExporter(self)
+        result = exporter.export(path, update=update).to_dict()
+
+        self._events.emit_sync("exported", {
+            "format": "markdown",
+            "total": result["memories_total"],
+            "path": result["output_dir"],
+            "pages_written": result["pages_written"],
         }, namespace=self._namespace)
 
         return result

@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.43.0 (2026-04-10) — Universal Markdown Knowledge Export
+
+### New Features
+
+- **Portable Markdown knowledge bundle**
+  - New `MarkdownExporter` writes `INDEX.md`, `LOG.md`, entity pages, memory collections, and community pages
+  - Standard Markdown inter-links + YAML frontmatter for portability across Obsidian, Logseq, Foam, or plain files
+  - Incremental update mode skips unchanged pages and only rewrites touched files
+- **New surfaces**
+  - CLI: `memos export --format markdown --output ./knowledge --update`
+  - API: `GET /api/v1/export/markdown` returns a ZIP bundle
+  - Core: `MemOS.export_markdown()`
+
+### Tests
+
+- 4 focused Markdown export tests added
+- Full suite: **1457 tests passing**
+
 ## v0.40.0 (2026-04-09) — Memory Compression
 
 ### New Features
