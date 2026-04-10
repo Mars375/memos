@@ -20,6 +20,7 @@ from .storage.encrypted_backend import EncryptedStorageBackend
 from .events import EventBus
 from .versioning.engine import VersioningEngine
 from .versioning.models import MemoryVersion, VersionDiff
+from .compression import MemoryCompressor
 from .namespaces.acl import NamespaceACL, Role
 from .cache.embedding_cache import EmbeddingCache
 from .analytics import RecallAnalytics
