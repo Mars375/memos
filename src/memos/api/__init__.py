@@ -10,10 +10,11 @@ from .. import __version__ as MEMOS_VERSION
 from ..core import MemOS, MemoryStats
 
 try:
-    from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
     from fastapi.responses import StreamingResponse, HTMLResponse
 except ImportError:  # pragma: no cover - optional server dependency
     FastAPI = None  # type: ignore[assignment]
+    Query = None  # type: ignore[assignment]
     Request = None  # type: ignore[assignment]
     WebSocket = None  # type: ignore[assignment]
     WebSocketDisconnect = None  # type: ignore[assignment]
@@ -41,23 +42,52 @@ def create_api(memos: MemOS) -> dict[str, Any]:
             return {"status": "error", "message": str(e)}
 
     async def recall(body: dict) -> dict:
-        # Parse date filters
-        _after = body.get("filter_after")
-        _before = body.get("filter_before")
         from datetime import datetime as _dt
-        filter_after = _dt.fromisoformat(_after).timestamp() if _after else None
-        filter_before = _dt.fromisoformat(_before).timestamp() if _before else None
+
+        def _parse_date(value: Any) -> float | None:
+            if not value:
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            return _dt.fromisoformat(str(value)).timestamp()
+
+        def _as_list(value: Any) -> list[str]:
+            if not value:
+                return []
+            if isinstance(value, str):
+                return [value]
+            return [str(item) for item in value if item]
+
+        tags_payload = body.get("tags")
+        filter_tags = body.get("filter_tags")
+        tag_filter = None
+        if isinstance(tags_payload, dict):
+            tag_filter = {
+                "include": _as_list(tags_payload.get("include")),
+                "require": _as_list(tags_payload.get("require")),
+                "exclude": _as_list(tags_payload.get("exclude")),
+                "mode": tags_payload.get("mode", "ANY"),
+            }
+            filter_tags = None
+        elif isinstance(tags_payload, list):
+            filter_tags = tags_payload
+
+        importance_payload = body.get("importance") or {}
         retrieval_mode = body.get("retrieval_mode", "semantic")
         if retrieval_mode not in ("semantic", "keyword", "hybrid"):
-            return {"status": "error", "message": f"Invalid retrieval_mode. Must be semantic, keyword, or hybrid."}
+            return {"status": "error", "message": "Invalid retrieval_mode. Must be semantic, keyword, or hybrid."}
+
         results = memos.recall(
             query=body["query"],
-            top=body.get("top", 5),
-            filter_tags=body.get("filter_tags"),
+            top=body.get("top_k", body.get("top", 5)),
+            filter_tags=filter_tags,
             min_score=body.get("min_score", 0.0),
-            filter_after=filter_after,
-            filter_before=filter_before,
+            filter_after=_parse_date(body.get("created_after") or body.get("filter_after")),
+            filter_before=_parse_date(body.get("created_before") or body.get("filter_before")),
             retrieval_mode=retrieval_mode,
+            tag_filter=tag_filter,
+            min_importance=importance_payload.get("min"),
+            max_importance=importance_payload.get("max"),
         )
         return {
             "status": "ok",
@@ -68,9 +98,9 @@ def create_api(memos: MemOS) -> dict[str, Any]:
                     "score": round(r.score, 4),
                     "tags": r.item.tags,
                     "match_reason": r.match_reason,
-                    "age_days": round(
-                        (__import__("time").time() - r.item.created_at) / 86400, 1
-                    ),
+                    "importance": r.item.importance,
+                    "created_at": r.item.created_at,
+                    "age_days": round((__import__("time").time() - r.item.created_at) / 86400, 1),
                 }
                 for r in results
             ],
@@ -416,6 +446,49 @@ def create_fastapi_app(
     @app.post("/api/v1/recall")
     async def api_recall(body: dict):
         return await routes["recall"](body)
+
+    @app.get("/api/v1/memories")
+    async def api_list_memories(
+        tag: list[str] | None = Query(default=None),
+        require_tag: list[str] | None = Query(default=None),
+        exclude_tag: list[str] | None = Query(default=None),
+        min_importance: float | None = None,
+        max_importance: float | None = None,
+        after: str | None = None,
+        before: str | None = None,
+        sort: str = "created_at",
+        limit: int = 50,
+    ):
+        from datetime import datetime as _dt
+
+        after_ts = _dt.fromisoformat(after).timestamp() if after else None
+        before_ts = _dt.fromisoformat(before).timestamp() if before else None
+        items = memos.list_memories(
+            tags=tag,
+            require_tags=require_tag,
+            exclude_tags=exclude_tag,
+            min_importance=min_importance,
+            max_importance=max_importance,
+            created_after=after_ts,
+            created_before=before_ts,
+            sort=sort,
+            limit=limit,
+        )
+        return {
+            "status": "ok",
+            "results": [
+                {
+                    "id": item.id,
+                    "content": item.content,
+                    "tags": item.tags,
+                    "importance": item.importance,
+                    "created_at": item.created_at,
+                    "accessed_at": item.accessed_at,
+                }
+                for item in items
+            ],
+            "total": len(items),
+        }
 
     # SSE Streaming Recall endpoint
     @app.get("/api/v1/recall/enriched")

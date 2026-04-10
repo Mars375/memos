@@ -29,13 +29,14 @@ from .versioning.models import MemoryVersion, VersionDiff
 from .namespaces.acl import NamespaceACL, Role
 from .namespaces.registry import NamespaceRegistry
 from .cache.embedding_cache import EmbeddingCache
-from .cache.embedding_cache import EmbeddingCache
 from .analytics import RecallAnalytics
 from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .migration import MigrationEngine, MigrationReport, _create_backend
 from .compression import MemoryCompressor
+logger = logging.getLogger(__name__)
+from .query import MemoryQuery, QueryEngine
 
 
 logger = logging.getLogger(__name__)
@@ -473,142 +474,64 @@ class MemOS:
         filter_after: Optional[float] = None,
         filter_before: Optional[float] = None,
         retrieval_mode: str = "semantic",
+        tag_filter: Optional[dict[str, Any]] = None,
+        min_importance: Optional[float] = None,
+        max_importance: Optional[float] = None,
     ) -> list[RecallResult]:
-        """Retrieve memories relevant to a query.
-
-        Args:
-            retrieval_mode: "semantic" (default), "hybrid" (semantic + BM25),
-                            or "keyword" (pure keyword TF overlap).
-        """
-        from .retrieval.hybrid import HybridRetriever
-        _VALID_MODES = ("semantic", "keyword", "hybrid")
-        if retrieval_mode not in _VALID_MODES:
-            raise ValueError(f"retrieval_mode must be one of {_VALID_MODES}, got {retrieval_mode!r}")
+        """Retrieve memories relevant to a query."""
         self._check_acl("read")
         started = time.perf_counter()
         final_results: list[RecallResult] = []
 
+        def _coerce_tags(values: Any) -> list[str]:
+            if not values:
+                return []
+            if isinstance(values, str):
+                return [values]
+            return [str(value) for value in values if value]
+
+        include_tags = _coerce_tags(filter_tags)
+        require_tags: list[str] = []
+        exclude_tags: list[str] = []
+        if tag_filter:
+            include_tags.extend(_coerce_tags(tag_filter.get("include")))
+            require_tags.extend(_coerce_tags(tag_filter.get("require")))
+            exclude_tags.extend(_coerce_tags(tag_filter.get("exclude")))
+            if str(tag_filter.get("mode") or "").upper() == "AND" and include_tags:
+                require_tags.extend(include_tags)
+                include_tags = []
+
         try:
-            # keyword-only mode: skip semantic engine entirely
-            if retrieval_mode == "keyword":
-                all_items = self._store.list_all(namespace=self._namespace)
-                if filter_tags:
-                    tag_set = set(t.lower() for t in filter_tags)
-                    all_items = [i for i in all_items if tag_set & set(t.lower() for t in i.tags)]
-                candidates = [
-                    RecallResult(item=item, score=0.0, match_reason="keyword")
-                    for item in all_items if not item.is_expired
-                ]
-                if filter_after is not None:
-                    candidates = [r for r in candidates if r.item.created_at >= filter_after]
-                if filter_before is not None:
-                    candidates = [r for r in candidates if r.item.created_at <= filter_before]
-                retriever = HybridRetriever()
-                keyword_results = retriever.keyword_recall(query, candidates, top=top, min_score=min_score)
-                for r in keyword_results:
-                    r.item.touch()
-                    self._store.upsert(r.item, namespace=self._namespace)
-                    self._events.emit_sync("recalled", {"id": r.item.id, "query": query, "score": r.score, "tags": r.item.tags}, namespace=self._namespace)
-                final_results = keyword_results
-                return final_results
-
-            # Try retrieval engine for semantic/hybrid search (supports Qdrant native)
-            semantic_top = 50 if retrieval_mode == "hybrid" else top
-            engine_results = self._retrieval.search(
-                query, top=semantic_top, filter_tags=filter_tags,
+            query_engine = QueryEngine(
+                self._retrieval,
                 namespace=self._namespace,
+                decay=self._decay,
             )
-
-            if engine_results:
-                # Touch recalled items and emit events
-                for r in engine_results[:top]:
-                    r.item.touch()
-                    self._store.upsert(r.item, namespace=self._namespace)
-                    self._events.emit_sync("recalled", {
-                        "id": r.item.id,
-                        "query": query,
-                        "score": r.score,
-                        "tags": r.item.tags,
-                    }, namespace=self._namespace)
-
-                # Filter out expired memories
-                engine_results = [r for r in engine_results if not r.item.is_expired]
-
-                # Filter by date range
-                if filter_after is not None:
-                    engine_results = [r for r in engine_results if r.item.created_at >= filter_after]
-                if filter_before is not None:
-                    engine_results = [r for r in engine_results if r.item.created_at <= filter_before]
-
-                # Apply decay
-                adjusted = []
-                for r in engine_results[:top]:
-                    decayed = self._decay.adjusted_score(r.score, r.item)
-                    if decayed >= min_score:
-                        r.score = decayed
-                        adjusted.append(r)
-
-                if retrieval_mode == "hybrid" and adjusted:
-                    adjusted = HybridRetriever().rerank(query, adjusted)
-
-                final_results = sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
-            else:
-                # Fallback: basic keyword search
-                all_items = self._store.list_all(namespace=self._namespace)
-
-                if filter_tags:
-                    tag_set = set(t.lower() for t in filter_tags)
-                    all_items = [
-                        item for item in all_items
-                        if tag_set & set(t.lower() for t in item.tags)
-                    ]
-
-                if not all_items:
-                    final_results = []
-                else:
-                    results = []
-                    for item in all_items:
-                        kw_score = self._retrieval._bm25(query, item.content)
-                        if kw_score > 0:
-                            results.append(RecallResult(
-                                item=item,
-                                score=kw_score,
-                                match_reason="keyword",
-                            ))
-
-                    results.sort(key=lambda r: r.score, reverse=True)
-
-                    # Filter out expired memories
-                    results = [r for r in results if not r.item.is_expired]
-
-                    # Filter by date range
-                    if filter_after is not None:
-                        results = [r for r in results if r.item.created_at >= filter_after]
-                    if filter_before is not None:
-                        results = [r for r in results if r.item.created_at <= filter_before]
-
-                    # Touch recalled items
-                    for r in results[:top]:
-                        r.item.touch()
-                        self._store.upsert(r.item, namespace=self._namespace)
-
-                        # Emit recall event for each touched item
-                        self._events.emit_sync("recalled", {
-                            "id": r.item.id,
-                            "query": query,
-                            "score": r.score,
-                            "tags": r.item.tags,
-                        }, namespace=self._namespace)
-
-                    # Apply decay
-                    adjusted = []
-                    for r in results[:top]:
-                        decayed = self._decay.adjusted_score(r.score, r.item)
-                        if decayed >= min_score:
-                            r.score = decayed
-                            adjusted.append(r)
-
-                    final_results = sorted(adjusted, key=lambda x: x.score, reverse=True)[:top]
+            final_results = query_engine.execute(
+                MemoryQuery(
+                    query=query,
+                    top_k=top,
+                    retrieval_mode=retrieval_mode,
+                    include_tags=include_tags,
+                    require_tags=require_tags,
+                    exclude_tags=exclude_tags,
+                    min_importance=min_importance,
+                    max_importance=max_importance,
+                    created_after=filter_after,
+                    created_before=filter_before,
+                    min_score=min_score,
+                ),
+                self._store,
+            )
+            for result in final_results:
+                result.item.touch()
+                self._store.upsert(result.item, namespace=self._namespace)
+                self._events.emit_sync("recalled", {
+                    "id": result.item.id,
+                    "query": query,
+                    "score": result.score,
+                    "tags": result.item.tags,
+                }, namespace=self._namespace)
         finally:
             try:
                 self._analytics.track_recall(query, final_results, (time.perf_counter() - started) * 1000.0)
@@ -617,6 +540,47 @@ class MemOS:
 
         return final_results
 
+    def list_memories(
+        self,
+        *,
+        tags: Optional[list[str]] = None,
+        require_tags: Optional[list[str]] = None,
+        exclude_tags: Optional[list[str]] = None,
+        min_importance: Optional[float] = None,
+        max_importance: Optional[float] = None,
+        created_after: Optional[float] = None,
+        created_before: Optional[float] = None,
+        sort: str = "created_at",
+        limit: int = 50,
+    ) -> list[MemoryItem]:
+        """List memories with structured filters and sorting."""
+        self._check_acl("read")
+        query_engine = QueryEngine(
+            self._retrieval,
+            namespace=self._namespace,
+            decay=self._decay,
+        )
+        def _coerce_tags(values: Any) -> list[str]:
+            if not values:
+                return []
+            if isinstance(values, str):
+                return [values]
+            return [str(value) for value in values if value]
+
+        return query_engine.list_items(
+            MemoryQuery(
+                top_k=limit,
+                include_tags=_coerce_tags(tags),
+                require_tags=_coerce_tags(require_tags),
+                exclude_tags=_coerce_tags(exclude_tags),
+                min_importance=min_importance,
+                max_importance=max_importance,
+                created_after=created_after,
+                created_before=created_before,
+                sort=sort,
+            ),
+            self._store,
+        )
 
     async def recall_stream(
         self,

@@ -125,5 +125,66 @@ class TestRecallTagFilter(unittest.TestCase):
         assert not any("food" in c for c in contents), f"Food leaked: {contents}"
 
 
+class TestRecallAdvancedFilters(unittest.TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.mem = MemOS(backend="memory")
+        self.mem._retrieval._store = self.mem._store
+
+    def test_recall_filters_by_importance(self):
+        self.mem.learn("critical project update", tags=["project"], importance=0.9)
+        self.mem.learn("minor project update", tags=["project"], importance=0.2)
+
+        results = self.mem.recall("project update", min_importance=0.5)
+        contents = [r.item.content for r in results]
+        assert "critical project update" in contents
+        assert "minor project update" not in contents
+
+    def test_recall_supports_require_and_exclude_tags(self):
+        self.mem.learn("active urgent release note", tags=["project", "urgent"], importance=0.8)
+        self.mem.learn("archived urgent release note", tags=["project", "urgent", "archived"], importance=0.9)
+        self.mem.learn("active casual release note", tags=["project"], importance=0.8)
+
+        results = self.mem.recall(
+            "release note",
+            filter_tags=["project"],
+            tag_filter={"require": ["urgent"], "exclude": ["archived"]},
+        )
+        contents = [r.item.content for r in results]
+        assert contents == ["active urgent release note"]
+
+    def test_recall_supports_and_mode_for_include_tags(self):
+        self.mem.learn("release project note", tags=["project", "release"])
+        self.mem.learn("project only note", tags=["project"])
+
+        results = self.mem.recall(
+            "note",
+            tag_filter={"include": ["project", "release"], "mode": "AND"},
+        )
+        contents = [r.item.content for r in results]
+        assert contents == ["release project note"]
+
+    def test_list_memories_filters_and_sorts(self):
+        now = time.time()
+        low = self.mem.learn("low importance memory", tags=["project"], importance=0.2)
+        high = self.mem.learn("high importance memory", tags=["project", "urgent"], importance=0.9)
+        medium = self.mem.learn("medium importance memory", tags=["project", "urgent"], importance=0.6)
+        low.created_at = now - 300
+        high.created_at = now - 100
+        medium.created_at = now - 200
+        for item in (low, high, medium):
+            self.mem._store.upsert(item)
+
+        items = self.mem.list_memories(
+            tags=["project"],
+            require_tags=["urgent"],
+            min_importance=0.5,
+            sort="importance",
+            limit=5,
+        )
+        contents = [item.content for item in items]
+        assert contents == ["high importance memory", "medium importance memory"]
+
+
 if __name__ == "__main__":
     unittest.main()

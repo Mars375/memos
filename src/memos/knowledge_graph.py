@@ -113,6 +113,14 @@ class KnowledgeGraph:
             CREATE INDEX IF NOT EXISTS idx_triples_valid_from ON triples(valid_from);
             CREATE INDEX IF NOT EXISTS idx_triples_valid_to   ON triples(valid_to);
         """)
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(triples)").fetchall()
+        }
+        if "confidence_label" not in columns:
+            self._conn.execute(
+                "ALTER TABLE triples ADD COLUMN confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED'"
+            )
         self._conn.commit()
 
         # Migration: add confidence_label column if missing (existing DBs)

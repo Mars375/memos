@@ -34,6 +34,25 @@ def test_dispatch_search(mem):
     assert "python" in r["content"][0]["text"].lower()
 
 
+def test_dispatch_search_with_advanced_filters(mem):
+    r = _dispatch(
+        mem,
+        "memory_search",
+        {
+            "query": "deployment",
+            "top_k": 5,
+            "tags": ["devops"],
+            "require_tags": ["devops"],
+            "min_importance": 0.4,
+            "retrieval_mode": "keyword",
+        },
+    )
+    assert not r.get("isError")
+    text = r["content"][0]["text"]
+    assert "Docker simplifies deployment" in text
+    assert "importance=" in text
+
+
 def test_dispatch_save(mem):
     r = _dispatch(mem, "memory_save", {"content": "test mcp save", "tags": ["test"]})
     assert not r.get("isError")
