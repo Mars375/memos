@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any, Optional
 
+from .dedup import DedupEngine, DedupScanResult
 from .kg_extractor import KGExtractor
 from .models import MemoryItem, RecallResult, MemoryStats, FeedbackEntry, FeedbackStats, generate_id
 from .retrieval.engine import RetrievalEngine
@@ -31,6 +33,9 @@ from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .migration import MigrationEngine, MigrationReport, _create_backend
 from .compression import MemoryCompressor
+
+
+logger = logging.getLogger(__name__)
 
 
 class MemOS:
@@ -177,6 +182,7 @@ class MemOS:
         self._kg_extractor = KGExtractor(
             project_patterns=kwargs.get("kg_project_patterns"),
         )
+        self._dedup = DedupEngine()
 
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
@@ -260,6 +266,7 @@ class MemOS:
         metadata: Optional[dict[str, Any]] = None,
         ttl: Optional[float] = None,
         auto_kg: Optional[bool] = None,
+        allow_duplicate: bool = False,
     ) -> MemoryItem:
         """Store a new memory."""
         self._check_acl("write")
@@ -271,6 +278,18 @@ class MemOS:
             issues = MemorySanitizer.check(content)
             if issues:
                 raise ValueError(f"Memory failed sanitization: {issues}")
+
+        if not allow_duplicate:
+            existing = self._store.list_all(namespace=self._namespace)
+            duplicate = self._dedup.check(content, existing)
+            if duplicate is not None:
+                if duplicate.reason == "near":
+                    logger.warning(
+                        "Skipping near-duplicate memory matched to %s (similarity=%.3f)",
+                        duplicate.item.id,
+                        duplicate.similarity,
+                    )
+                return duplicate.item
 
         # Auto-tag with type tags (decision, preference, milestone, etc.)
         final_tags = list(tags) if tags else []
@@ -925,6 +944,55 @@ class MemOS:
             self._events.emit_sync("consolidated", {
                 "groups_found": result.groups_found,
                 "memories_merged": result.memories_merged,
+            }, namespace=self._namespace)
+
+        return result
+
+    def dedup_check(self, content: str, *, threshold: float = 0.95) -> dict[str, Any]:
+        """Check whether content would be inserted or skipped as a duplicate."""
+        self._check_acl("read")
+        match = self._dedup.check(
+            content,
+            self._store.list_all(namespace=self._namespace),
+            threshold=threshold,
+        )
+        payload: dict[str, Any] = {"is_duplicate": match is not None, "match": None}
+        if match is not None:
+            payload["match"] = {
+                "id": match.item.id,
+                "content": match.item.content,
+                "tags": match.item.tags,
+                "importance": match.item.importance,
+                "similarity": round(match.similarity, 4),
+                "reason": match.reason,
+            }
+        return payload
+
+    def dedup_scan(self, *, threshold: float = 0.95, fix: bool = False) -> DedupScanResult:
+        """Scan the current namespace for duplicates and optionally remove them."""
+        self._check_acl("read")
+        items = self._store.list_all(namespace=self._namespace)
+        result = self._dedup.scan(items, threshold=threshold)
+
+        if not fix or not result.details:
+            return result
+
+        self._check_acl("delete")
+        for group in result.details:
+            merged = self._dedup.merge_group(group)
+            self._store.upsert(merged, namespace=self._namespace)
+            self._retrieval.index(merged)
+            self._versioning.record_version(merged, source="dedup_scan")
+            for duplicate in group.duplicates:
+                if duplicate.id == merged.id:
+                    continue
+                if self._store.delete(duplicate.id, namespace=self._namespace):
+                    result.duplicates_removed += 1
+
+        if result.duplicates_removed:
+            self._events.emit_sync("deduplicated", {
+                "groups_found": result.groups_found,
+                "duplicates_removed": result.duplicates_removed,
             }, namespace=self._namespace)
 
         return result

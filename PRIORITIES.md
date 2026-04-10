@@ -649,7 +649,8 @@ Config docker-compose :
 
 ---
 
-## [ ] P29 — Memory Deduplication (Near-duplicate Detection)
+## [x] P29 — Memory Deduplication (Near-duplicate Detection)
+Implémenté v0.45.0 — `DedupEngine` (SHA-256 normalisé + trigrams Jaccard), skip exact/near-dup dans `MemOS.learn()`, bypass `allow_duplicate=True`, CLI `dedup-check` / `dedup-scan --fix`, endpoint `POST /api/v1/dedup/check`, couverture dédiée `tests/test_dedup.py` et réalignement versioning.
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Empêcher l'accumulation de mémoires dupliquées lors des re-imports.
 

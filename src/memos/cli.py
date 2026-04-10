@@ -145,6 +145,7 @@ def cmd_learn(ns: argparse.Namespace) -> None:
         importance=ns.importance,
         ttl=ttl,
         auto_kg=False if getattr(ns, "no_auto_kg", False) else None,
+        allow_duplicate=bool(getattr(ns, "allow_duplicate", False)),
     )
     ttl_str = f", ttl={ns.ttl}" if ns.ttl else ""
     print(f"✓ Learned [{item.id[:8]}...] ({len(item.content)} chars, tags={item.tags}{ttl_str})")
@@ -566,6 +567,38 @@ def cmd_consolidate(ns: argparse.Namespace) -> None:
             print(f"  [{g.reason}] sim={g.similarity:.2f} keep=[{g.keep.id[:8]}] {g.keep.content[:60]}")
             for d in g.duplicates:
                 print(f"    dup=[{d.id[:8]}] {d.content[:60]}")
+
+
+def cmd_dedup_check(ns: argparse.Namespace) -> None:
+    """Check whether a text matches an existing memory."""
+    memos = _get_memos(ns)
+    result = memos.dedup_check(ns.content, threshold=ns.threshold)
+    if getattr(ns, "json", False):
+        print(json.dumps(result, indent=2))
+        return
+    if not result["is_duplicate"]:
+        print("No duplicate found.")
+        return
+    match = result["match"]
+    print(
+        f"Duplicate found: [{match['reason']}] sim={match['similarity']:.3f} "
+        f"id={match['id'][:8]} {match['content'][:120]}"
+    )
+
+
+def cmd_dedup_scan(ns: argparse.Namespace) -> None:
+    """Scan the memory store for duplicate entries."""
+    memos = _get_memos(ns)
+    result = memos.dedup_scan(threshold=ns.threshold, fix=ns.fix)
+    print(f"Groups found: {result.groups_found}")
+    print(f"Duplicates found: {result.duplicates_found}")
+    if ns.fix:
+        print(f"Duplicates removed: {result.duplicates_removed}")
+    if ns.verbose:
+        for group in result.details[:20]:
+            print(f"  [{group.reason}] sim={group.similarity:.3f} keep=[{group.keep.id[:8]}] {group.keep.content[:80]}")
+            for duplicate in group.duplicates:
+                print(f"    dup=[{duplicate.id[:8]}] {duplicate.content[:80]}")
 
 
 def cmd_mcp_serve(ns: argparse.Namespace) -> None:
@@ -1118,6 +1151,7 @@ def build_parser() -> argparse.ArgumentParser:
     learn.add_argument("--ttl", help="Time-to-live (e.g., 30m, 2h, 7d, 3600)")
     learn.add_argument("--no-auto-kg", action="store_true", help="Disable automatic KG extraction for this write")
     learn.add_argument("--kg-db", dest="kg_db", default=None, help="Path to kg.db for auto-extracted facts")
+    learn.add_argument("--allow-duplicate", action="store_true", help="Bypass duplicate detection for this write")
 
     extract_kg = sub.add_parser("extract-kg", help="Preview KG facts that would be extracted from text")
     extract_kg.add_argument("content", help="Text to analyze")
@@ -1228,6 +1262,18 @@ def build_parser() -> argparse.ArgumentParser:
     cons.add_argument("--dry-run", action="store_true", help="Report only, don't modify")
     cons.add_argument("--verbose", "-v", action="store_true")
     cons.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    dedup_check = sub.add_parser("dedup-check", help="Check whether a memory already exists")
+    dedup_check.add_argument("content", help="Memory content to compare")
+    dedup_check.add_argument("--threshold", type=float, default=0.95, help="Near-duplicate threshold (0-1)")
+    dedup_check.add_argument("--json", action="store_true", help="JSON output")
+    dedup_check.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    dedup_scan = sub.add_parser("dedup-scan", help="Scan all memories for duplicates")
+    dedup_scan.add_argument("--threshold", type=float, default=0.95, help="Near-duplicate threshold (0-1)")
+    dedup_scan.add_argument("--fix", action="store_true", help="Remove duplicate entries after scanning")
+    dedup_scan.add_argument("--verbose", "-v", action="store_true")
+    dedup_scan.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # ingest
     ing = sub.add_parser("ingest", help="Import file(s) into memory")
@@ -3144,6 +3190,8 @@ def main(argv: list[str] | None = None) -> None:
         "watch": cmd_watch,
         "subscribe": cmd_subscribe,
         "consolidate": cmd_consolidate,
+        "dedup-check": cmd_dedup_check,
+        "dedup-scan": cmd_dedup_scan,
         "ingest": cmd_ingest,
         "ingest-url": cmd_ingest_url,
         "export": cmd_export,

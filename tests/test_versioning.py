@@ -502,7 +502,7 @@ class TestMemOSVersioning:
 
         item1 = mem.learn(content, tags=["v1"], importance=0.3)
         # Re-learn same content updates the item
-        item2 = mem.learn(content, tags=["v1", "v2"], importance=0.9)
+        item2 = mem.learn(content, tags=["v1", "v2"], importance=0.9, allow_duplicate=True)
 
         # Same ID (deterministic from content)
         assert item1.id == item2.id
@@ -516,7 +516,7 @@ class TestMemOSVersioning:
         mem = MemOS()
         content = "versioned item content"
         mem.learn(content, tags=["initial"], importance=0.5)
-        mem.learn(content, tags=["updated"], importance=0.8)
+        mem.learn(content, tags=["updated"], importance=0.8, allow_duplicate=True)
 
         item_id = generate_id(content)
         v1 = mem.get_version(item_id, 1)
@@ -531,7 +531,7 @@ class TestMemOSVersioning:
         mem = MemOS()
         content = "diff test content unique"
         mem.learn(content, tags=["old"], importance=0.3)
-        mem.learn(content, tags=["new"], importance=0.9)
+        mem.learn(content, tags=["new"], importance=0.9, allow_duplicate=True)
 
         item_id = generate_id(content)
         diff = mem.diff(item_id, 1, 2)
@@ -545,7 +545,7 @@ class TestMemOSVersioning:
         mem.learn(content, tags=["first"])
         assert mem.diff_latest(generate_id(content)) is None  # Only 1 version
 
-        mem.learn(content, tags=["second"])
+        mem.learn(content, tags=["second"], allow_duplicate=True)
         diff = mem.diff_latest(generate_id(content))
         assert diff is not None
         assert "tags" in diff.changes
@@ -593,7 +593,7 @@ class TestMemOSVersioning:
         content = "rollback test content unique"
 
         mem.learn(content, tags=["original"], importance=0.5)
-        mem.learn(content, tags=["modified"], importance=0.9)
+        mem.learn(content, tags=["modified"], importance=0.9, allow_duplicate=True)
 
         item_id = generate_id(content)
 
@@ -629,12 +629,12 @@ class TestMemOSVersioning:
 
         # Create old versions
         for i in range(5):
-            item = mem.learn(content, tags=[f"old-{i}"])
+            item = mem.learn(content, tags=[f"old-{i}"], allow_duplicate=True)
             versions = mem.history(item.id)
             versions[-1].created_at = now - 200 * 86400
 
         # Create recent version
-        mem.learn(content, tags=["recent"])
+        mem.learn(content, tags=["recent"], allow_duplicate=True)
 
         removed = mem.versioning_gc(max_age_days=90.0, keep_latest=2)
         assert removed > 0
@@ -673,7 +673,7 @@ class TestMemOSVersioning:
         mem = MemOS()
         content = "rollback event test"
         mem.learn(content, tags=["v1"])
-        mem.learn(content, tags=["v2"])
+        mem.learn(content, tags=["v2"], allow_duplicate=True)
 
         item_id = generate_id(content)
         mem.rollback(item_id, 1)
@@ -699,7 +699,7 @@ class TestMemOSVersioning:
         mem = MemOS()
 
         mem.learn("item alpha content", tags=["alpha"])
-        mem.learn("item alpha content", tags=["alpha", "updated"])
+        mem.learn("item alpha content", tags=["alpha", "updated"], allow_duplicate=True)
 
         mem.learn("item beta content", tags=["beta"])
 

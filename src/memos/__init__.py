@@ -1,9 +1,10 @@
 """MemOS — Memory Operating System for LLM Agents."""
 
-__version__ = "0.44.0"
+__version__ = "0.45.0"
 
 from .core import MemOS
 from .compression import MemoryCompressor, CompressionResult
+from .dedup import DedupEngine, DedupCheckResult, DedupGroup, DedupScanResult
 from .migration import MigrationEngine, MigrationReport
 from .models import MemoryItem, RecallResult, MemoryStats
 
@@ -16,4 +17,8 @@ __all__ = [
     "MigrationReport",
     "MemoryCompressor",
     "CompressionResult",
+    "DedupEngine",
+    "DedupCheckResult",
+    "DedupGroup",
+    "DedupScanResult",
 ]

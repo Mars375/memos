@@ -34,6 +34,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
                 importance=body.get("importance", 0.5),
                 metadata=body.get("metadata"),
                 auto_kg=body.get("auto_kg"),
+                allow_duplicate=bool(body.get("allow_duplicate", False)),
             )
             return {"status": "ok", "id": item.id, "tags": item.tags}
         except ValueError as e:
@@ -91,6 +92,16 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         result = memos.compress(
             threshold=float(body.get("threshold", 0.1)),
             dry_run=bool(body.get("dry_run", False)),
+        )
+        return {"status": "ok", **result}
+
+    async def dedup_check(body: dict) -> dict:
+        content = body.get("content", "").strip()
+        if not content:
+            return {"status": "error", "message": "content is required"}
+        result = memos.dedup_check(
+            content,
+            threshold=float(body.get("threshold", 0.95)),
         )
         return {"status": "ok", **result}
 
@@ -202,6 +213,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         "recall": recall,
         "prune": prune,
         "compress": compress,
+        "dedup_check": dedup_check,
         "stats": stats,
         "analytics_top": analytics_top,
         "analytics_patterns": analytics_patterns,
@@ -262,6 +274,10 @@ def create_fastapi_app(
     @app.post("/api/v1/learn")
     async def api_learn(body: dict):
         return await routes["learn"](body)
+
+    @app.post("/api/v1/dedup/check")
+    async def api_dedup_check(body: dict):
+        return await routes["dedup_check"](body)
 
     @app.post("/api/v1/learn/extract")
     async def api_learn_extract(body: dict):
