@@ -1,6 +1,6 @@
 """MemOS — Memory Operating System for LLM Agents."""
 
-__version__ = "0.39.0"
+__version__ = "0.47.0"
 
 from .core import MemOS
 from .migration import MigrationEngine, MigrationReport

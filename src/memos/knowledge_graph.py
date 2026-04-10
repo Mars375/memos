@@ -113,17 +113,15 @@ class KnowledgeGraph:
             CREATE INDEX IF NOT EXISTS idx_triples_valid_from ON triples(valid_from);
             CREATE INDEX IF NOT EXISTS idx_triples_valid_to   ON triples(valid_to);
         """)
-        # Migration: add confidence_label column if missing
-        cols = [r[1] for r in self._conn.execute("PRAGMA table_info(triples)").fetchall()]
-        if "confidence_label" not in cols:
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(triples)").fetchall()
+        }
+        if "confidence_label" not in columns:
             self._conn.execute(
                 "ALTER TABLE triples ADD COLUMN confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED'"
             )
-            self._conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_triples_confidence_label "
-                "ON triples(confidence_label)"
-            )
-            self._conn.commit()
+        self._conn.commit()
 
     # ------------------------------------------------------------------
     # Public API
@@ -146,8 +144,7 @@ class KnowledgeGraph:
         """
         if confidence_label not in self.VALID_LABELS:
             raise ValueError(
-                f"Invalid confidence_label {confidence_label!r}. "
-                f"Must be one of {self.VALID_LABELS}"
+                f"Invalid confidence_label: {confidence_label!r}. Must be one of {self.VALID_LABELS}"
             )
         fact_id = _short_id()
         now = time.time()
@@ -157,10 +154,21 @@ class KnowledgeGraph:
             """
             INSERT INTO triples
                 (id, subject, predicate, object, valid_from, valid_to,
-                 confidence, source, created_at, invalidated_at, confidence_label)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+                 confidence, confidence_label, source, created_at, invalidated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
             """,
-            (fact_id, subject, predicate, str(object), vf, vt, confidence, source, now, confidence_label),
+            (
+                fact_id,
+                subject,
+                predicate,
+                str(object),
+                vf,
+                vt,
+                confidence,
+                confidence_label,
+                source,
+                now,
+            ),
         )
         # Auto-upsert subject and object into the entities table so that
         # stats()["total_entities"] and search_entities() reflect reality.
