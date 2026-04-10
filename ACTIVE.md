@@ -1,6 +1,6 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P25 livrée, PR à ouvrir, chantier ACTIVE
+## Statut : ✅ P25 livrée, PR #12 ouverte, chantier ACTIVE
 
 **Dernière session** : 2026-04-10 — P25 Unified Brain Search
 **Version** : 0.37.1
@@ -24,5 +24,5 @@
 - Validation : `python -m pytest -x -q` → **1346 passed**
 
 ## Prochaine étape
-- ouvrir et suivre la PR de **P25 — Unified Brain Search**
+- suivre la review de la **PR #12 — P25 Unified Brain Search**
 - ensuite reprendre **P26 — Entity Detail API + Graph ↔ Wiki Bridge** pour rendre la couche unifiée navigable dans le dashboard
