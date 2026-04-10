@@ -34,10 +34,22 @@ class TestCLIParsing:
 
     def test_recall_args(self):
         p = build_parser()
-        ns = p.parse_args(["recall", "test query", "--top", "3", "--enriched"])
+        ns = p.parse_args([
+            "recall",
+            "test query",
+            "--top",
+            "3",
+            "--enriched",
+            "--min-importance",
+            "0.4",
+            "--tag-mode",
+            "all",
+        ])
         assert ns.query == "test query"
         assert ns.top == 3
         assert ns.enriched is True
+        assert ns.min_importance == 0.4
+        assert ns.tag_mode == "all"
 
     def test_serve_args(self):
         p = build_parser()

@@ -688,7 +688,7 @@ Sans dédup, miner le même fichier deux fois double les mémoires → recall br
 
 ---
 
-## [ ] P30 — Namespace Management API
+## [x] P30 — Namespace Management API
 **Priorité : HAUTE — bloquant v1 multi-agent**
 **Objectif :** API REST complète pour gérer les namespaces — indispensable pour 5 agents OpenClaw.
 
@@ -706,8 +706,9 @@ Actuellement : les namespaces existent en CLI mais invisible depuis l'API → au
 
 ---
 
-## [ ] P31 — Advanced Recall Filters (Date, Importance, Tag Logic)
+## [~] P31 — Advanced Recall Filters (Date, Importance, Tag Logic)
 **Priorité : HAUTE — qualité v1**
+Implémenté v0.47.0 — `MemoryQuery`/`QueryEngine`, filtres importance + include/require/exclude tags, `GET /api/v1/memories`, `POST /api/v1/recall` enrichi, CLI/MCP alignés, tests API/core/MCP/CLI ajoutés.
 **Objectif :** Recall structuré pour les requêtes agent complexes — pas juste query+tags+top_k.
 
 À implémenter :

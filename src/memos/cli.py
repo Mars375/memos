@@ -167,12 +167,20 @@ def cmd_batch_learn(ns: argparse.Namespace) -> None:
 def cmd_recall(ns: argparse.Namespace) -> None:
     """Recall memories matching a query."""
     from datetime import datetime as _dt
+
+    def _split_csv(value: str | None) -> list[str]:
+        if not value:
+            return []
+        return [t.strip() for t in value.split(",") if t.strip()]
+
     memos = _get_memos(ns)
-    # Parse tag filter
-    filter_tags = None
-    if ns.tags:
-        filter_tags = [t.strip() for t in ns.tags.split(",") if t.strip()]
-    # Parse date filters
+    filter_tags = _split_csv(getattr(ns, "tags", None))
+    require_tags = _split_csv(getattr(ns, "require_tags", None))
+    exclude_tags = _split_csv(getattr(ns, "exclude_tags", None))
+    if (getattr(ns, "tag_mode", "any") or "any").lower() == "all" and filter_tags:
+        require_tags.extend(filter_tags)
+        filter_tags = []
+
     filter_after = None
     filter_before = None
     if ns.after:
@@ -194,7 +202,7 @@ def cmd_recall(ns: argparse.Namespace) -> None:
             payload = bridge.recall_enriched(
                 ns.query,
                 top=ns.top,
-                filter_tags=filter_tags,
+                filter_tags=filter_tags or require_tags,
                 min_score=ns.min_score,
                 filter_after=filter_after,
                 filter_before=filter_before,
@@ -223,9 +231,16 @@ def cmd_recall(ns: argparse.Namespace) -> None:
         return
     retrieval_mode = getattr(ns, "retrieval_mode", "semantic") or "semantic"
     results = memos.recall(
-        ns.query, top=ns.top, min_score=ns.min_score,
-        filter_tags=filter_tags, filter_after=filter_after, filter_before=filter_before,
+        ns.query,
+        top=ns.top,
+        min_score=ns.min_score,
+        filter_tags=filter_tags,
+        filter_after=filter_after,
+        filter_before=filter_before,
         retrieval_mode=retrieval_mode,
+        tag_filter={"require": require_tags, "exclude": exclude_tags} if (require_tags or exclude_tags) else None,
+        min_importance=getattr(ns, "min_importance", None),
+        max_importance=getattr(ns, "max_importance", None),
     )
     if not results:
         if fmt == "json":
@@ -1060,7 +1075,12 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("query", help="Search query")
     recall.add_argument("--top", "-n", type=int, default=5)
     recall.add_argument("--min-score", type=float, default=0.0)
-    recall.add_argument("--tags", help="Comma-separated tags to filter by")
+    recall.add_argument("--min-importance", type=float, help="Only return memories with importance >= this value")
+    recall.add_argument("--max-importance", type=float, help="Only return memories with importance <= this value")
+    recall.add_argument("--tags", help="Comma-separated tags to include")
+    recall.add_argument("--tag-mode", choices=["any", "all"], default="any", help="How --tags are applied: any (default) or all")
+    recall.add_argument("--require-tags", help="Comma-separated tags that must all be present")
+    recall.add_argument("--exclude-tags", help="Comma-separated tags to exclude")
     recall.add_argument("--after", help="Only memories created after this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--before", help="Only memories created before this date (ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM)")
     recall.add_argument("--format", choices=["text", "json"], default="text", help="Output format (default: text)")

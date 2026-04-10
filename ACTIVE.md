@@ -1,20 +1,26 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P22 DONE, chantier ACTIVE
+## Statut : ✅ P31 DONE (branche en review), chantier ACTIVE
 
-**Dernière session** : 2026-04-09 — P22 URL Ingest
-**Version** : 0.37.0
-**Tests** : 1342 passed
+**Dernière session** : 2026-04-10 — P31 Advanced Recall Filters
+**Version** : 0.47.0
+**Tests** : 1349 passed
 
 ## Dernière action
-- **P22 terminée** : ingestion d'URL multi-source sans setup manuel
-- `src/memos/ingest/url.py` — `URLIngestor` avec routing arXiv, X/Twitter, PDF et webpage HTML
-- Core : `MemOS.ingest_url()`
-- CLI : `memos ingest-url <url> [--tags ...] [--dry-run]`
-- REST : `POST /api/v1/ingest/url`
-- Support PDF : extraction via PyMuPDF si dispo, fallback zéro-dépendance pour PDFs simples
-- Validation : `python -m pytest -x -q` → **1342 passed**
+- **P31 implémentée** : recall structuré par date, importance et logique de tags
+- `src/memos/query.py` + `src/memos/core.py`
+  - `MemoryQuery` / `QueryEngine`
+  - filtres `include` / `require` / `exclude`, bornes d’importance, plage de dates
+  - `list_memories()` triable côté core
+- `src/memos/api/__init__.py`
+  - `POST /api/v1/recall` enrichi (`tags`, `importance`, `created_after|before`, `top_k`, `retrieval_mode`)
+  - nouveau `GET /api/v1/memories` avec filtres et tri
+- `src/memos/cli.py` / `src/memos/mcp_server.py`
+  - `memos recall --min-importance --max-importance --tag-mode --require-tags --exclude-tags`
+  - MCP `memory_search` enrichi avec filtres avancés
+- stabilité annexe : `src/memos/knowledge_graph.py` réaligné avec les tests labels (`confidence_label`, `query_by_label`, `label_stats`, `infer_transitive`)
+- Validation : `python -m pytest -x -q` → **1349 passed**
 
 ## Prochaine étape
-- **P23 — Speaker Ownership** (prochaine priorité OPEN dans `PRIORITIES.md`)
-- **P33 — Auto-extraction KG à l'écriture** reste critique sprint V1 et doit être tirée très haut dans les prochaines sessions
+- **P32 — PyPI Release + README v1**
+- **P34 — Embeddings intégrés** (friction d’adoption)
