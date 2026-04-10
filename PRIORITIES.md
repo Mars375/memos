@@ -780,7 +780,7 @@ Problème actuel : le KG temporel est une feature puissante mais reste vide en p
 ---
 
 ## [~] P34 — Embeddings intégrés (zéro dépendances externes)
-**Statut : IN REVIEW (branche feature)**
+**Statut : IN REVIEW (PR #11)**
 **Priorité : HAUTE — bloque l'adoption**
 **Objectif :** `pip install "memos[local]" && MemOS(backend="local")` donne un recall sémantique correct sans avoir besoin d'Ollama, ChromaDB, ni aucun service externe.
 

@@ -1,6 +1,6 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P25 livrée + P34 embeddings intégrés, chantier ACTIVE
+## Statut : ✅ P25 livrée + P34 embeddings intégrés, PR #11 ouverte, chantier ACTIVE
 
 **Dernière session** : 2026-04-10 — P25 Unified Brain Search + P34 Embeddings intégrés
 **Version** : 0.38.0
@@ -35,5 +35,6 @@
 - Validation : `python -m pytest -x -q` → **1345 passed**
 
 ## Prochaine étape
-- reprendre **P26 — Entity Detail API + Graph ↔ Wiki Bridge** pour rendre la couche unifiée navigable dans le dashboard
+- suivre la review de la **PR #11 — P34 Embeddings intégrés**
+- ensuite reprendre **P26 — Entity Detail API + Graph ↔ Wiki Bridge**
 - après P26, reprendre **P33 — Auto-extraction KG à l'écriture**
