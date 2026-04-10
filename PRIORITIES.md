@@ -779,11 +779,19 @@ Problème actuel : le KG temporel est une feature puissante mais reste vide en p
 
 ---
 
-## [ ] P34 — Embeddings intégrés (zéro dépendances externes)
+## [~] P34 — Embeddings intégrés (zéro dépendances externes)
+**Statut : IN REVIEW (branche feature)**
 **Priorité : HAUTE — bloque l'adoption**
-**Objectif :** `pip install memos && memos serve` donne un recall sémantique correct sans avoir besoin d'Ollama, ChromaDB, ni aucun service externe.
+**Objectif :** `pip install "memos[local]" && MemOS(backend="local")` donne un recall sémantique correct sans avoir besoin d'Ollama, ChromaDB, ni aucun service externe.
 
-Problème actuel : le backend JSON/memory utilise un recall basique (keyword match ou cosine sur TF-IDF). Pour un vrai recall sémantique, il faut Ollama + ChromaDB + modèle téléchargé. La friction d'installation est trop haute pour l'adoption.
+Implémenté sur la branche courante :
+- `LocalEmbedder` lazy basé sur `sentence-transformers`
+- `MemOS(backend="local")` câblé sur le backend JSON existant
+- `RetrievalEngine` compatible embedder local branchable, cache persistant conservé
+- tests ajoutés pour garantir le mode local sans appel Ollama
+- correction associée : `knowledge_graph.py` réaligné avec les tests `confidence_label`
+
+Contrainte restante : publier la PR puis review/merge.
 
 À implémenter :
 - Intégrer `sentence-transformers` comme option d'embedding légère (modèle `all-MiniLM-L6-v2`, 23MB)

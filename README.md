@@ -5,8 +5,8 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.37.0-purple.svg)](https://github.com/Mars375/memos/releases)
-[![Tests](https://img.shields.io/badge/tests-1402_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![Version](https://img.shields.io/badge/version-v0.38.0-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Tests](https://img.shields.io/badge/tests-1345_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 
 ---
 
@@ -14,6 +14,11 @@
 
 ```bash
 pip install memos
+```
+
+With local semantic recall (no external services):
+```bash
+pip install "memos[local]"    # sentence-transformers, backend="local"
 ```
 
 With vector backend (recommended for production):
@@ -51,6 +56,9 @@ mem = MemOS()
 
 # JSON persistence
 mem = MemOS(backend="json", persist_path="~/.memos/store.json")
+
+# Local-first semantic recall, no Ollama/Chroma required
+mem = MemOS(backend="local", persist_path="~/.memos/store.json")
 
 # ChromaDB with local Ollama embeddings
 mem = MemOS(backend="chroma", embed_host="http://localhost:11434")

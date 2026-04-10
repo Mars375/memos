@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Optional
+from typing import Optional, Protocol, runtime_checkable
 
 from ..models import MemoryItem, RecallResult
 from ..storage.base import StorageBackend
@@ -12,6 +12,16 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..cache.embedding_cache import EmbeddingCache
+
+
+@runtime_checkable
+class Embedder(Protocol):
+    """Protocol for pluggable embedding providers."""
+
+    def encode(self, text: str) -> Optional[list[float]]: ...
+
+    @property
+    def model_name(self) -> str: ...
 
 
 def _bm25_score(query: str, content: str) -> float:
@@ -44,12 +54,16 @@ class RetrievalEngine:
         embed_host: str = "http://localhost:11434",
         embed_model: str = "nomic-embed-text",
         semantic_weight: float = 0.6,
+        embedder: Optional[Embedder] = None,
     ) -> None:
         self._store = store
         self._embed_host = embed_host
         self._embed_model = embed_model
         self._semantic_weight = semantic_weight
         self._keyword_weight = 1.0 - semantic_weight
+        # Pluggable local embedder (sentence-transformers, ONNX, etc.)
+        # When set, _get_embedding() tries this before Ollama.
+        self._embedder = embedder
         # Local embedding cache for small stores
         self._embed_cache: dict[str, list[float]] = {}
         # Optional persistent cache (set via set_cache)
@@ -86,7 +100,7 @@ class RetrievalEngine:
             )
 
         # Standard in-memory hybrid search
-        all_items = self._store.list_all()
+        all_items = self._store.list_all(namespace=namespace)
 
         # Filter by tags if specified
         if filter_tags:
@@ -202,45 +216,60 @@ class RetrievalEngine:
         return results[:top]
 
     def _get_embedding(self, text: str) -> Optional[list[float]]:
-        """Get embedding from Ollama, with L1 (memory) + L2 (disk) caching."""
+        """Get embedding — pluggable embedder first, then Ollama, with caching."""
         # L1: in-memory cache (fastest)
         if text in self._embed_cache:
             return self._embed_cache[text]
 
         # L2: persistent disk cache
+        cache_key = self._embed_model
+        if self._embedder is not None:
+            cache_key = getattr(self._embedder, "model_name", self._embed_model)
         if self._persistent_cache is not None:
-            cached = self._persistent_cache.get(text, model=self._embed_model)
+            cached = self._persistent_cache.get(text, model=cache_key)
             if cached is not None:
                 self._embed_cache[text] = cached  # Promote to L1
                 return cached
 
-        try:
-            import httpx
-            resp = httpx.post(
-                f"{self._embed_host}/api/embed",
-                json={"model": self._embed_model, "input": text},
-                timeout=10.0,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            # Ollama returns {"embeddings": [[...]]}
-            embeddings = data.get("embeddings", [])
-            if embeddings:
-                vec = embeddings[0]
-                self._embed_cache[text] = vec
-                # Store in persistent cache
-                if self._persistent_cache is not None:
-                    self._persistent_cache.put(text, vec, model=self._embed_model)
-                # Limit L1 cache size
-                if len(self._embed_cache) > 5000:
-                    keys = list(self._embed_cache.keys())[:2500]
-                    for k in keys:
-                        del self._embed_cache[k]
-                return vec
-        except Exception:
-            pass  # Graceful fallback to keyword-only
+        vec: Optional[list[float]] = None
 
-        return None
+        # Try pluggable local embedder first (sentence-transformers, ONNX, etc.)
+        if self._embedder is not None:
+            try:
+                vec = self._embedder.encode(text)
+            except Exception:
+                pass  # Fall through to Ollama
+
+        # Fallback: Ollama API
+        if vec is None:
+            try:
+                import httpx
+                resp = httpx.post(
+                    f"{self._embed_host}/api/embed",
+                    json={"model": self._embed_model, "input": text},
+                    timeout=10.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                # Ollama returns {"embeddings": [[...]]}
+                embeddings = data.get("embeddings", [])
+                if embeddings:
+                    vec = embeddings[0]
+            except Exception:
+                pass  # Graceful fallback to keyword-only
+
+        # Cache result if obtained
+        if vec is not None:
+            self._embed_cache[text] = vec
+            if self._persistent_cache is not None:
+                self._persistent_cache.put(text, vec, model=cache_key)
+            # Limit L1 cache size
+            if len(self._embed_cache) > 5000:
+                keys = list(self._embed_cache.keys())[:2500]
+                for k in keys:
+                    del self._embed_cache[k]
+
+        return vec
 
     @staticmethod
     def _bm25(query: str, content: str) -> float:
