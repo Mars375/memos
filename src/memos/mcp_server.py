@@ -135,6 +135,21 @@ TOOLS = [
         },
     },
     {
+        "name": "brain_search",
+        "description": "Unified search across memories, living wiki pages, and the knowledge graph.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "top_k": {"type": "integer", "default": 10, "description": "Max results per source"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter memories by tags"},
+                "min_score": {"type": "number", "default": 0.0, "description": "Minimum memory score"},
+                "max_context_chars": {"type": "integer", "default": 2000, "description": "Max characters for fused context"}
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "memory_decay",
         "description": "Apply importance decay to memories. Dry-run by default. Use apply=true to persist changes.",
         "inputSchema": {
@@ -395,6 +410,41 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
             text.append(f"KG facts ({len(facts)}):")
             for f in facts:
                 text.append(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}")
+            return _text("\n".join(text))
+
+        elif tool == "brain_search":
+            from .brain import BrainSearch
+            from .knowledge_graph import KnowledgeGraph
+            query = args.get("query", "").strip()
+            if not query:
+                return _error("query is required")
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance
+            searcher = BrainSearch(memos, kg_instance, wiki_dir=args.get("wiki_dir"))
+            result = searcher.search(
+                query,
+                top_k=int(args.get("top_k", 10)),
+                filter_tags=args.get("tags"),
+                min_score=float(args.get("min_score", 0.0)),
+                max_context_chars=int(args.get("max_context_chars", 2000)),
+            )
+            payload = result.to_dict()
+            text = [
+                f"Entities: {', '.join(payload['entities'])}" if payload["entities"] else "Entities: none",
+                f"Memories ({len(payload['memories'])})",
+            ]
+            for item in payload["memories"][:5]:
+                text.append(f"  [{item['score']:.2f}] {item['content'][:120]}")
+            text.append(f"Wiki ({len(payload['wiki_pages'])})")
+            for item in payload["wiki_pages"][:5]:
+                text.append(f"  [{item['score']:.2f}] {item['entity']}: {item['snippet']}")
+            text.append(f"KG facts ({len(payload['kg_facts'])})")
+            for item in payload["kg_facts"][:5]:
+                text.append(f"  [{item['confidence_label']}] {item['subject']} -{item['predicate']}-> {item['object']}")
+            text.append("Context:")
+            text.append(payload["context"])
             return _text("\n".join(text))
 
         elif tool == "memory_decay":

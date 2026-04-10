@@ -1,20 +1,28 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P22 DONE, chantier ACTIVE
+## Statut : ✅ P25 livrée, PR #12 ouverte, chantier ACTIVE
 
-**Dernière session** : 2026-04-09 — P22 URL Ingest
-**Version** : 0.37.0
-**Tests** : 1342 passed
+**Dernière session** : 2026-04-10 — P25 Unified Brain Search
+**Version** : 0.37.1
+**Tests** : 1346 passed
 
 ## Dernière action
-- **P22 terminée** : ingestion d'URL multi-source sans setup manuel
-- `src/memos/ingest/url.py` — `URLIngestor` avec routing arXiv, X/Twitter, PDF et webpage HTML
-- Core : `MemOS.ingest_url()`
-- CLI : `memos ingest-url <url> [--tags ...] [--dry-run]`
-- REST : `POST /api/v1/ingest/url`
-- Support PDF : extraction via PyMuPDF si dispo, fallback zéro-dépendance pour PDFs simples
-- Validation : `python -m pytest -x -q` → **1342 passed**
+- **P25 implémentée** : recherche unifiée mémoire + wiki vivant + graphe de connaissances
+- `src/memos/brain.py`
+  - nouvelle classe `BrainSearch`
+  - résultat structuré `BrainSearchResult` avec `memories`, `wiki_pages`, `kg_facts`, `entities`, `context`
+  - détection/expansion d’entités puis fusion score-normalisée avec interleaving pour contexte prêt-à-injecter
+- `src/memos/api/__init__.py`
+  - nouvel endpoint `POST /api/v1/brain/search`
+- `src/memos/mcp_server.py`
+  - nouveau tool MCP `brain_search`
+- `src/memos/cli.py`
+  - nouvelle commande `memos brain-search "<query>"`
+- `tests/test_brain_search.py`
+  - couverture dédiée BrainSearch + API + MCP + CLI
+- **Fix annexe intégré sur main avant branche** : support `confidence_label` dans `KnowledgeGraph`, ce qui répare le crash `test_kg_bridge`
+- Validation : `python -m pytest -x -q` → **1346 passed**
 
 ## Prochaine étape
-- **P23 — Speaker Ownership** (prochaine priorité OPEN dans `PRIORITIES.md`)
-- **P33 — Auto-extraction KG à l'écriture** reste critique sprint V1 et doit être tirée très haut dans les prochaines sessions
+- suivre la review de la **PR #12 — P25 Unified Brain Search**
+- ensuite reprendre **P26 — Entity Detail API + Graph ↔ Wiki Bridge** pour rendre la couche unifiée navigable dans le dashboard
