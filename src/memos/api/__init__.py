@@ -10,10 +10,11 @@ from .. import __version__ as MEMOS_VERSION
 from ..core import MemOS, MemoryStats
 
 try:
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
     from fastapi.responses import StreamingResponse, HTMLResponse
 except ImportError:  # pragma: no cover - optional server dependency
     FastAPI = None  # type: ignore[assignment]
+    Request = None  # type: ignore[assignment]
     WebSocket = None  # type: ignore[assignment]
     WebSocketDisconnect = None  # type: ignore[assignment]
     StreamingResponse = None  # type: ignore[assignment]
@@ -215,11 +216,19 @@ def create_api(memos: MemOS) -> dict[str, Any]:
     }
 
 
-def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[str]] = None, rate_limit: int = 100, kg_db_path: Optional[str] = None, **kwargs) -> Any:
+def create_fastapi_app(
+    memos: Optional[MemOS] = None,
+    api_keys: Optional[list[str]] = None,
+    rate_limit: int = 100,
+    kg_db_path: Optional[str] = None,
+    namespace_keys: Optional[dict[str, str]] = None,
+    **kwargs,
+) -> Any:
     """Create a FastAPI application for MemOS.
     
     Args:
-        api_keys: List of valid API keys. If None/empty, auth is disabled.
+        api_keys: Optional legacy list of master API keys.
+        namespace_keys: Optional namespace -> token mapping.
         rate_limit: Max requests per minute per key (default 100).
     """
     if FastAPI is None:
@@ -554,12 +563,20 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         return await routes["get_memory"](item_id)
 
     # Auth & rate limiting
-    from .auth import APIKeyManager, create_auth_middleware
+    import logging
+    from .auth import APIKeyManager, create_auth_middleware, get_auth_context
     from .ratelimit import RateLimiter, create_rate_limit_middleware, DEFAULT_RULES
-    key_manager = APIKeyManager(keys=api_keys)
-    key_manager.rate_limiter.max_requests = rate_limit
-    if key_manager.auth_enabled:
-        app.middleware("http")(create_auth_middleware(key_manager))
+    key_manager = APIKeyManager.from_env()
+    for i, key in enumerate(api_keys or []):
+        key_manager.add_master_key(key, name=f"legacy-{i + 1}")
+    for namespace, key in (namespace_keys or {}).items():
+        key_manager.add_namespace_key(namespace, key)
+    app.state.key_manager = key_manager
+    if not key_manager.auth_enabled:
+        logging.getLogger("memos.api").warning(
+            "MemOS API authentication disabled, set API_KEY and/or MEMOS_NAMESPACE_KEYS to secure the REST API"
+        )
+    app.middleware("http")(create_auth_middleware(key_manager, memos=memos))
 
     # Standalone per-endpoint rate limiter (works with or without auth)
     rate_limiter = RateLimiter(default_max=rate_limit, rules=DEFAULT_RULES)
@@ -567,6 +584,17 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # Dashboard
     from ..web import DASHBOARD_HTML
+
+    @app.get("/api/v1/auth/whoami")
+    async def api_auth_whoami(request: Request):
+        context = get_auth_context(request, key_manager)
+        return {
+            "status": "ok",
+            **context.to_dict(),
+            "auth_enabled": key_manager.auth_enabled,
+            "master_keys": key_manager.master_key_count,
+            "namespace_keys": key_manager.namespace_key_count,
+        }
 
 
     @app.get("/api/v1/classify")
@@ -1118,6 +1146,8 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             "version": MEMOS_VERSION,
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
+            "master_keys": key_manager.master_key_count,
+            "namespace_keys": key_manager.namespace_key_count,
             "rate_limiting": True,
         }
 

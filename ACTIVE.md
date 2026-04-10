@@ -1,26 +1,26 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P27 DONE, chantier ACTIVE
+## Statut : ✅ P28 DONE, chantier ACTIVE
 
-**Dernière session** : 2026-04-10 — P27 Knowledge Export Universel
-**Version** : 0.43.0
-**Tests** : 1457 passed
+**Dernière session** : 2026-04-10 — P28 API Authentication
+**Version** : 0.44.0
+**Tests** : 1460 passed
 
 ## Dernière action
-- **P27 terminée** : export Markdown portable et interopérable du knowledge MemOS
-- `src/memos/export_markdown.py`
-  - `MarkdownExporter` génère `INDEX.md`, `LOG.md`, pages entités, collections de mémoires et pages communautés
-  - frontmatter YAML + inter-liens Markdown standards
-  - mode incrémental qui ne réécrit que les pages modifiées
-- `src/memos/core.py`
-  - `MemOS.export_markdown()` pour l’API et la CLI
-- `src/memos/cli.py`
-  - `memos export --format markdown --output ./knowledge --update`
+- **P28 terminée** : auth Bearer + clés de namespace pour l’API REST
 - `src/memos/api/__init__.py`
-  - `GET /api/v1/export/markdown` → bundle ZIP téléchargeable
-- Validation : `python -m pytest -x -q` → **1457 passed**
+  - `GET /api/v1/auth/whoami`
+  - chargement auto `API_KEY` / `MEMOS_NAMESPACE_KEYS`
+  - warning explicite si l’API reste en mode open
+- `src/memos/api/auth.py`
+  - authentification `Authorization: Bearer <token>`
+  - clés master + namespace, logs d’accès non autorisés
+  - compat legacy `X-API-Key` conservée
+- `tests/test_auth.py`
+  - couverture master key, namespace key, whoami, open mode, rate limit, isolation namespace
+- Validation : `python -m pytest -x -q` → **1460 passed**
 
 ## Prochaine étape
-- **P28 — API Authentication** (bloquant V1)
 - **P29 — Memory Deduplication** (bloquant V1)
+- **P30 — Namespace Management API**
 - **P34 — Embeddings intégrés** (friction d'adoption)

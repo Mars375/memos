@@ -623,9 +623,11 @@ Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledg
 #  V1 RELEASE CHECKLIST — les 5 bloquants avant de taguer v1.0.0
 # ═══════════════════════════════════════════════════════
 
-## [ ] P28 — API Authentication (Bearer Token + Namespace Keys)
+## [x] P28 — API Authentication (Bearer Token + Namespace Keys)
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Sécuriser l'API REST et isoler les namespaces par agent.
+
+Implémenté **v0.44.0** — `API_KEY` + `MEMOS_NAMESPACE_KEYS`, bearer auth, `GET /api/v1/auth/whoami`, logs d’accès non autorisés, mode open avec warning explicite, compat `X-API-Key` conservée pour backward compat, 23 tests dédiés.
 
 Sans auth, n'importe quel process sur le réseau peut lire/écrire toutes les mémoires de tous les agents.
 
