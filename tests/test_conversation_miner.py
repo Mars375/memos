@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import textwrap
->>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 from pathlib import Path
 
 import pytest
@@ -15,7 +14,6 @@ from memos.ingest.conversation import (
     Turn,
     _slug,
     parse_transcript,
->>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 )
 
 
@@ -315,4 +313,3 @@ def test_result_str():
     s = str(r)
     assert "5" in s
     assert "Alice" in s
->>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))

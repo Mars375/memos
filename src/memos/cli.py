@@ -1612,7 +1612,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Preview without storing",
     )
->>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 
     # mine-status
     mine_status_p = sub.add_parser("mine-status", help="Show incremental mine cache status")
@@ -2600,7 +2599,6 @@ def cmd_mine_conversation(ns: argparse.Namespace) -> None:
     )
     if ns.dry_run:
         print("[dry-run: nothing stored]")
->>>>>>> fa8bf8a (feat(P23): Speaker Ownership — conversation miner with per-speaker namespaces (v0.38.0))
 
 
 def cmd_mine_status(ns: argparse.Namespace) -> None:
