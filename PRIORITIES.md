@@ -711,8 +711,9 @@ Implémenté v0.47.0 — `MemoryQuery`/`QueryEngine`, filtres importance + inclu
 
 ---
 
-## [ ] P32 — PyPI Release + README v1
+## [~] P32 — PyPI Release + README v1
 **Priorité : HAUTE — condition nécessaire pour v1.0.0**
+Implémenté v1.0.0 — package PyPI renommé en `memos-agent`, metadata packaging complétée pour le layout `src/`, workflow `publish.yml` sur tags `v1.*`, README réécrit comme doc de référence, changelog consolidé depuis `v0.29.0`, build sdist/wheel validé.
 **Objectif :** `pip install memos-agent` fonctionne. Le README est la documentation de référence.
 
 À faire :

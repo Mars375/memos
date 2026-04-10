@@ -1,26 +1,27 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P31 DONE (branche en review), chantier ACTIVE
+## Statut : ✅ P32 livrée (branche en review), chantier ACTIVE
 
-**Dernière session** : 2026-04-10 — P31 Advanced Recall Filters
-**Version** : 0.47.0
-**Tests** : 1349 passed
+**Dernière session** : 2026-04-10 — P32 PyPI Release + README v1
+**Version** : 1.0.0
+**Tests** : 1482 passed
 
 ## Dernière action
-- **P31 implémentée** : recall structuré par date, importance et logique de tags
-- `src/memos/query.py` + `src/memos/core.py`
-  - `MemoryQuery` / `QueryEngine`
-  - filtres `include` / `require` / `exclude`, bornes d’importance, plage de dates
-  - `list_memories()` triable côté core
-- `src/memos/api/__init__.py`
-  - `POST /api/v1/recall` enrichi (`tags`, `importance`, `created_after|before`, `top_k`, `retrieval_mode`)
-  - nouveau `GET /api/v1/memories` avec filtres et tri
-- `src/memos/cli.py` / `src/memos/mcp_server.py`
-  - `memos recall --min-importance --max-importance --tag-mode --require-tags --exclude-tags`
-  - MCP `memory_search` enrichi avec filtres avancés
-- stabilité annexe : `src/memos/knowledge_graph.py` réaligné avec les tests labels (`confidence_label`, `query_by_label`, `label_stats`, `infer_transitive`)
-- Validation : `python -m pytest -x -q` → **1349 passed**
+- **P32 implémentée** : préparation release `memos-agent` pour PyPI + documentation v1
+- `pyproject.toml` + `src/memos/__init__.py`
+  - renommage package PyPI en `memos-agent`
+  - bump version `1.0.0`
+  - metadata complétée (`classifiers`, `keywords`, `project.urls`)
+  - packaging `src/` réaligné via `tool.setuptools`
+- `.github/workflows/publish.yml`
+  - build + `twine check` + publication PyPI sur tags `v1.*`
+  - mode trusted publishing prêt côté GitHub Actions
+- `README.md` + `CHANGELOG.md`
+  - README réécrit comme doc de référence (quick start, MCP, backends, Docker, API)
+  - changelog consolidé de `v0.29.0` à `v1.0.0`
+- Validation : `python -m pytest -x -q` → **1482 passed**
+- Validation packaging : `python -m build` → wheel + sdist **OK**
 
 ## Prochaine étape
-- **P32 — PyPI Release + README v1**
-- **P34 — Embeddings intégrés** (friction d’adoption)
+- **P34 — Embeddings intégrés** (friction d’adoption, bloque l’onboarding sans services externes)
+- puis finaliser la séquence release/merge/tag v1 après review
