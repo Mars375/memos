@@ -98,3 +98,79 @@ class TestNamespaceIsolation:
         assert mem.namespace == "test-ns"
         mem.namespace = ""
         assert mem.namespace == ""
+
+
+class TestNamespaceManagement:
+    def test_create_stats_export_import_delete(self, tmp_path):
+        source = MemOS(
+            backend="memory",
+            persist_path=str(tmp_path / "source-store.json"),
+            sanitize=False,
+        )
+        created = source.create_namespace("orion", description="SRE agent")
+        assert created["name"] == "orion"
+        assert created["description"] == "SRE agent"
+
+        source.namespace = "orion"
+        source.learn("Rotate nginx logs weekly", tags=["ops", "sre"])
+        source.learn("Pager alerts route to Orion", tags=["ops"])
+        source.namespace = ""
+
+        stats = source.namespace_stats("orion")
+        assert stats["memory_count"] == 2
+        assert stats["size_chars"] > 0
+        assert stats["top_tags"][0]["tag"] == "ops"
+
+        export = source.export_namespace("orion")
+        assert export["namespace"] == "orion"
+        assert export["total"] == 2
+
+        target = MemOS(
+            backend="memory",
+            persist_path=str(tmp_path / "target-store.json"),
+            sanitize=False,
+        )
+        imported = target.import_namespace("orion", export)
+        assert imported["imported"] == 2
+        assert target.namespace_stats("orion")["memory_count"] == 2
+
+        deleted = source.delete_namespace("orion", confirm=True)
+        assert deleted["deleted_memories"] == 2
+        assert "orion" not in source.list_namespaces()
+
+    def test_namespace_api_endpoints(self, tmp_path):
+        from fastapi.testclient import TestClient
+        from memos.api import create_fastapi_app
+
+        memos = MemOS(
+            backend="memory",
+            persist_path=str(tmp_path / "api-store.json"),
+            sanitize=False,
+        )
+        client = TestClient(create_fastapi_app(memos=memos))
+
+        create_resp = client.post(
+            "/api/v1/namespaces",
+            json={"name": "proto", "description": "Labs agent"},
+        )
+        assert create_resp.json()["namespace"]["name"] == "proto"
+
+        import_resp = client.post(
+            "/api/v1/namespaces/proto/import",
+            json={"memories": [{"content": "Build experiment plan", "tags": ["labs"]}]},
+        )
+        assert import_resp.json()["imported"] == 1
+
+        list_resp = client.get("/api/v1/namespaces")
+        payload = list_resp.json()
+        assert payload["status"] == "ok"
+        assert any(ns["name"] == "proto" for ns in payload["namespaces"])
+
+        stats_resp = client.get("/api/v1/namespaces/proto")
+        assert stats_resp.json()["namespace"]["memory_count"] == 1
+
+        export_resp = client.post("/api/v1/namespaces/proto/export")
+        assert export_resp.json()["export"]["total"] == 1
+
+        delete_resp = client.delete("/api/v1/namespaces/proto?confirm=true")
+        assert delete_resp.json()["deleted_memories"] == 1

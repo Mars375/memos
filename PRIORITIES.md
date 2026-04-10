@@ -671,21 +671,17 @@ Sans dédup, miner le même fichier deux fois double les mémoires → recall br
 
 ---
 
-## [ ] P30 — Namespace Management API
+## [x] P30 — Namespace Management API
 **Priorité : HAUTE — bloquant v1 multi-agent**
-**Objectif :** API REST complète pour gérer les namespaces — indispensable pour 5 agents OpenClaw.
+Implémenté v0.46.0 — registre persistant des namespaces, stats/export/import par namespace, API REST complète, CLI `memos namespaces`, MCP `namespace_list`/`namespace_stats`, 5 tests ciblés ajoutés.
 
-Actuellement : les namespaces existent en CLI mais invisible depuis l'API → aucun outil agent ne peut gérer ses propres espaces.
-
-À implémenter dans `src/memos/api/__init__.py` :
-- `GET /api/v1/namespaces` — liste tous les namespaces (nom, nb mémoires, taille, dernière activité)
-- `POST /api/v1/namespaces` body `{"name": "orion", "description": "SRE agent"}` — crée un namespace
-- `GET /api/v1/namespaces/{name}` — stats détaillées (nb mémoires, top tags, dernière écriture)
-- `DELETE /api/v1/namespaces/{name}` — supprime namespace + toutes ses mémoires (confirmation required)
-- `POST /api/v1/namespaces/{name}/export` — export JSON du namespace
-- `POST /api/v1/namespaces/{name}/import` — import JSON dans le namespace
-- MCP tool : `namespace_list`, `namespace_stats`
-- CLI : `memos namespaces list`, `memos namespaces delete <name>`
+Réalisé :
+- `src/memos/namespaces/registry.py` pour persister `description`, `created_at`, `updated_at`
+- `src/memos/core.py` avec `create_namespace`, `namespace_stats`, `list_namespace_details`, `delete_namespace`, `export_namespace`, `import_namespace`
+- `src/memos/api/__init__.py` avec `GET/POST /api/v1/namespaces`, `GET/DELETE /api/v1/namespaces/{name}`, `POST /api/v1/namespaces/{name}/export|import`
+- `src/memos/cli.py` avec `memos namespaces list|stats|delete --yes`
+- `src/memos/mcp_server.py` avec `namespace_list` et `namespace_stats`
+- correction bonus : l’export/import JSON et le moteur de retrieval respectent désormais le namespace courant
 
 ---
 

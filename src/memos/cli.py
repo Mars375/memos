@@ -1460,6 +1460,24 @@ def build_parser() -> argparse.ArgumentParser:
     ns_stats.add_argument("--json", action="store_true", help="JSON output")
     ns_stats.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
 
+    # namespace management
+    namespaces_p = sub.add_parser("namespaces", help="List, inspect, and delete namespaces")
+    namespaces_sub = namespaces_p.add_subparsers(dest="namespaces_action")
+
+    namespaces_list = namespaces_sub.add_parser("list", help="List namespaces with counts and activity")
+    namespaces_list.add_argument("--json", action="store_true", help="JSON output")
+    namespaces_list.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    namespaces_stats = namespaces_sub.add_parser("stats", help="Show detailed stats for one namespace")
+    namespaces_stats.add_argument("name", help="Namespace name")
+    namespaces_stats.add_argument("--json", action="store_true", help="JSON output")
+    namespaces_stats.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
+    namespaces_delete = namespaces_sub.add_parser("delete", help="Delete a namespace and all its memories")
+    namespaces_delete.add_argument("name", help="Namespace name")
+    namespaces_delete.add_argument("--yes", action="store_true", help="Confirm destructive deletion")
+    namespaces_delete.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+
     # compact
     # prune-expired
     pe = sub.add_parser("prune-expired", help="Remove expired memories (past their TTL)")
@@ -2166,6 +2184,58 @@ def cmd_ns_stats(ns: argparse.Namespace) -> None:
     if stats.get('role_distribution'):
         for role, count in stats['role_distribution'].items():
             print(f"    {role}: {count}")
+
+
+def cmd_namespaces(ns: argparse.Namespace) -> None:
+    """Manage namespace metadata and lifecycle."""
+    memos = _get_memos(ns)
+    action = getattr(ns, "namespaces_action", None)
+
+    if action == "list":
+        namespaces = memos.list_namespace_details()
+        if getattr(ns, "json", False):
+            print(json.dumps({"namespaces": namespaces, "total": len(namespaces)}, indent=2))
+            return
+        if not namespaces:
+            print("No namespaces found")
+            return
+        for info in namespaces:
+            last = "-"
+            if info.get("last_activity"):
+                last = datetime.fromtimestamp(info["last_activity"], tz=timezone.utc).isoformat()
+            desc = f" — {info['description']}" if info.get("description") else ""
+            print(
+                f"  {info['name']}: {info['memory_count']} memories, "
+                f"{info['size_chars']} chars, last={last}{desc}"
+            )
+        print(f"\n{len(namespaces)} namespace(s)")
+        return
+
+    if action == "stats":
+        stats = memos.namespace_stats(ns.name)
+        if getattr(ns, "json", False):
+            print(json.dumps(stats, indent=2))
+            return
+        print(f"Name:          {stats['name']}")
+        print(f"Description:   {stats.get('description') or '-'}")
+        print(f"Memories:      {stats['memory_count']}")
+        print(f"Size (chars):  {stats['size_chars']}")
+        print(f"Last activity: {stats.get('last_activity') or '-'}")
+        if stats.get("top_tags"):
+            print("Top tags:")
+            for tag in stats["top_tags"]:
+                print(f"  {tag['tag']}: {tag['count']}")
+        return
+
+    if action == "delete":
+        if not getattr(ns, "yes", False):
+            print("Refusing to delete namespace without --yes", file=sys.stderr)
+            sys.exit(1)
+        result = memos.delete_namespace(ns.name, confirm=True)
+        print(f"Deleted namespace '{result['name']}' ({result['deleted_memories']} memories removed)")
+        return
+
+    raise SystemExit("Unknown namespaces action")
 
 
 def cmd_compact(ns: argparse.Namespace) -> None:
@@ -3209,6 +3279,7 @@ def main(argv: list[str] | None = None) -> None:
         "ns-revoke": cmd_ns_revoke,
         "ns-policies": cmd_ns_policies,
         "ns-stats": cmd_ns_stats,
+        "namespaces": cmd_namespaces,
         "compact": cmd_compact,
         "cache-stats": cmd_cache_stats,
         "benchmark": cmd_benchmark,

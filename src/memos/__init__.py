@@ -1,6 +1,6 @@
 """MemOS — Memory Operating System for LLM Agents."""
 
-__version__ = "0.45.0"
+__version__ = "0.46.0"
 
 from .core import MemOS
 from .compression import MemoryCompressor, CompressionResult

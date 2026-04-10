@@ -11,16 +11,21 @@ def mem():
     m.learn("Python is great for scripting", tags=["python", "dev"])
     m.learn("Use async/await for concurrency", tags=["python", "async"])
     m.learn("Docker simplifies deployment", tags=["devops"])
+    m.create_namespace("orion", description="SRE agent")
+    m.namespace = "orion"
+    m.learn("Rotate nginx logs weekly", tags=["ops"])
+    m.namespace = ""
     return m
 
 
 def test_tools_list(mem):
-    assert len(TOOLS) == 15  # 4 memory + 3 kg + 1 bridge + 2 decay/reinforce + 2 context-stack (P7) + 2 sync (P12) + 1 brain_search (P25)
+    assert len(TOOLS) == 17  # prior tools + 2 namespace tools (P30)
     names = {t["name"] for t in TOOLS}
     assert {"memory_search", "memory_save", "memory_forget", "memory_stats"}.issubset(names)
     assert {"kg_add_fact", "kg_query_entity", "kg_timeline"}.issubset(names)
     assert {"memory_decay", "memory_reinforce"}.issubset(names)
     assert {"memory_wake_up", "memory_context_for"}.issubset(names)
+    assert {"namespace_list", "namespace_stats"}.issubset(names)
 
 
 def test_dispatch_search(mem):
@@ -53,6 +58,20 @@ def test_dispatch_unknown_tool(mem):
     assert r.get("isError")
 
 
+def test_dispatch_namespace_list(mem):
+    r = _dispatch(mem, "namespace_list", {})
+    assert not r.get("isError")
+    assert "orion" in r["content"][0]["text"]
+
+
+def test_dispatch_namespace_stats(mem):
+    r = _dispatch(mem, "namespace_stats", {"name": "orion"})
+    assert not r.get("isError")
+    text = r["content"][0]["text"]
+    assert "Namespace: orion" in text
+    assert "Memories: 1" in text
+
+
 def test_dispatch_save_empty(mem):
     r = _dispatch(mem, "memory_save", {"content": ""})
     assert r.get("isError")
@@ -75,7 +94,7 @@ async def test_http_tools_list(mem):
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        assert len(r.json()["result"]["tools"]) == 15  # + 2 sync (P12)
+        assert len(r.json()["result"]["tools"]) == 17
 
 
 @pytest.mark.asyncio

@@ -273,6 +273,22 @@ TOOLS = [
             "required": ["query"],
         },
     },
+    {
+        "name": "namespace_list",
+        "description": "List known namespaces with counts, size, and last activity.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "namespace_stats",
+        "description": "Return detailed stats for one namespace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Namespace name"},
+            },
+            "required": ["name"],
+        },
+    },
 ]
 
 
@@ -477,6 +493,39 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
                 include_kg=bool(args.get("include_kg", True)),
             )
             return _text(result.context)
+
+        elif tool == "namespace_list":
+            namespaces = memos.list_namespace_details()
+            if not namespaces:
+                return _text("No namespaces found.")
+            lines = []
+            for ns in namespaces:
+                desc = f" — {ns['description']}" if ns.get("description") else ""
+                lines.append(
+                    f"{ns['name']}: {ns['memory_count']} memories, "
+                    f"{ns['size_chars']} chars{desc}"
+                )
+            return _text("\n".join(lines))
+
+        elif tool == "namespace_stats":
+            name = args.get("name", "").strip()
+            if not name:
+                return _error("name is required")
+            try:
+                stats = memos.namespace_stats(name)
+            except ValueError as exc:
+                return _error(str(exc))
+            lines = [
+                f"Namespace: {stats['name']}",
+                f"Description: {stats.get('description') or '-'}",
+                f"Memories: {stats['memory_count']}",
+                f"Size: {stats['size_chars']} chars",
+            ]
+            if stats.get("top_tags"):
+                lines.append("Top tags:")
+                for tag in stats["top_tags"]:
+                    lines.append(f"  {tag['tag']}: {tag['count']}")
+            return _text("\n".join(lines))
 
         elif tool == "memory_sync_check":
             from .conflict import ConflictDetector

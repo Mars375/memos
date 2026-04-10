@@ -86,7 +86,7 @@ class RetrievalEngine:
             )
 
         # Standard in-memory hybrid search
-        all_items = self._store.list_all()
+        all_items = self._store.list_all(namespace=namespace)
 
         # Filter by tags if specified
         if filter_tags:

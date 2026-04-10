@@ -257,3 +257,26 @@ class TestCLIFunctional:
         assert "2 result(s)" in out
         # cleanup
         main(["forget", "--tag", "search-limit-test"])
+
+    def test_namespaces_list_and_delete(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+
+        store = tmp_path / ".memos" / "store.json"
+        memos = __import__("memos").MemOS(backend="memory", persist_path=str(store), sanitize=False)
+        memos.create_namespace("orion", description="SRE agent")
+        memos.namespace = "orion"
+        memos.learn("Rotate logs", tags=["ops"])
+
+        main(["namespaces", "list"])
+        out = capsys.readouterr().out
+        assert "orion" in out
+        assert "SRE agent" in out
+
+        main(["namespaces", "stats", "orion"])
+        out = capsys.readouterr().out
+        assert "Memories:" in out
+        assert "1" in out
+
+        main(["namespaces", "delete", "orion", "--yes"])
+        out = capsys.readouterr().out
+        assert "Deleted namespace 'orion'" in out

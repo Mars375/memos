@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Optional
 
 from .dedup import DedupEngine, DedupScanResult
@@ -25,6 +27,7 @@ from .events import EventBus
 from .versioning.engine import VersioningEngine
 from .versioning.models import MemoryVersion, VersionDiff
 from .namespaces.acl import NamespaceACL, Role
+from .namespaces.registry import NamespaceRegistry
 from .cache.embedding_cache import EmbeddingCache
 from .cache.embedding_cache import EmbeddingCache
 from .analytics import RecallAnalytics
@@ -115,6 +118,13 @@ class MemOS:
             self._store = EncryptedStorageBackend(store, crypto)
         else:
             self._store = store
+
+        registry_path = kwargs.get("namespace_registry_path")
+        if registry_path is None:
+            store_path = getattr(store, "_path", None)
+            if store_path is not None:
+                registry_path = str(Path(store_path).with_name("namespaces.json"))
+        self._namespace_registry = NamespaceRegistry(path=registry_path)
 
         # Retrieval
         self._retrieval = RetrievalEngine(
@@ -309,6 +319,8 @@ class MemOS:
         )
 
         self._store.upsert(item, namespace=self._namespace)
+        if self._namespace:
+            self._namespace_registry.touch(self._namespace)
         self._retrieval.index(item)
         self._versioning.record_version(item, source="learn")
 
@@ -861,7 +873,105 @@ class MemOS:
 
     def list_namespaces(self) -> list[str]:
         """List all non-default namespaces."""
-        return self._store.list_namespaces()
+        names = {
+            name
+            for name in self._store.list_namespaces()
+            if self._store.list_all(namespace=name)
+        }
+        names.update(record["name"] for record in self._namespace_registry.list())
+        return sorted(names)
+
+    def create_namespace(self, name: str, description: str = "") -> dict[str, Any]:
+        """Create or register a namespace without requiring a first memory write."""
+        record = self._namespace_registry.register(name, description)
+        namespace = record["name"]
+        self._store.list_all(namespace=namespace)
+        self._events.emit_sync(
+            "namespace_created",
+            {"name": namespace, "description": record.get("description", "")},
+            namespace=namespace,
+        )
+        return record
+
+    def namespace_stats(self, name: str) -> dict[str, Any]:
+        """Return detailed statistics for a namespace."""
+        namespace = NamespaceRegistry.validate_name(name)
+        record = self._namespace_registry.get(namespace) or {
+            "name": namespace,
+            "description": "",
+            "created_at": None,
+            "updated_at": None,
+        }
+        items = self._store.list_all(namespace=namespace)
+        tag_counts = Counter(tag for item in items for tag in item.tags)
+        item_activity = [max(item.created_at, item.accessed_at) for item in items]
+        last_activity = max(item_activity, default=0.0)
+        record_updated = float(record.get("updated_at") or 0.0)
+        if record_updated > last_activity:
+            last_activity = record_updated
+        return {
+            "name": namespace,
+            "description": str(record.get("description", "") or ""),
+            "memory_count": len(items),
+            "size_chars": sum(len(item.content) for item in items),
+            "last_activity": last_activity or None,
+            "created_at": record.get("created_at"),
+            "updated_at": record.get("updated_at"),
+            "top_tags": [
+                {"tag": tag, "count": count}
+                for tag, count in tag_counts.most_common(10)
+            ],
+        }
+
+    def list_namespace_details(self) -> list[dict[str, Any]]:
+        """Return namespace summaries with counts and metadata."""
+        return [self.namespace_stats(name) for name in self.list_namespaces()]
+
+    def delete_namespace(self, name: str, *, confirm: bool = False) -> dict[str, Any]:
+        """Delete a namespace and all memories stored inside it."""
+        namespace = NamespaceRegistry.validate_name(name)
+        if not confirm:
+            raise ValueError("confirm=true is required to delete a namespace")
+        items = list(self._store.list_all(namespace=namespace))
+        deleted = 0
+        for item in items:
+            if self._store.delete(item.id, namespace=namespace):
+                deleted += 1
+        self._namespace_registry.delete(namespace)
+        self._events.emit_sync(
+            "namespace_deleted",
+            {"name": namespace, "deleted_memories": deleted},
+            namespace=namespace,
+        )
+        return {"name": namespace, "deleted_memories": deleted}
+
+    def export_namespace(self, name: str, *, include_metadata: bool = True) -> dict[str, Any]:
+        """Export a specific namespace as JSON."""
+        namespace = NamespaceRegistry.validate_name(name)
+        previous = self._namespace
+        self._namespace = namespace
+        try:
+            return self.export_json(include_metadata=include_metadata)
+        finally:
+            self._namespace = previous
+
+    def import_namespace(
+        self,
+        name: str,
+        data: dict,
+        *,
+        merge: str = "skip",
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Import a JSON export into a target namespace."""
+        namespace = NamespaceRegistry.validate_name(name)
+        self.create_namespace(namespace)
+        previous = self._namespace
+        self._namespace = namespace
+        try:
+            return self.import_json(data, merge=merge, dry_run=dry_run)
+        finally:
+            self._namespace = previous
 
     # ── Namespace ACL Management ───────────────────────────
 
@@ -1060,10 +1170,11 @@ class MemOS:
 
     def export_json(self, *, include_metadata: bool = True) -> dict:
         """Export all memories as a JSON-serializable dict."""
-        items = self._store.list_all()
+        items = self._store.list_all(namespace=self._namespace)
         return {
             "version": "0.2.0",
             "exported_at": time.time(),
+            "namespace": self._namespace,
             "total": len(items),
             "memories": [
                 {
@@ -1092,17 +1203,20 @@ class MemOS:
         result = {"imported": 0, "skipped": 0, "overwritten": 0, "errors": []}
         memories = data.get("memories", [])
 
+        if self._namespace and not dry_run:
+            self._namespace_registry.touch(self._namespace)
+
         for entry in memories:
             try:
                 mem_id = entry.get("id", generate_id(entry["content"]))
-                existing = self._store.get(mem_id)
+                existing = self._store.get(mem_id, namespace=self._namespace)
 
                 if existing and merge == "skip":
                     result["skipped"] += 1
                     continue
 
                 if existing and merge == "overwrite":
-                    self._store.delete(mem_id)
+                    self._store.delete(mem_id, namespace=self._namespace)
                     result["overwritten"] += 1
 
                 tags = list(entry.get("tags", []))
@@ -1120,7 +1234,7 @@ class MemOS:
                         access_count=entry.get("access_count", 0),
                         metadata=entry.get("metadata", {}),
                     )
-                    self._store.upsert(item)
+                    self._store.upsert(item, namespace=self._namespace)
                     self._retrieval.index(item)
                 result["imported"] += 1
             except Exception as e:

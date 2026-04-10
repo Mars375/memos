@@ -1395,8 +1395,92 @@ def create_fastapi_app(
             },
         )
 
+    # ── Namespace Management API ────────────────────────────
+
+    @app.get("/api/v1/namespaces")
+    async def api_namespaces_list():
+        namespaces = memos.list_namespace_details()
+        return {"status": "ok", "namespaces": namespaces, "total": len(namespaces)}
+
+    @app.post("/api/v1/namespaces")
+    async def api_namespaces_create(body: dict):
+        name = (body.get("name") or "").strip()
+        if not name:
+            return {"status": "error", "message": "name is required"}
+        try:
+            record = memos.create_namespace(name, description=body.get("description", "") or "")
+            return {"status": "ok", "namespace": record}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.get("/api/v1/namespaces/acl/policies")
+    async def api_acl_all_policies():
+        """List all ACL policies across all namespaces."""
+        policies = memos.list_namespace_policies()
+        return {"policies": policies, "total": len(policies)}
+
+    @app.get("/api/v1/namespaces/acl/stats")
+    async def api_acl_stats():
+        """Get namespace ACL statistics."""
+        return memos.namespace_acl_stats()
+
+    @app.get("/api/v1/namespaces/{name}")
+    async def api_namespace_stats(name: str):
+        try:
+            return {"status": "ok", "namespace": memos.namespace_stats(name)}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.delete("/api/v1/namespaces/{name}")
+    async def api_namespace_delete(name: str, confirm: bool = False):
+        try:
+            result = memos.delete_namespace(name, confirm=confirm)
+            return {"status": "ok", **result}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/namespaces/{name}/export")
+    async def api_namespace_export(name: str, body: dict | None = None):
+        payload = body or {}
+        try:
+            export = memos.export_namespace(
+                name,
+                include_metadata=bool(payload.get("include_metadata", True)),
+            )
+            return {"status": "ok", "namespace": name, "export": export}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
+    @app.post("/api/v1/namespaces/{name}/import")
+    async def api_namespace_import(name: str, body: dict):
+        if "data" in body and isinstance(body["data"], dict):
+            data = body["data"]
+        elif "export" in body and isinstance(body["export"], dict):
+            data = body["export"]
+        elif "memories" in body:
+            data = {
+                "version": body.get("version"),
+                "exported_at": body.get("exported_at"),
+                "namespace": body.get("namespace", name),
+                "total": body.get("total", len(body.get("memories", []))),
+                "memories": body.get("memories", []),
+            }
+        else:
+            return {"status": "error", "message": "data or memories payload is required"}
+        try:
+            result = memos.import_namespace(
+                name,
+                data,
+                merge=body.get("merge", "skip"),
+                dry_run=bool(body.get("dry_run", False)),
+            )
+            return {"status": "ok", "namespace": name, **result}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}
+
     # ── Namespace ACL API ───────────────────────────────────
 
+    @app.post("/api/v1/namespaces/{namespace}/acl/grant")
     @app.post("/api/v1/namespaces/{namespace}/grant")
     async def api_acl_grant(namespace: str, body: dict):
         """Grant an agent access to a namespace.
@@ -1418,6 +1502,7 @@ def create_fastapi_app(
         except ValueError as e:
             return {"status": "error", "message": str(e)}
 
+    @app.post("/api/v1/namespaces/{namespace}/acl/revoke")
     @app.post("/api/v1/namespaces/{namespace}/revoke")
     async def api_acl_revoke(namespace: str, body: dict):
         """Revoke an agent's access to a namespace.
@@ -1430,22 +1515,12 @@ def create_fastapi_app(
         success = memos.revoke_namespace_access(agent_id, namespace)
         return {"status": "revoked" if success else "not_found"}
 
+    @app.get("/api/v1/namespaces/{namespace}/acl/policies")
     @app.get("/api/v1/namespaces/{namespace}/policies")
     async def api_acl_list(namespace: str):
         """List all ACL policies for a namespace."""
         policies = memos.list_namespace_policies(namespace=namespace)
         return {"namespace": namespace, "policies": policies, "total": len(policies)}
-
-    @app.get("/api/v1/namespaces")
-    async def api_acl_all_policies():
-        """List all ACL policies across all namespaces."""
-        policies = memos.list_namespace_policies()
-        return {"policies": policies, "total": len(policies)}
-
-    @app.get("/api/v1/namespaces/acl/stats")
-    async def api_acl_stats():
-        """Get namespace ACL statistics."""
-        return memos.namespace_acl_stats()
 
 
     # ── Multi-Agent Sharing API ─────────────────────────────
