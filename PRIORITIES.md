@@ -511,7 +511,8 @@ Sources supportées :
 
 ---
 
-## [ ] P23 — Speaker Ownership (Conversation Miner)
+## [x] P23 — Speaker Ownership (Conversation Miner)
+Implemented v0.38.0 — ConversationMiner, parse_conversation, CLI `mine-conversation`, REST `POST /api/v1/mine/conversation`, 54 tests.
 **Objectif :** Dans le conversation miner, attribuer chaque mémoire au bon speaker.
 
 Actuellement : toutes les lignes d'un transcript vont dans le même namespace.

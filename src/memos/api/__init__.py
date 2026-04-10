@@ -420,6 +420,46 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     rate_limiter = RateLimiter(default_max=rate_limit, rules=DEFAULT_RULES)
     app.middleware("http")(create_rate_limit_middleware(rate_limiter))
 
+    @app.post("/api/v1/mine/conversation")
+    async def api_mine_conversation(body: dict):
+        """Mine a conversation file with speaker attribution.
+
+        Body: {"path": "...", "per_speaker": true, "namespace_prefix": "conv",
+               "tags": [...], "importance": 0.55}
+        """
+        from ..miner.conversation import ConversationMiner
+        path = body.get("path", "").strip()
+        if not path:
+            return {"status": "error", "message": "path is required"}
+        from pathlib import Path as _Path
+        if not _Path(path).expanduser().exists():
+            return {"status": "error", "message": f"File not found: {path}"}
+        miner = ConversationMiner(
+            memos,
+            namespace_prefix=body.get("namespace_prefix", "conv"),
+            per_speaker=body.get("per_speaker", True),
+            extra_tags=body.get("tags"),
+        )
+        try:
+            result = miner.mine_conversation(
+                path,
+                tags=body.get("tags"),
+                importance=float(body.get("importance", 0.55)),
+                per_speaker=body.get("per_speaker"),
+            )
+            return {
+                "status": "ok",
+                "imported": result.imported,
+                "speakers": result.speakers_detected,
+                "turns_total": result.turns_total,
+                "skipped_duplicates": result.skipped_duplicates,
+                "skipped_empty": result.skipped_empty,
+                "memory_ids": result.memory_ids,
+                "errors": result.errors,
+            }
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # Dashboard
     from ..web import DASHBOARD_HTML
 
