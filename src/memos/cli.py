@@ -1533,6 +1533,16 @@ def build_parser() -> argparse.ArgumentParser:
     wg.add_argument("--update", action="store_true", help="Incrementally update only changed pages")
     wg.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
 
+    # brain-search
+    brain = sub.add_parser("brain-search", help="Unified search across memories, living wiki pages, and knowledge graph")
+    brain.add_argument("query", help="Search query")
+    brain.add_argument("--top", type=int, default=10, help="Max results per source")
+    brain.add_argument("--tags", help="Comma-separated tag filter for memories")
+    brain.add_argument("--wiki-dir", dest="wiki_dir", help="Wiki directory")
+    brain.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
+    brain.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone", "json"])
+    brain.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+
     # mine
     mine_p = sub.add_parser("mine", help="Smart mine — import files/conversations into memories")
     mine_p.add_argument("paths", nargs="+", help="Files or directories to mine")
@@ -2907,6 +2917,34 @@ def cmd_wiki_graph(ns: argparse.Namespace) -> None:
         kg.close()
 
 
+def cmd_brain_search(ns: argparse.Namespace) -> None:
+    """Run unified search across memories, living wiki pages, and the knowledge graph."""
+    from .brain import BrainSearch
+
+    memos = _get_memos(ns)
+    kg = _get_kg(ns)
+    try:
+        searcher = BrainSearch(memos, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
+        tags = ns.tags.split(",") if getattr(ns, "tags", None) else None
+        result = searcher.search(ns.query, top_k=ns.top, filter_tags=tags)
+        print(f"Brain search: {ns.query}")
+        if result.entities:
+            print("Entities:", ", ".join(result.entities))
+        print(f"Memories: {len(result.memories)}")
+        for item in result.memories:
+            print(f"  [{item.score:.2f}] {item.content}")
+        print(f"Wiki pages: {len(result.wiki_pages)}")
+        for item in result.wiki_pages:
+            print(f"  [{item.score:.2f}] {item.entity}: {item.snippet}")
+        print(f"KG facts: {len(result.kg_facts)}")
+        for item in result.kg_facts:
+            print(f"  [{item.confidence_label}] {item.subject} -{item.predicate}-> {item.object}")
+        print("Context:")
+        print(result.context)
+    finally:
+        kg.close()
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = build_parser()
     ns = parser.parse_args(argv)
@@ -2972,6 +3010,7 @@ def main(argv: list[str] | None = None) -> None:
         "wiki-read": cmd_wiki_read,
         "wiki-living": cmd_wiki_living,
         "wiki-graph": cmd_wiki_graph,
+        "brain-search": cmd_brain_search,
         "mine": cmd_mine,
         "mine-status": cmd_mine_status,
         "kg-add": cmd_kg_add,

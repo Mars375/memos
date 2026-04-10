@@ -552,7 +552,8 @@ Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes 
 #  Ces 3 priorités transforment les features séparées en cerveau unique.
 # ═══════════════════════════════════════════════════════════════════════
 
-## [ ] P25 — Unified Brain Search (une requête → tout le savoir)
+## [~] P25 — Unified Brain Search (une requête → tout le savoir)
+Implémenté sur branche `feat/p25-unified-brain-search` — `BrainSearch`, CLI `brain-search`, REST `POST /api/v1/brain/search`, MCP `brain_search`, 4 tests dédiés + suite complète verte. (v0.37.1)
 **Objectif :** Un agent ne doit pas savoir si la réponse est dans une mémoire, un fait KG, ou une page wiki. MemOS cherche dans les 3 et retourne un résultat fusionné.
 
 Problème actuel : `recall` cherche dans les mémoires, `wiki-living search` cherche dans les pages wiki, le KG est interrogé séparément. 3 appels distincts pour avoir la vue complète.

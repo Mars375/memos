@@ -600,6 +600,30 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             ],
         }
 
+    @app.post("/api/v1/brain/search")
+    async def brain_search(body: dict):
+        """Unified search across memories, living wiki pages, and the knowledge graph."""
+        from ..brain import BrainSearch
+
+        query = body.get("query", "").strip()
+        if not query:
+            return {"status": "error", "message": "query is required"}
+        try:
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=body.get("wiki_dir"))
+            result = searcher.search(
+                query,
+                top_k=int(body.get("top_k", 10)),
+                filter_tags=body.get("tags"),
+                min_score=float(body.get("min_score", 0.0)),
+                retrieval_mode=body.get("retrieval_mode", "hybrid"),
+                max_context_chars=int(body.get("max_context_chars", 2000)),
+            )
+            payload = result.to_dict()
+            payload["status"] = "ok"
+            return payload
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # ---- End Knowledge Graph ----
 
     # ---- Palace (P6) ----
