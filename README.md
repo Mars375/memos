@@ -5,8 +5,8 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.32.0-purple.svg)](https://github.com/Mars375/memos/releases)
-[![Tests](https://img.shields.io/badge/tests-1195_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![Version](https://img.shields.io/badge/version-v0.37.0-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Tests](https://img.shields.io/badge/tests-1402_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 
 ---
 
@@ -341,9 +341,21 @@ mem_bob   = MemOS(backend="chroma", namespace="agent-bob")
 git clone https://github.com/Mars375/memos
 cd memos
 pip install -e ".[dev]"
-pytest -q --tb=no          # 1195 tests
+pytest -q --tb=no          # 1402 tests
 pytest tests/test_core.py  # specific module
 ```
+
+---
+
+## Architecture
+
+MemOS is built around three core layers (see [PRD.md](PRD.md)):
+
+- **Capture** — Mine conversations and events into structured memory units via the CLI (`memos mine`), SDK, or MCP.
+- **Engine** — Storage, recall, decay, reinforcement, versioning, and knowledge graph. Pluggable backends (in-memory, JSON, ChromaDB, Qdrant, Pinecone).
+- **Knowledge Surface** — Living wiki, graph view, and context packs (`wake_up`, `context_for`, `recall_enriched`) that serve the right context at the right time.
+
+See [ROADMAP.md](ROADMAP.md) for planned features and current status.
 
 ---
 

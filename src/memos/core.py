@@ -28,6 +28,7 @@ from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .migration import MigrationEngine, MigrationReport, _create_backend
+from .compression import MemoryCompressor, CompressionResult
 
 
 class MemOS:
@@ -1246,6 +1247,34 @@ class MemOS:
         if self._embedding_cache is None:
             return -1
         return self._embedding_cache.clear()
+
+    def compress(
+        self,
+        *,
+        threshold: float = 0.1,
+        dry_run: bool = False,
+    ) -> CompressionResult:
+        """Compress very low-importance memories into aggregate summaries."""
+        compressor = MemoryCompressor()
+        items = self._store.list_all(namespace=self._namespace)
+        result = compressor.compress(items, threshold=threshold)
+
+        if not dry_run:
+            for item_id in result.deleted_ids:
+                self._store.delete(item_id, namespace=self._namespace)
+            for summary in result.summaries:
+                self._store.upsert(summary, namespace=self._namespace)
+                self._retrieval.index(summary)
+
+            if result.summary_count:
+                self._events.emit_sync("compressed", {
+                    "compressed_count": result.compressed_count,
+                    "summary_count": result.summary_count,
+                    "freed_bytes": result.freed_bytes,
+                    "threshold": threshold,
+                }, namespace=self._namespace)
+
+        return result
 
     # ── Versioning & Time-Travel ────────────────────────────
 

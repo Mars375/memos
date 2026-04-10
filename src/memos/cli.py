@@ -1742,6 +1742,12 @@ def build_parser() -> argparse.ArgumentParser:
     reinforce_p.add_argument("--strength", type=float, default=None, help="Boost amount (default: 0.05)")
     reinforce_p.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "json", "chroma", "qdrant", "pinecone"])
 
+    compress_p = sub.add_parser("compress", help="Compress decayed memories into aggregate summaries")
+    compress_p.add_argument("--threshold", type=float, default=0.1, help="Importance threshold (default: 0.1)")
+    compress_p.add_argument("--dry-run", action="store_true", help="Preview without modifying memories")
+    compress_p.add_argument("--verbose", "-v", action="store_true")
+    compress_p.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "json", "chroma", "qdrant", "pinecone"])
+
     return p
 
 
@@ -2827,6 +2833,24 @@ def cmd_reinforce(ns: argparse.Namespace) -> None:
     m._store.upsert(item, namespace=m._namespace)
     print(f"✓ Reinforced [{item.id[:8]}] importance: {old_imp:.3f} → {new_imp:.3f}")
 
+
+def cmd_compress(ns: argparse.Namespace) -> None:
+    """Compress very low-importance memories into aggregate summaries."""
+    m = _get_memos(ns)
+    result = m.compress(threshold=ns.threshold, dry_run=ns.dry_run)
+    prefix = "DRY RUN " if ns.dry_run else ""
+    print(f"{prefix}Compression complete:")
+    print(f"  Compressed memories: {result.compressed_count}")
+    print(f"  Summary memories:    {result.summary_count}")
+    print(f"  Freed bytes:         {result.freed_bytes}")
+    if getattr(ns, "verbose", False) and result.details:
+        for detail in result.details[:10]:
+            tags = ", ".join(detail["tags"])
+            print(
+                f"  - [{tags}] {detail['source_count']} → {detail['summary_id'][:8]} "
+                f"({detail['freed_bytes']} bytes)"
+            )
+
 def cmd_wiki_living(ns: argparse.Namespace) -> None:
     """Living wiki commands."""
     from .wiki_living import LivingWikiEngine
@@ -3050,6 +3074,7 @@ def main(argv: list[str] | None = None) -> None:
         "classify": cmd_classify,
         "decay": cmd_decay,
         "reinforce": cmd_reinforce,
+        "compress": cmd_compress,
     }
     commands[ns.command](ns)
 

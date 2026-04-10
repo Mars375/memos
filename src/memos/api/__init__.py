@@ -1452,6 +1452,26 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             "importance_after": round(new_imp, 4),
         }
 
+    @app.post("/api/v1/compress")
+    async def api_compress(body: dict = None):
+        """Compress very low-importance memories into aggregate summaries.
+
+        Body (optional): {"threshold": 0.1, "dry_run": true}
+        """
+        body = body or {}
+        result = memos.compress(
+            threshold=float(body.get("threshold", 0.1)),
+            dry_run=bool(body.get("dry_run", True)),
+        )
+        return {
+            "status": "ok",
+            "compressed_count": result.compressed_count,
+            "summary_count": result.summary_count,
+            "freed_bytes": result.freed_bytes,
+            "groups_considered": result.groups_considered,
+            "details": result.details,
+        }
+
 
     # ── Sync & Conflict Resolution API (P12) ──────────────────────────
 

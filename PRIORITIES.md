@@ -527,7 +527,8 @@ Actuellement : toutes les lignes d'un transcript vont dans le même namespace.
 
 ---
 
-## [ ] P24 — Memory Compression (AAAK pour mémoires décayées)
+## [x] P24 — Memory Compression (AAAK pour mémoires décayées)
+Implemented — `MemoryCompressor`, `MemOS.compress()`, CLI `memos compress`, REST `POST /api/v1/compress`, 5 tests.
 **Objectif :** Compresser les mémoires très décayées (importance < 0.1) en résumés agrégés.
 
 Inspiré de AAAK compression pattern : éviter accumulation de mémoires mortes qui polluent le recall.
