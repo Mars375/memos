@@ -39,13 +39,20 @@ _CORS_HEADERS = {
 TOOLS = [
     {
         "name": "memory_search",
-        "description": "Search memories semantically. Returns the most relevant memories for a query.",
+        "description": "Search memories semantically with structured filters.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Search query"},
                 "top_k": {"type": "integer", "default": 5, "description": "Number of results"},
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Include tags (ANY match)"},
+                "require_tags": {"type": "array", "items": {"type": "string"}, "description": "Tags that must all be present"},
+                "exclude_tags": {"type": "array", "items": {"type": "string"}, "description": "Tags that must not be present"},
+                "min_importance": {"type": "number", "description": "Minimum importance filter"},
+                "max_importance": {"type": "number", "description": "Maximum importance filter"},
+                "created_after": {"type": "string", "description": "Only memories created after this ISO date"},
+                "created_before": {"type": "string", "description": "Only memories created before this ISO date"},
+                "retrieval_mode": {"type": "string", "enum": ["semantic", "keyword", "hybrid"], "default": "semantic"},
             },
             "required": ["query"],
         },
@@ -284,16 +291,40 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
     """Dispatch a tool call to the MemOS instance."""
     try:
         if tool == "memory_search":
+            from datetime import datetime as _dt
+
+            def _parse_date(value: Any) -> float | None:
+                if not value:
+                    return None
+                if isinstance(value, (int, float)):
+                    return float(value)
+                return _dt.fromisoformat(str(value)).timestamp()
+
             query = args.get("query", "")
             top_k = int(args.get("top_k", 5))
             tags = args.get("tags") or []
-            results = memos.recall(query, top=top_k, filter_tags=tags)
+            require_tags = args.get("require_tags") or []
+            exclude_tags = args.get("exclude_tags") or []
+            results = memos.recall(
+                query,
+                top=top_k,
+                filter_tags=tags,
+                filter_after=_parse_date(args.get("created_after")),
+                filter_before=_parse_date(args.get("created_before")),
+                retrieval_mode=args.get("retrieval_mode", "semantic"),
+                tag_filter={"require": require_tags, "exclude": exclude_tags} if (require_tags or exclude_tags) else None,
+                min_importance=args.get("min_importance"),
+                max_importance=args.get("max_importance"),
+            )
             if not results:
                 return _text("No memories found.")
             lines = []
             for r in results:
                 tag_str = f"[{', '.join(r.item.tags)}]" if r.item.tags else ""
-                lines.append(f"[{r.score:.3f}] {r.item.content} {tag_str}")
+                lines.append(
+                    f"[{r.score:.3f}] {r.item.content} {tag_str}"
+                    f" (importance={r.item.importance:.2f})"
+                )
             return _text("\n".join(lines))
 
         elif tool == "memory_save":
