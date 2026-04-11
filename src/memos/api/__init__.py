@@ -805,6 +805,47 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
+    @app.get("/api/v1/brain/entity/{name}")
+    async def brain_entity_detail(
+        name: str,
+        top_memories: int = 5,
+        neighbor_limit: int = 12,
+    ):
+        """Return a unified entity detail view across wiki, memories, and KG."""
+        from ..brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg)
+            detail = searcher.entity_detail(
+                name,
+                top_memories=top_memories,
+                neighbor_limit=neighbor_limit,
+            )
+            payload = detail.to_dict()
+            payload["status"] = "ok"
+            return payload
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.get("/api/v1/brain/entity/{name}/subgraph")
+    async def brain_entity_subgraph(name: str, depth: int = 2):
+        """Return an ego-network subgraph for an entity."""
+        from ..brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg)
+            subgraph = searcher.entity_subgraph(name, depth=depth)
+            return {
+                "status": "ok",
+                "entity": subgraph.center,
+                "depth": subgraph.depth,
+                "nodes": subgraph.nodes,
+                "edges": subgraph.edges,
+                "layers": subgraph.layers,
+            }
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # ---- End Knowledge Graph ----
 
     # ---- Palace (P6) ----

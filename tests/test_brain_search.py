@@ -49,6 +49,30 @@ def test_brain_search_unifies_sources(brain_env):
     assert "[memory" in result.context
 
 
+def test_brain_entity_detail_bridges_wiki_memories_and_graph(brain_env):
+    memos, kg, wiki_root, _kg_path = brain_env
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+
+    detail = searcher.entity_detail("Alice")
+
+    assert detail.entity == "Alice"
+    assert "# Alice" in detail.wiki_page
+    assert any(memory["id"] for memory in detail.memories)
+    assert any(fact["subject"] == "Alice" or fact["object"] == "Alice" for fact in detail.kg_facts)
+    assert any(neighbor.entity == "OpenAI" for neighbor in detail.kg_neighbors)
+
+
+def test_brain_entity_subgraph_returns_neighbors(brain_env):
+    memos, kg, wiki_root, _kg_path = brain_env
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+
+    subgraph = searcher.entity_subgraph("Alice", depth=2)
+
+    assert subgraph.center == "Alice"
+    assert any(node["id"] == "Alice" for node in subgraph.nodes)
+    assert any(edge["source"] == "Alice" or edge["target"] == "Alice" for edge in subgraph.edges)
+
+
 @pytest.mark.asyncio
 async def test_brain_search_api(brain_env):
     from httpx import ASGITransport, AsyncClient
@@ -70,6 +94,43 @@ async def test_brain_search_api(brain_env):
     assert len(data["wiki_pages"]) >= 1
     assert len(data["kg_facts"]) >= 1
     assert "Fused context:" in data["context"]
+
+
+@pytest.mark.asyncio
+async def test_brain_entity_detail_api(brain_env):
+    from httpx import ASGITransport, AsyncClient
+    from memos.api import create_fastapi_app
+
+    memos, _kg, wiki_root, kg_path = brain_env
+    app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/brain/entity/Alice")
+
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["entity"] == "Alice"
+    assert data["wiki_page"]
+    assert data["kg_facts"]
+    assert any(neighbor["entity"] == "OpenAI" for neighbor in data["kg_neighbors"])
+
+
+@pytest.mark.asyncio
+async def test_brain_entity_subgraph_api(brain_env):
+    from httpx import ASGITransport, AsyncClient
+    from memos.api import create_fastapi_app
+
+    memos, _kg, wiki_root, kg_path = brain_env
+    app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/brain/entity/Alice/subgraph?depth=2")
+
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["entity"] == "Alice"
+    assert any(node["id"] == "Alice" for node in data["nodes"])
+    assert any(edge["source"] == "Alice" or edge["target"] == "Alice" for edge in data["edges"])
 
 
 def test_brain_search_mcp_dispatch(brain_env):

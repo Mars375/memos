@@ -97,6 +97,7 @@
 - [x] Multiple backends (JSON, Chroma, Qdrant, Pinecone, etc.).
 - [x] Import/mine from multiple sources.
 - [x] Knowledge graph APIs and visualization.
+- [x] Entity detail API + Graph ↔ Wiki bridge (wiki + memories + KG + subgraph).
 - [x] Living wiki (update/read/search/lint).
 - [x] Memory lifecycle (decay, prune, reinforce).
 - [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at).

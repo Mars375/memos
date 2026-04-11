@@ -72,6 +72,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   #add-panel textarea,#add-panel input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:.82em;padding:6px 9px;margin-bottom:6px;outline:none;resize:vertical;}
   #add-panel textarea:focus,#add-panel input:focus{border-color:var(--accent);}
   #graph-area{flex:1;position:relative;overflow:hidden;}
+  #entity-panel{position:absolute;top:0;right:0;width:420px;max-width:46vw;height:100%;background:rgba(19,19,42,.98);border-left:1px solid var(--border);z-index:40;transform:translateX(100%);transition:transform .18s ease;display:flex;flex-direction:column;overflow:hidden;box-shadow:-8px 0 30px rgba(0,0,0,.35);}
+  #entity-panel.open{transform:translateX(0);}
+  #entity-panel-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  #entity-panel-title{font-size:.95em;color:var(--accent2);font-weight:700;}
+  #entity-panel-body{padding:14px 16px;overflow-y:auto;font-size:.82em;line-height:1.6;}
+  .entity-block{margin-bottom:14px;}
+  .entity-block h3{font-size:.72em;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:6px;}
+  .entity-link{display:inline-block;margin:2px 6px 2px 0;padding:4px 9px;border-radius:999px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:.75em;}
+  .entity-link:hover{border-color:var(--accent);}
+  .entity-pre{white-space:pre-wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:240px;overflow:auto;}
+  .entity-fact,.entity-memory{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:7px;}
+  .entity-meta{color:var(--text2);font-size:.72em;}
   #graph-svg{width:100%;height:100%;}
   .glink{stroke:#2e2e50;stroke-opacity:.8;}
   .glink.hi{stroke:var(--accent);stroke-opacity:1;}
@@ -143,6 +155,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <h2><span id="kg-overlay-title">KG Facts</span><button class="btn" style="background:var(--bg3);color:var(--text)" onclick="closeKGOverlay()">&#x2715; Close</button></h2>
     <div id="kg-facts-list"></div>
   </div>
+  <div id="entity-panel">
+    <div id="entity-panel-header">
+      <div>
+        <div id="entity-panel-title">Entity detail</div>
+        <div id="entity-panel-subtitle" style="font-size:.72em;color:var(--text2)">Graph ↔ Wiki bridge</div>
+      </div>
+      <button class="btn" style="background:var(--bg3);color:var(--text)" onclick="closeEntityPanel()">&#x2715; Close</button>
+    </div>
+    <div id="entity-panel-body"><span style="color:var(--text2)">Select a graph node to inspect an entity.</span></div>
+  </div>
   <div id="controls">
     <button class="cb" onclick="zoomIn()">+</button>
     <button class="cb" onclick="zoomOut()">&minus;</button>
@@ -159,6 +181,7 @@ function nr(d){return 4+d.importance*10+Math.min(d.access_count*.5,6);}
 
 let GD={nodes:[],edges:[]},sim,svg,zoom,lSel,nSel,selId=null,aTags=new Set(),sq='';
 let analyticsChart=null;
+let lastEntity=null;
 
 function initGraph(){
   const area=document.getElementById('graph-area');
@@ -256,6 +279,57 @@ function onNC(d){
   nSel.classed('hi',n=>n.id===d.id).classed('fd',n=>!conn.has(n.id));
   lSel.classed('hi',e=>{const s=nid(e.source),t=nid(e.target);return s===d.id||t===d.id;})
       .classed('fd',e=>{const s=nid(e.source),t=nid(e.target);return s!==d.id&&t!==d.id;});
+  const entities=extractEntitiesFromNode(d);
+  if(entities.length)openEntityPanel(entities[0]);
+}
+
+function extractEntitiesFromNode(d){
+  const seen=new Set();
+  const out=[];
+  const add=v=>{const s=(v||'').trim();if(!s)return;const k=s.toLowerCase();if(seen.has(k))return;seen.add(k);out.push(s);};
+  ((d.tags||[]).filter(t=>/[A-Z]/.test(t) || t.includes('-')===false)).forEach(add);
+  ((d.content||'').match(/\\b(?:[A-Z][\\w.-]*(?:\\s+[A-Z][\\w.-]*)+|[A-Z][a-z]{2,})\\b/g)||[]).forEach(add);
+  return out.slice(0,8);
+}
+
+function closeEntityPanel(){document.getElementById('entity-panel').classList.remove('open');}
+
+function escapeHtml(s){return String(s||'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function entityButton(name,extra=''){
+  return `<button class="entity-link" onclick='openEntityPanel(${JSON.stringify(name)})'>${escapeHtml(name)}${extra}</button>`;
+}
+
+async function openEntityPanel(entity){
+  lastEntity=entity;
+  const panel=document.getElementById('entity-panel');
+  const body=document.getElementById('entity-panel-body');
+  document.getElementById('entity-panel-title').textContent=entity;
+  body.innerHTML='<span style="color:var(--text2)">Loading entity detail…</span>';
+  panel.classList.add('open');
+  try{
+    const [detail,subgraph]=await Promise.all([
+      fetch(API+'/brain/entity/'+encodeURIComponent(entity)).then(r=>r.json()),
+      fetch(API+'/brain/entity/'+encodeURIComponent(entity)+'/subgraph?depth=2').then(r=>r.json()).catch(()=>null),
+    ]);
+    if(detail.status!=='ok'){body.innerHTML='<span style="color:var(--danger)">Failed to load entity detail.</span>';return;}
+    const neighbors=(detail.kg_neighbors||[]).map(n=>entityButton(n.entity,` <span class="entity-meta">(${Number(n.relation_count||0)})</span>`)).join('');
+    const backlinks=(detail.backlinks||[]).map(name=>entityButton(name)).join('');
+    const memories=(detail.memories||[]).map(m=>`<div class="entity-memory"><div>${escapeHtml(m.content)}</div><div class="entity-meta">importance ${Number(m.importance||0).toFixed(2)} · ${escapeHtml(m.source||'memory')}</div></div>`).join('');
+    const facts=(detail.kg_facts||[]).map(f=>`<div class="entity-fact"><strong>${escapeHtml(f.subject)}</strong> -${escapeHtml(f.predicate)}→ <strong>${escapeHtml(f.object)}</strong><div class="entity-meta">${escapeHtml(f.confidence_label||'EXTRACTED')}</div></div>`).join('');
+    const subgraphMeta=(subgraph&&subgraph.status==='ok') ? `${subgraph.nodes.length} nodes · ${subgraph.edges.length} edges` : 'Unavailable';
+    body.innerHTML=`
+      <div class="entity-block"><h3>Community</h3><div>${escapeHtml(detail.community||'n/a')}</div></div>
+      <div class="entity-block"><h3>Wiki page</h3><div class="entity-pre">${escapeHtml(detail.wiki_page||'')}</div></div>
+      <div class="entity-block"><h3>Top memories</h3>${memories||'<div class="entity-meta">No linked memories.</div>'}</div>
+      <div class="entity-block"><h3>KG facts</h3>${facts||'<div class="entity-meta">No active graph facts.</div>'}</div>
+      <div class="entity-block"><h3>Graph neighbors</h3>${neighbors||'<div class="entity-meta">No graph neighbors.</div>'}</div>
+      <div class="entity-block"><h3>Backlinks</h3>${backlinks||'<div class="entity-meta">No backlinks.</div>'}</div>
+      <div class="entity-block"><h3>Subgraph</h3><div class="entity-meta">${subgraphMeta}</div></div>
+    `;
+  }catch(e){
+    body.innerHTML='<span style="color:var(--danger)">Error loading entity detail.</span>';
+  }
 }
 
 function clearAll(){

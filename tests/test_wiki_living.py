@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from memos.core import MemOS
+from memos.knowledge_graph import KnowledgeGraph
 from memos.wiki_living import LivingWikiEngine, extract_entities
 
 
@@ -84,3 +85,18 @@ def test_log_records_updates(engine):
     entries = engine.get_log(limit=5)
     assert entries
     assert entries[0]["action"] in {"update", "create"}
+
+
+def test_update_adds_graph_neighbors_section(mem, tmp_path):
+    kg = KnowledgeGraph(db_path=":memory:")
+    kg.add_fact("Alice", "works_on", "Project Phoenix")
+    mem._kg = kg
+    engine = LivingWikiEngine(mem, wiki_dir=str(tmp_path / "wiki"))
+
+    engine.update(force=True)
+
+    page = engine.read_page("Alice")
+    assert page is not None
+    assert "## Graph Neighbors" in page
+    assert "Project Phoenix" in page
+    kg.close()

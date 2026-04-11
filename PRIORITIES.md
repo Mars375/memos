@@ -582,36 +582,15 @@ Problème actuel : `recall` cherche dans les mémoires, `wiki-living search` che
 
 ---
 
-## [ ] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+## [x] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+Implemented v0.47.1 — `BrainSearch.entity_detail()` + `entity_subgraph()`, REST `GET /api/v1/brain/entity/{name}` + `/subgraph`, dashboard slide-in panel navigable, wiki living pages enrichies avec `## Graph Neighbors`, 15 tests ciblés + suite complète verte.
 **Objectif :** Chaque entité connue de MemOS a une vue unifiée — mémoires + faits KG + page wiki + voisins de graphe. Le dashboard D3.js devient navigable, pas juste visuel.
 
-Actuellement : les nœuds D3.js sont des points morts. Les pages wiki existent mais ne sont pas connectées au graphe. Les faits KG ne sont pas liés aux mémoires qui les mentionnent.
-
-À implémenter :
-**API :**
-- `GET /api/v1/brain/entity/{name}` — vue complète :
-  ```json
-  {
-    "entity": "Alice",
-    "wiki_page": "...",             // page wiki vivante (Karpathy)
-    "memories": [...],              // top-5 mémoires liées (mempalace verbatim)
-    "kg_facts": [...],              // faits actifs avec confidence_label (graphify)
-    "kg_neighbors": [...],          // entités voisines (graphify path queries)
-    "backlinks": [...],             // autres entités qui mentionnent celle-ci
-    "community": "..."              // communauté Leiden d'appartenance
-  }
-  ```
-- `GET /api/v1/brain/entity/{name}/subgraph` — ego network depth=2 pour D3.js
-
-**Dashboard :**
-- Clic sur un nœud D3.js → slide-in panel avec la vue entity detail
-- Panel : wiki page rendu markdown + top mémoires + faits KG (colorés par confidence_label)
-- Backlinks cliquables → navigation entre entités
-- Nœuds "god nodes" (3+ communautés) mis en évidence visuellement
-
-**Wiki pages :**
-- Section `## Graph Neighbors` auto-générée (voisins KG directs)
-- Frontmatter enrichi : `community`, `kg_facts_count`, `backlinks_count`, `top_memories`
+Livré :
+- Vue unifiée par entité : page wiki vivante, top mémoires liées, faits KG actifs, voisins directs, backlinks, communauté graphe
+- Sous-graphe depth=2 exposé via l’API pour alimenter le dashboard
+- Dashboard D3.js relié à l’API entity detail via un slide-in panel navigable
+- Pages wiki vivantes enrichies avec une section `## Graph Neighbors`
 
 ---
 
