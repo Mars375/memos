@@ -10,6 +10,7 @@
 - Living wiki: **Shipped (base)**
 - Memory lifecycle (decay, prune, reinforce, versioning): **Shipped (base)**
 - Inspectability (dashboard, graph, stats): **Partial**
+- Knowledge export (portable markdown snapshot): **Shipped**
 - Team / policy memory: **Partial (namespaces only)**
 - Task / skill / tool memory: **Planned**
 - Evaluation & token savings benchmarks: **Planned**
@@ -99,6 +100,7 @@
 - [x] Knowledge graph APIs and visualization.
 - [x] Entity detail API + Graph ↔ Wiki bridge (wiki + memories + KG + subgraph).
 - [x] Living wiki (update/read/search/lint).
+- [x] Portable markdown knowledge export (`INDEX.md`, `LOG.md`, entities, memories, communities).
 - [x] Memory lifecycle (decay, prune, reinforce).
 - [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at).
 - [x] Multi-namespace support.

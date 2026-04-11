@@ -6,6 +6,7 @@ from .core import MemOS
 from .migration import MigrationEngine, MigrationReport
 from .models import MemoryItem, RecallResult, MemoryStats
 from .brain import BrainSearch, BrainSearchResult
+from .export_markdown import MarkdownExporter, MarkdownExportResult
 
 __all__ = [
     "MemOS",
@@ -16,4 +17,6 @@ __all__ = [
     "MigrationReport",
     "BrainSearch",
     "BrainSearchResult",
+    "MarkdownExporter",
+    "MarkdownExportResult",
 ]

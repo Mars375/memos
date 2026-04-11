@@ -594,32 +594,11 @@ Livré :
 
 ---
 
-## [ ] P27 — Knowledge Export Universel (Markdown interopérable)
+## [x] P27 — Knowledge Export Universel (Markdown interopérable)
+Implémenté v0.47.1 — `MarkdownExporter`, export portable `INDEX.md`/`LOG.md` + `entities/` + `memories/` + `communities/`, mode incrémental `--update`, CLI `memos export --format markdown`, endpoint ZIP `GET /api/v1/export/markdown`, tests dédiés export/CLI/API verts.
 **Objectif :** Exporter tout le knowledge de MemOS en markdown portable — lisible par n'importe quel outil (Obsidian, Logseq, Foam, simple lecteur de fichiers, autre agent).
 
 Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledge de MemOS, utile pour backup, migration, partage entre agents, ou audit humain.
-
-À implémenter dans `src/memos/export_markdown.py` :
-- `MarkdownExporter` classe
-- `export(output_dir: str)` — génère :
-  ```
-  export/
-  ├── INDEX.md              # entrée principale : communautés + god nodes + stats
-  ├── LOG.md                # journal append-only de toute l'activité
-  ├── entities/
-  │   ├── Alice.md          # page entité : mémoires + faits KG + voisins + backlinks
-  │   └── Project-X.md      # frontmatter YAML : importance, community, kg_facts_count
-  ├── memories/
-  │   ├── decisions.md      # mémoires par type-tag (auto-tagger P17)
-  │   └── milestones.md
-  └── communities/
-      └── engineering.md    # page communauté Leiden (P21)
-  ```
-- Inter-liens entre pages avec syntaxe markdown standard `[Alice](../entities/Alice.md)`
-- Frontmatter YAML : `tags`, `importance`, `community`, `confidence`, `created`, `backlinks`
-- Incrémental : `memos export --update` — ne régénère que les pages modifiées depuis le dernier export
-- CLI : `memos export --format markdown --output ./knowledge/`
-- REST : `GET /api/v1/export/markdown` → ZIP téléchargeable
 
 ---
 # ═══════════════════════════════════════════════════════
