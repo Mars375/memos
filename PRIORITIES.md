@@ -605,7 +605,8 @@ Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledg
 #  V1 RELEASE CHECKLIST — les 5 bloquants avant de taguer v1.0.0
 # ═══════════════════════════════════════════════════════
 
-## [ ] P28 — API Authentication (Bearer Token + Namespace Keys)
+## [x] P28 — API Authentication (Bearer Token + Namespace Keys)
+**Implemented** — APIKeyManager, middleware auth, rate limiting, namespace forcing, GET /api/v1/auth/whoami, 25 tests. PR #15.
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Sécuriser l'API REST et isoler les namespaces par agent.
 
