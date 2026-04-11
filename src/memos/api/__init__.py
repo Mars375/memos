@@ -1689,6 +1689,46 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         return {"status": "ok", **report.to_dict()}
 
 
+
+    # ── Dedup ──────────────────────────────────────────
+
+    @app.post("/api/v1/dedup/check")
+    async def api_dedup_check(body: dict):
+        """Check if content would be a duplicate."""
+        content_text = body.get("content", "")
+        threshold = body.get("threshold")
+        if not content_text:
+            return {"status": "error", "message": "content is required"}
+        result = memos.dedup_check(content_text, threshold=threshold)
+        resp = {
+            "is_duplicate": result.is_duplicate,
+            "reason": result.reason,
+            "similarity": result.similarity,
+        }
+        if result.match:
+            resp["match"] = {
+                "id": result.match.id,
+                "content": result.match.content[:500],
+                "tags": result.match.tags,
+                "importance": result.match.importance,
+            }
+        return resp
+
+    @app.post("/api/v1/dedup/scan")
+    async def api_dedup_scan(body: dict):
+        """Scan all memories for duplicates."""
+        fix = body.get("fix", False)
+        threshold = body.get("threshold")
+        result = memos.dedup_scan(fix=fix, threshold=threshold)
+        return {
+            "total_scanned": result.total_scanned,
+            "exact_duplicates": result.exact_duplicates,
+            "near_duplicates": result.near_duplicates,
+            "total_duplicates": result.total_duplicates,
+            "fixed": result.fixed,
+            "groups": result.groups[:50],
+        }
+
     # ── MCP Streamable HTTP (universal — OpenClaw, Claude Code, Cursor, …) ──
     from ..mcp_server import add_mcp_routes as _add_mcp
     _add_mcp(app, memos)
