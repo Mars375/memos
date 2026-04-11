@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import Any, Optional
 
 from .models import MemoryItem, RecallResult, MemoryStats, FeedbackEntry, FeedbackStats, generate_id
@@ -28,6 +31,7 @@ from .embeddings import LocalEmbedder
 from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
+from .dedup import DedupEngine, DedupCheckResult, DedupScanResult
 from .migration import MigrationEngine, MigrationReport, _create_backend
 from .query import MemoryQuery, QueryEngine
 
@@ -182,6 +186,11 @@ class MemOS:
             retention_days=kwargs.get("analytics_retention_days", 90),
         )
 
+
+        # Dedup engine (prevent duplicate memories at write time)
+        self._dedup_enabled: bool = kwargs.get("dedup_enabled", False)
+        self._dedup_threshold: float = kwargs.get("dedup_threshold", 0.95)
+        self._dedup_engine: Optional[DedupEngine] = None
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
     @property
@@ -263,8 +272,18 @@ class MemOS:
         importance: float = 0.5,
         metadata: Optional[dict[str, Any]] = None,
         ttl: Optional[float] = None,
+        allow_duplicate: bool = False,
     ) -> MemoryItem:
-        """Store a new memory."""
+        """Store a new memory.
+
+        Args:
+            content: Memory text content.
+            tags: Optional list of tags.
+            importance: Importance score 0.0-1.0.
+            metadata: Optional metadata dict.
+            ttl: Time-to-live in seconds.
+            allow_duplicate: If True, bypass dedup check and insert even if duplicate.
+        """
         self._check_acl("write")
 
         if not content or not content.strip():
@@ -274,6 +293,18 @@ class MemOS:
             issues = MemorySanitizer.check(content)
             if issues:
                 raise ValueError(f"Memory failed sanitization: {issues}")
+
+        # Dedup check — skip if duplicate found and allow_duplicate=False
+        if self._dedup_enabled and not allow_duplicate:
+            dedup_result = self.dedup_check(content)
+            if dedup_result.is_duplicate:
+                logger.info(
+                    "Skipping duplicate memory (reason=%s, similarity=%.3f, original=%s)",
+                    dedup_result.reason,
+                    dedup_result.similarity,
+                    dedup_result.match.id if dedup_result.match else "N/A",
+                )
+                return dedup_result.match
 
         # Auto-tag with type tags (decision, preference, milestone, etc.)
         final_tags = list(tags) if tags else []
@@ -293,6 +324,10 @@ class MemOS:
         )
 
         self._store.upsert(item, namespace=self._namespace)
+
+        # Register in dedup index
+        if self._dedup_enabled and self._dedup_engine:
+            self._dedup_engine.register(item)
         self._retrieval.index(item)
         self._versioning.record_version(item, source="learn")
 
@@ -306,6 +341,71 @@ class MemOS:
         }, namespace=self._namespace)
 
         return item
+
+
+    # ── Dedup ──────────────────────────────────────────
+
+    @property
+    def dedup_enabled(self) -> bool:
+        """Whether dedup checking is enabled."""
+        return self._dedup_enabled
+
+    def dedup_set_enabled(self, enabled: bool = True, threshold: float = 0.95) -> None:
+        """Enable or disable dedup checking at write time.
+
+        Args:
+            enabled: Enable dedup on learn().
+            threshold: Similarity threshold (0.0-1.0) for near-duplicate detection.
+        """
+        self._dedup_enabled = enabled
+        self._dedup_threshold = threshold
+        if enabled:
+            self._dedup_engine = DedupEngine(
+                self._store,
+                threshold=threshold,
+                namespace=self._namespace or None,
+            )
+        else:
+            self._dedup_engine = None
+
+    def dedup_check(self, content: str, *, threshold: Optional[float] = None) -> "DedupCheckResult":
+        """Check if content would be a duplicate.
+
+        Args:
+            content: Content to check.
+            threshold: Override threshold for this check.
+
+        Returns:
+            DedupCheckResult with is_duplicate, match, reason, similarity.
+        """
+        if self._dedup_engine is None:
+            self._dedup_engine = DedupEngine(
+                self._store,
+                threshold=threshold or self._dedup_threshold,
+                namespace=self._namespace or None,
+            )
+        return self._dedup_engine.check(content, threshold=threshold)
+
+    def dedup_scan(self, *, fix: bool = False, threshold: Optional[float] = None) -> "DedupScanResult":
+        """Scan all memories for duplicates.
+
+        Args:
+            fix: If True, remove found duplicates.
+            threshold: Override threshold for this scan.
+
+        Returns:
+            DedupScanResult with counts and details.
+        """
+        if self._dedup_engine is None:
+            self._dedup_engine = DedupEngine(
+                self._store,
+                threshold=threshold or self._dedup_threshold,
+                namespace=self._namespace or None,
+            )
+        result = self._dedup_engine.scan(fix=fix, threshold=threshold)
+        if fix:
+            self._dedup_engine.invalidate_cache()
+        return result
 
     def batch_learn(
         self,
