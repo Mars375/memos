@@ -98,6 +98,7 @@
 - [x] Import/mine from multiple sources.
 - [x] Knowledge graph APIs and visualization.
 - [x] Entity detail API + Graph ↔ Wiki bridge (wiki + memories + KG + subgraph).
+- [x] Knowledge export in portable markdown (INDEX/LOG/entities/memories/communities + ZIP API).
 - [x] Living wiki (update/read/search/lint).
 - [x] Memory lifecycle (decay, prune, reinforce).
 - [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at).

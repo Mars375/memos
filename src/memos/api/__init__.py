@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import shutil
+import tempfile
 import time
+from pathlib import Path
 from typing import Any, Optional
 
 from .. import __version__ as MEMOS_VERSION
@@ -11,7 +14,7 @@ from ..core import MemOS, MemoryStats
 
 try:
     from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
-    from fastapi.responses import StreamingResponse, HTMLResponse
+    from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
 except ImportError:  # pragma: no cover - optional server dependency
     FastAPI = None  # type: ignore[assignment]
     Query = None  # type: ignore[assignment]
@@ -19,6 +22,7 @@ except ImportError:  # pragma: no cover - optional server dependency
     WebSocketDisconnect = None  # type: ignore[assignment]
     StreamingResponse = None  # type: ignore[assignment]
     HTMLResponse = None  # type: ignore[assignment]
+    FileResponse = None  # type: ignore[assignment]
 
 
 def create_api(memos: MemOS) -> dict[str, Any]:
@@ -1241,6 +1245,28 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
                 filename=f"memos-export-{int(time.time())}.parquet",
                 headers={"X-Memos-Total": str(result["total"]), "X-Memos-Size": str(result["size_bytes"])},
             )
+
+    @app.get("/api/v1/export/markdown")
+    async def api_export_markdown(update: bool = False, wiki_dir: str | None = None):
+        """Export all knowledge as a downloadable markdown ZIP."""
+        from ..export_markdown import MarkdownExporter
+
+        tmp_root = Path(tempfile.mkdtemp(prefix="memos-markdown-export-"))
+        export_dir = tmp_root / "knowledge"
+        zip_path = tmp_root / "memos-knowledge-export.zip"
+        exporter = MarkdownExporter(
+            memos,
+            kg=getattr(memos, "_kg", None),
+            output_dir=str(export_dir),
+            wiki_dir=wiki_dir,
+        )
+        exporter.export(update=update)
+        shutil.make_archive(str(zip_path.with_suffix("")), "zip", root_dir=tmp_root, base_dir="knowledge")
+        return FileResponse(
+            str(zip_path),
+            media_type="application/zip",
+            filename="memos-knowledge-export.zip",
+        )
 
     # Async consolidation
     @app.post("/api/v1/consolidate")
