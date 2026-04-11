@@ -5,27 +5,27 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.38.0-purple.svg)](https://github.com/Mars375/memos/releases)
-[![Tests](https://img.shields.io/badge/tests-1345_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![Version](https://img.shields.io/badge/version-v1.0.0-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Tests](https://img.shields.io/badge/tests-1434_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 
 ---
 
 ## Installation
 
 ```bash
-pip install memos
+pip install memos-agent
 ```
 
 With local semantic recall (no external services):
 ```bash
-pip install "memos[local]"    # sentence-transformers, backend="local"
+pip install "memos-agent[local]"    # sentence-transformers, backend="local"
 ```
 
 With vector backend (recommended for production):
 ```bash
-pip install "memos[chroma]"   # ChromaDB + Ollama embeddings
-pip install "memos[qdrant]"   # Qdrant
-pip install "memos[all]"      # all backends
+pip install "memos-agent[chroma]"   # ChromaDB + Ollama embeddings
+pip install "memos-agent[qdrant]"   # Qdrant
+pip install "memos-agent[all]"      # all backends
 ```
 
 ---

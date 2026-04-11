@@ -1,8 +1,8 @@
 # MemOS — Product Requirements Document (PRD)
 
-**Version:** v0.2  
-**Status:** Draft  
-**Product:** MemOS  
+**Version:** v1.0  
+**Status:** Active  
+**Product:** MemOS (`memos-agent` on PyPI)  
 **Tagline:** The memory layer every LLM agent should use instead of brute-force context injection.
 
 ---
@@ -18,12 +18,13 @@ Instead of treating memory as an afterthought (chat history + vector DB + a few 
 - maintains them over time (reinforcement, decay, correction, versioning),
 - returns compact, task-specific context packs for agents.
 
-MemOS draws inspiration from four main sources:
+MemOS draws inspiration from five main sources:
 
-- **MemPalace** — spatial / navigable memory structures and mental “rooms”.
-- **Karpathy’s LLM Knowledge Base / Wiki** — compiling raw text into a living knowledge base rather than re-running RAG over raw docs.
-- **Obsidian & knowledge graphs** — backlinks, graph view, emergent structure, entity pages.
-- **Nexus-style orchestration** — consistent handling of agents, tools, sessions, skills and memory spaces.
+- **MemPalace** (41k★) — spatial memory structures, wake-up context (~200 tokens identity injection), raw-first storage with intelligence at query time, emotional context extraction from conversations.
+- **Karpathy’s LLM Wiki** — compiling raw text into a living knowledge base rather than re-running RAG over raw docs. Key insight: ingest → update wiki pages → lint for contradictions. Knowledge compounds instead of accumulating.
+- **Obsidian** — backlinks as first-class citizens, graph view revealing emergent structure, local-first markdown, frontmatter metadata. MemOS wiki should be Obsidian-compatible.
+- **Graphify** (22k★) — confidence labels on every KG edge (EXTRACTED/INFERRED/AMBIGUOUS), SHA-256 content cache for incremental processing, multi-export formats, token compression metrics.
+- **GitNexus** (27k★) — staleness detection (warn when sources need re-mining), pre/post MCP hooks for auto-capture, skills-as-markdown packaging, blast radius analysis (what depends on a changed fact).
 
 ---
 
@@ -525,7 +526,93 @@ Provides tools for debugging, retrospective analysis and reproducibility.
 
 ---
 
-## 14. Recommended README Pitch
+## 14. v1.0 — What Shipped
+
+### Capture Layer
+- [x] Learn / batch learn (SDK, CLI, REST, MCP)
+- [x] Mine from 7 chat formats (Claude, ChatGPT, Slack, Discord, Telegram, OpenClaw, generic)
+- [x] URL ingest (`memos learn <url>`)
+- [x] Speaker ownership (per-speaker namespaces in mined conversations)
+- [x] Incremental mining with SHA-256 content cache
+
+### Memory Engine
+- [x] 6 storage backends: memory, JSON, ChromaDB, Qdrant, Pinecone, local (sentence-transformers)
+- [x] Hybrid retrieval: BM25 + semantic embeddings
+- [x] Advanced recall filters (date range, tags, importance, type)
+- [x] Recall explainability (score breakdown per component)
+- [x] Deduplication enabled by default (exact SHA-256 + near-duplicate Jaccard trigrams)
+- [x] Memory decay, reinforcement, pruning
+- [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at)
+- [x] Memory compression (reduce storage footprint)
+- [x] Memory compaction (archive, merge, cluster)
+- [x] TTL per memory with auto-expiry
+- [x] Namespace ACL (RBAC: owner/writer/reader/denied)
+- [x] Multi-agent memory sharing protocol
+- [x] Conflict detection & resolution
+
+### Knowledge Surface
+- [x] Temporal knowledge graph (entities, relations, confidence labels, paths)
+- [x] Auto KG extraction from memories
+- [x] Living wiki (update, read, search, lint)
+- [x] Graph ↔ Wiki bridge (entity detail views)
+- [x] Unified brain search (memories + wiki + KG in one query)
+- [x] Portable markdown export (INDEX.md, LOG.md, entities, communities)
+- [x] Second brain graph dashboard (D3.js)
+- [x] Parquet export/import
+
+### Integrations
+- [x] MCP server (HTTP + stdio) — 12 tools
+- [x] REST API — 20+ endpoints + SSE streaming
+- [x] Python SDK
+- [x] CLI — 30+ commands
+- [x] API authentication (Bearer master key + namespace-scoped keys)
+- [x] Rate limiting per endpoint
+- [x] Docker + Docker Compose
+- [x] GitHub Actions CI (test + PyPI publish)
+
+### Stats
+- 1434 tests passing
+- Package: `pip install memos-agent`
+
+---
+
+## 15. v2.0 Priorities — Inspired by MemPalace, Karpathy Wiki, Obsidian, Graphify, GitNexus
+
+These are the next high-impact features to implement, ranked by value:
+
+### P1 — Confidence Labels on KG Edges *(from Graphify)*
+Every relationship in the knowledge graph should be tagged `EXTRACTED` (explicit in source), `INFERRED` (deduced by the system), or `AMBIGUOUS` (flagged for review). This is critical for trust and debugging.
+
+### P2 — Lint Command *(from Karpathy Wiki)*
+`memos lint` detects contradictions between memories, orphan entities in the KG with no connections, coverage gaps (topics mentioned but never expanded), and low-confidence sections. Automated knowledge hygiene.
+
+### P3 — Wake-up Context Optimization *(from MemPalace)*
+`memory_wake_up` should produce a ~200 token identity injection for system prompts — not a full search, but the agent's compressed "self". Distill the most important facts, preferences, and current goals.
+
+### P4 — Pre/Post MCP Hooks for Auto-Capture *(from GitNexus)*
+MCP hooks that inject relevant memory context BEFORE an agent uses a tool, and capture new memories AFTER conversations end. "Always-on memory" — no manual `memos search` needed.
+
+### P5 — Staleness Detection *(from GitNexus)*
+`memos status` warns when source files have been updated but not re-mined. Compare source timestamps/hashes against last-mined metadata. Proactive freshness management.
+
+### P6 — Obsidian-Compatible Export *(from Obsidian + Graphify)*
+Living wiki emits standard markdown with `[[wikilinks]]` and YAML frontmatter (created, updated, sources, confidence, tags). Users can open directly in Obsidian for visual browsing.
+
+### P7 — Backlinks as First-Class Queries *(from Obsidian)*
+When entity A references entity B, entity B's record automatically lists A as a backlink. `kg_backlinks(entity)` as a core API. Surface in the dashboard.
+
+### P8 — Compounding Ingest *(from Karpathy Wiki)*
+When new memories are added, automatically update related wiki pages (cross-references, summaries, entity pages). Knowledge compounds on ingest, not just on query.
+
+### P9 — Token Compression Reporting *(from Graphify)*
+`memos stats` reports how many tokens the KG/wiki saves vs raw memory retrieval. A compelling metric for users to quantify the value of structured memory.
+
+### P10 — Skills-as-Markdown *(from GitNexus)*
+Package common MemOS workflows (onboarding a new project, reviewing memory health, mining a new source) as installable skill files for Claude Code / Cursor / any MCP client.
+
+---
+
+## 16. Recommended README Pitch
 
 > MemOS is a local-first Memory Operating System for LLM agents. 
 > It mines raw conversations and events into structured memory, compiles them into a living wiki and knowledge graph, and returns only the context an agent actually needs — instead of replaying entire chat histories.
