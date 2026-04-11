@@ -36,6 +36,4 @@ venv/
 *.whl
 *.tar.gz
 CHANTIER_STATE.md
-src/memos_agent.egg-info/
-dist/
-*.egg-info/
+.tmp-twine-check/

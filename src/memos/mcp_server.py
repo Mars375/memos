@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import uuid
 from typing import Any
@@ -29,8 +30,12 @@ __all__ = ["create_mcp_app", "run_stdio", "TOOLS", "_dispatch", "add_mcp_routes"
 
 _MCP_VERSION = "2025-03-26"
 
+_CORS_ALLOWED_ORIGINS = os.environ.get(
+    "MEMOS_CORS_ORIGINS", "*"
+)
+
 _CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": _CORS_ALLOWED_ORIGINS,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
     "Access-Control-Expose-Headers": "Mcp-Session-Id",

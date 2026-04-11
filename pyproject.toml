@@ -18,7 +18,6 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.25",
-    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -28,10 +27,25 @@ qdrant = ["qdrant-client>=1.7"]
 pinecone = ["pinecone-client>=3.0"]
 parquet = ["pyarrow>=12.0"]
 server = ["fastapi>=0.104", "uvicorn>=0.24"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff>=0.4"]
 
 [project.scripts]
 memos = "memos.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.coverage.run]
+source = ["memos"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
