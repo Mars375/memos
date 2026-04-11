@@ -101,3 +101,4 @@
 - [x] Memory lifecycle (decay, prune, reinforce).
 - [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at).
 - [x] Multi-namespace support.
+- [x] Memory deduplication (exact + near-duplicate detection at write time).

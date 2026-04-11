@@ -671,7 +671,8 @@ Config docker-compose :
 
 ---
 
-## [ ] P29 — Memory Deduplication (Near-duplicate Detection)
+## [x] P29 — Memory Deduplication (Near-duplicate Detection)
+**Implémenté** — DedupEngine (SHA-256 exact + trigram Jaccard near-dup), MemOS.learn() integration, CLI dedup-check/dedup-scan, REST /api/v1/dedup/*. PR #21. 27 tests dédiés, 1411 totaux verts.
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Empêcher l'accumulation de mémoires dupliquées lors des re-imports.
 
@@ -831,3 +832,18 @@ Contrainte restante : publier la PR puis review/merge.
 #  Post-v1 (semaine suivante, cron autonome)
 #    P18 P19 P21 P22 P23 P24 P26 P27 P31
 #
+
+## [x] P35 — Recall Explainability (score breakdown + backend trace)
+**Implemented v0.47.1** — ScoreBreakdown dataclass, RecallResult.score_breakdown, CLI --explain, REST explain=true, 14 tests.
+PR: https://github.com/Mars375/memos/pull/20
+**Objectif :** rendre chaque résultat de recall explicable, pour comprendre pourquoi une mémoire sort et quel backend/mode a contribué.
+
+Composants du breakdown :
+- `semantic` — contribution embedding cosine
+- `keyword` — contribution BM25
+- `importance` — boost importance (0.1 × importance)
+- `recency` — bonus fraîcheur (fade 30 jours)
+- `tag_bonus` — bonus overlap tags
+- `backend` — chemin utilisé (hybrid, keyword-only, qdrant)
+
+Usage : `memos recall "query" --explain` ou `POST /api/v1/recall {"explain": true}`
