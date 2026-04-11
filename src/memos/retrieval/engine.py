@@ -6,7 +6,7 @@ import math
 import re
 from typing import Optional, Protocol, runtime_checkable
 
-from ..models import MemoryItem, RecallResult
+from ..models import MemoryItem, RecallResult, ScoreBreakdown
 from ..storage.base import StorageBackend
 from typing import TYPE_CHECKING
 
@@ -159,10 +159,20 @@ class RetrievalEngine:
             )
 
             if final_score > 0:
+                breakdown = ScoreBreakdown(
+                    semantic=round(self._semantic_weight * sem_score, 4),
+                    keyword=round(self._keyword_weight * kw_score, 4),
+                    importance=round(importance_boost, 4),
+                    recency=round(recency_bonus, 4),
+                    tag_bonus=round(tag_bonus, 4),
+                    total=round(min(final_score, 1.0), 4),
+                    backend="hybrid" if has_semantic else "keyword-only",
+                )
                 results.append(RecallResult(
                     item=item,
                     score=min(final_score, 1.0),
                     match_reason=match_reason,
+                    score_breakdown=breakdown,
                 ))
 
         results.sort(key=lambda r: r.score, reverse=True)
@@ -206,10 +216,20 @@ class RetrievalEngine:
             final_score = min(score + importance_boost + recency_bonus, 1.0)
 
             match_reason = "semantic" if score > 0.5 else "keyword"
+            breakdown = ScoreBreakdown(
+                semantic=round(score * self._semantic_weight, 4) if score > 0.5 else 0.0,
+                keyword=round(score * self._keyword_weight, 4) if score <= 0.5 else 0.0,
+                importance=round(importance_boost, 4),
+                recency=round(recency_bonus, 4),
+                tag_bonus=0.0,
+                total=round(final_score, 4),
+                backend="qdrant",
+            )
             results.append(RecallResult(
                 item=item,
                 score=final_score,
                 match_reason=match_reason,
+                score_breakdown=breakdown,
             ))
 
         results.sort(key=lambda r: r.score, reverse=True)

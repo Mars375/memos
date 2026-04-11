@@ -78,7 +78,7 @@ class QueryEngine:
 
         allowed_ids = {item.id for item in filtered_items}
         results = [
-            RecallResult(item=result.item, score=result.score, match_reason=result.match_reason)
+            RecallResult(item=result.item, score=result.score, match_reason=result.match_reason, score_breakdown=result.score_breakdown)
             for result in engine_results
             if result.item.id in allowed_ids
         ]
