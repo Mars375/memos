@@ -5,8 +5,8 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.38.0-purple.svg)](https://github.com/Mars375/memos/releases)
-[![Tests](https://img.shields.io/badge/tests-1345_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![Version](https://img.shields.io/badge/version-v0.47.0-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Tests](https://img.shields.io/badge/tests-1384_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 
 ---
 
@@ -25,7 +25,8 @@ With vector backend (recommended for production):
 ```bash
 pip install "memos[chroma]"   # ChromaDB + Ollama embeddings
 pip install "memos[qdrant]"   # Qdrant
-pip install "memos[all]"      # all backends
+pip install "memos[parquet]"  # parquet import/export
+pip install "memos[server]"   # FastAPI + uvicorn
 ```
 
 ---
@@ -179,7 +180,7 @@ GET    /health                      Health check
 All options can be set via environment variables:
 
 ```bash
-MEMOS_BACKEND=chroma              # memory | json | chroma | qdrant | pinecone
+MEMOS_BACKEND=local               # memory | json | local | chroma | qdrant | pinecone
 MEMOS_NAMESPACE=default           # memory namespace (one per agent)
 MEMOS_PERSIST_PATH=~/.memos/      # path for json/sqlite storage
 
@@ -207,6 +208,14 @@ docker run -p 8100:8000 \
   -e MEMOS_BACKEND=json \
   -v memos-data:/root/.memos \
   ghcr.io/mars375/memos:latest
+```
+
+Local semantic recall in one process (recommended for laptops and single agents):
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install "memos[local]"
+MEMOS_BACKEND=local memos serve --port 8100
 ```
 
 Full stack with ChromaDB + Ollama embeddings:

@@ -781,31 +781,37 @@ Problème actuel : le KG temporel est une feature puissante mais reste vide en p
 
 ---
 
-## [~] P34 — Embeddings intégrés (zéro dépendances externes)
-**Statut : IN REVIEW (PR #11)**
-**Priorité : HAUTE — bloque l'adoption**
+## [x] P34 — Embeddings intégrés (zéro dépendances externes)
+**Priorité : HAUTE — adoption / onboarding**
 **Objectif :** `pip install "memos[local]" && MemOS(backend="local")` donne un recall sémantique correct sans avoir besoin d'Ollama, ChromaDB, ni aucun service externe.
 
-Implémenté sur la branche courante :
+Implémenté et désormais réaligné côté pilotage/doc :
 - `LocalEmbedder` lazy basé sur `sentence-transformers`
 - `MemOS(backend="local")` câblé sur le backend JSON existant
 - `RetrievalEngine` compatible embedder local branchable, cache persistant conservé
-- tests ajoutés pour garantir le mode local sans appel Ollama
-- correction associée : `knowledge_graph.py` réaligné avec les tests `confidence_label`
+- tests dédiés pour garantir le mode local sans appel Ollama
+- README corrigé : version/tests à jour, extra `memos[all]` supprimé, `MEMOS_BACKEND=local` mis en avant, quickstart local ajouté
 
-Contrainte restante : publier la PR puis review/merge.
+Validation 2026-04-11 : `pytest -q tests/test_local_embeddings.py tests/test_retrieval.py tests/test_json_backend.py` → **49 passed** ; `pytest -q` → **1384 passed**.
+
+Pistes futures éventuelles :
+- Alternative ONNX Runtime pour réduire encore le poids d’installation
+- Vecteurs persistants dédiés (`vectors.db`) si le backend local doit monter en volumétrie
+- HNSW/usearch pour accélérer les gros corpus locaux
+- Benchmark explicite sur 10k mémoires pour documenter la latence réelle
+
+---
+
+## [ ] P35 — Recall Explainability (score breakdown + backend trace)
+**Priorité : HAUTE — observabilité / onboarding**
+**Objectif :** rendre chaque résultat de recall explicable, pour comprendre pourquoi une mémoire sort et quel backend/mode a contribué.
 
 À implémenter :
-- Intégrer `sentence-transformers` comme option d'embedding légère (modèle `all-MiniLM-L6-v2`, 23MB)
-  - Alternative ONNX Runtime : même modèle sans dépendance torch (plus léger)
-- Nouveau backend hybride : `local` — JSON store + embeddings sentence-transformers en mémoire/SQLite
-  - `MemOS(backend="local")` — tout-en-un, aucune dépendance externe
-  - Vecteurs stockés dans SQLite (`~/.memos/vectors.db`)
-  - HNSW index en mémoire (bibliothèque `hnswlib` ou `usearch`, ~1MB)
-- `MEMOS_BACKEND=local` devient le défaut recommandé dans la doc
-- Install : `pip install memos` inclut `sentence-transformers` en dépendance principale (pas extras)
-  - Ou `pip install "memos[local]"` si on préfère garder le package minimal
-- Performance attendue : ~50ms/query pour 10k mémoires sur CPU standard
+- enrichir `RecallResult` avec un breakdown simple (`semantic`, `keyword`, `importance`, `recency`, `tag_bonus`)
+- option CLI `memos recall "..." --explain`
+- REST : `POST /api/v1/recall` accepte `explain=true`
+- dashboard : panneau de détail sur un résultat
+- utile pour debugger les faux positifs, régler les poids, et mieux onboarder les nouveaux utilisateurs
 
 ---
 
