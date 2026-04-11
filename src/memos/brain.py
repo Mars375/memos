@@ -115,8 +115,13 @@ class BrainSearch:
         self._memos = memos
         self._kg = kg or getattr(memos, "_kg", None) or KnowledgeGraph()
         self._memos._kg = self._kg
-        self._bridge = getattr(memos, "_kg_bridge", None) or KGBridge(memos, self._kg)
+
+        existing_bridge = getattr(memos, "_kg_bridge", None)
+        if existing_bridge is not None and getattr(existing_bridge, "kg", None) is not self._kg:
+            existing_bridge = None
+        self._bridge = existing_bridge or KGBridge(memos, self._kg)
         self._memos._kg_bridge = self._bridge
+
         self._wiki = LivingWikiEngine(memos, wiki_dir=wiki_dir)
 
     def search(

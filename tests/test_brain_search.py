@@ -6,6 +6,7 @@ import pytest
 
 from memos.brain import BrainSearch
 from memos.core import MemOS
+from memos.kg_bridge import KGBridge
 from memos.knowledge_graph import KnowledgeGraph
 from memos.mcp_server import _dispatch
 from memos.wiki_living import LivingWikiEngine
@@ -105,7 +106,10 @@ async def test_brain_entity_detail_api(brain_env):
     app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.get("/api/v1/brain/entity/Alice")
+        response = await client.get(
+            "/api/v1/brain/entity/Alice",
+            params={"wiki_dir": str(wiki_root)},
+        )
 
     data = response.json()
     assert data["status"] == "ok"
@@ -113,6 +117,35 @@ async def test_brain_entity_detail_api(brain_env):
     assert data["wiki_page"]
     assert data["kg_facts"]
     assert any(neighbor["entity"] == "OpenAI" for neighbor in data["kg_neighbors"])
+
+
+def test_brain_search_rebinds_stale_bridge_to_explicit_kg(tmp_path: Path):
+    persist_path = tmp_path / "store.json"
+    wiki_root = tmp_path / "wiki"
+    stale_kg_path = tmp_path / "stale-kg.db"
+    fresh_kg_path = tmp_path / "fresh-kg.db"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    memos.learn("Alice works at OpenAI.", tags=["people"])
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+    wiki.update(force=True)
+
+    stale_kg = KnowledgeGraph(db_path=str(stale_kg_path))
+    stale_kg.add_fact("Alice", "works_at", "OldCorp", confidence_label="AMBIGUOUS")
+    memos._kg_bridge = KGBridge(memos, stale_kg)
+
+    fresh_kg = KnowledgeGraph(db_path=str(fresh_kg_path))
+    fresh_kg.add_fact("Alice", "works_at", "OpenAI", confidence_label="EXTRACTED")
+
+    searcher = BrainSearch(memos, kg=fresh_kg, wiki_dir=str(wiki_root))
+    detail = searcher.entity_detail("Alice")
+
+    assert any(fact["object"] == "OpenAI" for fact in detail.kg_facts)
+    assert all(fact["object"] != "OldCorp" for fact in detail.kg_facts)
+
+    stale_kg.close()
+    fresh_kg.close()
 
 
 @pytest.mark.asyncio

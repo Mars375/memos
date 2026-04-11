@@ -810,12 +810,13 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         name: str,
         top_memories: int = 5,
         neighbor_limit: int = 12,
+        wiki_dir: str | None = None,
     ):
         """Return a unified entity detail view across wiki, memories, and KG."""
         from ..brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
             detail = searcher.entity_detail(
                 name,
                 top_memories=top_memories,
@@ -828,12 +829,12 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             return {"status": "error", "message": str(exc)}
 
     @app.get("/api/v1/brain/entity/{name}/subgraph")
-    async def brain_entity_subgraph(name: str, depth: int = 2):
+    async def brain_entity_subgraph(name: str, depth: int = 2, wiki_dir: str | None = None):
         """Return an ego-network subgraph for an entity."""
         from ..brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
             subgraph = searcher.entity_subgraph(name, depth=depth)
             return {
                 "status": "ok",
