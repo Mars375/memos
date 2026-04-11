@@ -651,7 +651,7 @@ Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledg
 **Priorité : CRITIQUE — bloquant v1**
 **Objectif :** Sécuriser l'API REST et isoler les namespaces par agent.
 
-Implemented v0.48.1 — auth Bearer + compat `X-API-Key`, chargement via `API_KEY` / `MEMOS_NAMESPACE_KEYS`, namespace forcé pour les clés agent, `GET /api/v1/auth/whoami`, health enrichi, 25 tests auth dédiés + suite complète verte (1389 passed).
+Implemented v0.48.2 — auth Bearer + compat `X-API-Key`, chargement via `API_KEY` / `MEMOS_NAMESPACE_KEYS`, namespace forcé pour les clés agent, `GET /api/v1/auth/whoami`, warning explicite en mode open, health enrichi (`auth_mode`), 27 tests auth dédiés + suite complète verte (1391 passed).
 
 Sans auth, n'importe quel process sur le réseau peut lire/écrire toutes les mémoires de tous les agents.
 

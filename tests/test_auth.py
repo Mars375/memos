@@ -132,6 +132,16 @@ class TestFastAPIAuth:
         resp = client.get("/api/v1/stats")
         assert resp.status_code == 200
 
+    def test_open_mode_logs_warning(self, monkeypatch, caplog):
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("MEMOS_NAMESPACE_KEYS", raising=False)
+        from memos.api import create_fastapi_app
+
+        with caplog.at_level("WARNING"):
+            create_fastapi_app(api_keys=None)
+
+        assert "authentication is disabled" in caplog.text
+
     def test_auth_blocks_no_key(self, app_with_auth):
         from fastapi.testclient import TestClient
         client = TestClient(app_with_auth)
@@ -157,6 +167,7 @@ class TestFastAPIAuth:
         assert resp.status_code == 200
         data = resp.json()
         assert data["auth_enabled"] is True
+        assert data["auth_mode"] == "bearer"
         assert data["active_keys"] == 1
         assert data["master_keys"] == 1
         assert data["namespace_keys"] == 0
@@ -275,3 +286,13 @@ class TestFastAPIAuth:
         )
         assert len(recall_scoped.json()["results"]) == 1
         assert recall_global.json()["results"] == []
+
+    def test_health_reports_open_mode(self, app_no_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_no_auth)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["auth_enabled"] is False
+        assert data["auth_mode"] == "open"

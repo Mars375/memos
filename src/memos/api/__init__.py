@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from .. import __version__ as MEMOS_VERSION
 from ..core import MemOS, MemoryStats
@@ -559,6 +562,10 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     key_manager.rate_limiter.max_requests = rate_limit
     if key_manager.auth_enabled:
         app.middleware("http")(create_auth_middleware(key_manager))
+    else:
+        logger.warning(
+            "MemOS API authentication is disabled. Set API_KEY and/or MEMOS_NAMESPACE_KEYS to enable bearer auth."
+        )
 
     # Standalone per-endpoint rate limiter (works with or without auth)
     rate_limiter = RateLimiter(default_max=rate_limit, rules=DEFAULT_RULES)
@@ -1196,6 +1203,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             "status": "ok",
             "version": MEMOS_VERSION,
             "auth_enabled": key_manager.auth_enabled,
+            "auth_mode": "bearer" if key_manager.auth_enabled else "open",
             "active_keys": key_manager.key_count,
             "master_keys": key_manager.master_key_count,
             "namespace_keys": key_manager.namespace_key_count,
