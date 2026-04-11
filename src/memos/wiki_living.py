@@ -522,6 +522,33 @@ class LivingWikiEngine:
                         )
                     else:
                         content += link_lines
+
+                    kg = getattr(self._memos, "_kg", None)
+                    neighbor_lines = "\n## Graph Neighbors\n\n- No graph neighbors yet.\n"
+                    if kg is not None:
+                        try:
+                            neighbor_edges = kg.neighbors(ename, depth=1, direction="both")["edges"]
+                        except Exception:
+                            neighbor_edges = []
+                        if neighbor_edges:
+                            seen_neighbors: dict[str, set[str]] = {}
+                            for edge in neighbor_edges:
+                                other = edge["object"] if edge["subject"] == ename else edge["subject"]
+                                seen_neighbors.setdefault(other, set()).add(edge["predicate"])
+                            neighbor_lines = "\n## Graph Neighbors\n\n" + "\n".join(
+                                f"- [[{self._safe_slug(other)}|{other}]] ({', '.join(sorted(predicates))})"
+                                for other, predicates in sorted(seen_neighbors.items())
+                            ) + "\n"
+
+                    if "## Graph Neighbors" in content:
+                        content = re.sub(
+                            r"## Graph Neighbors\n.*?(?=\n## |\Z)",
+                            neighbor_lines.strip("\n"),
+                            content,
+                            flags=re.DOTALL,
+                        )
+                    else:
+                        content += neighbor_lines
                     page_path.write_text(content, encoding="utf-8")
 
         self._log_action(

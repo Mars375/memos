@@ -809,6 +809,48 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
+    @app.get("/api/v1/brain/entity/{name}")
+    async def brain_entity_detail(
+        name: str,
+        top_memories: int = 5,
+        neighbor_limit: int = 12,
+        wiki_dir: str | None = None,
+    ):
+        """Return a unified entity detail view across wiki, memories, and KG."""
+        from ..brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            detail = searcher.entity_detail(
+                name,
+                top_memories=top_memories,
+                neighbor_limit=neighbor_limit,
+            )
+            payload = detail.to_dict()
+            payload["status"] = "ok"
+            return payload
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @app.get("/api/v1/brain/entity/{name}/subgraph")
+    async def brain_entity_subgraph(name: str, depth: int = 2, wiki_dir: str | None = None):
+        """Return an ego-network subgraph for an entity."""
+        from ..brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            subgraph = searcher.entity_subgraph(name, depth=depth)
+            return {
+                "status": "ok",
+                "entity": subgraph.center,
+                "depth": subgraph.depth,
+                "nodes": subgraph.nodes,
+                "edges": subgraph.edges,
+                "layers": subgraph.layers,
+            }
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # ---- End Knowledge Graph ----
 
     # ---- Palace (P6) ----
@@ -1184,6 +1226,32 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     async def api_rate_limit_status(request):
         """Get current rate limit status for the requesting client."""
         return rate_limiter.get_status(request)
+
+    @app.get("/api/v1/export/markdown")
+    async def api_export_markdown(output_dir: str | None = None, update: bool = False, wiki_dir: str | None = None):
+        """Export MemOS knowledge as a downloadable markdown ZIP."""
+        import tempfile
+        import zipfile
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+
+        from ..export_markdown import MarkdownExporter
+
+        export_root = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="memos-markdown-export-"))
+        exporter = MarkdownExporter(memos, kg=_kg, wiki_dir=wiki_dir)
+        exporter.export(str(export_root), update=update)
+
+        zip_path = export_root.parent / f"{export_root.name}.zip"
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            for file_path in sorted(export_root.rglob("*")):
+                if file_path.is_file():
+                    bundle.write(file_path, arcname=str(file_path.relative_to(export_root)))
+
+        return FileResponse(
+            str(zip_path),
+            media_type="application/zip",
+            filename=f"memos-markdown-export-{int(time.time())}.zip",
+        )
 
     # Parquet export
     @app.get("/api/v1/export/parquet")

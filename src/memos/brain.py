@@ -8,6 +8,7 @@ from typing import Any
 
 from .kg_bridge import KGBridge
 from .knowledge_graph import KnowledgeGraph
+from .wiki_graph import GraphWikiEngine
 from .wiki_living import LivingWikiEngine
 
 
@@ -64,6 +65,44 @@ class BrainSearchResult:
         }
 
 
+@dataclass
+class EntityNeighbor:
+    entity: str
+    relation_count: int
+    predicates: list[str]
+
+
+@dataclass
+class EntitySubgraph:
+    center: str
+    depth: int
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+    layers: dict[int, list[str]]
+
+
+@dataclass
+class EntityDetail:
+    entity: str
+    wiki_page: str
+    memories: list[dict[str, Any]]
+    kg_facts: list[dict[str, Any]]
+    kg_neighbors: list[EntityNeighbor]
+    backlinks: list[str]
+    community: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "entity": self.entity,
+            "wiki_page": self.wiki_page,
+            "memories": list(self.memories),
+            "kg_facts": list(self.kg_facts),
+            "kg_neighbors": [asdict(item) for item in self.kg_neighbors],
+            "backlinks": list(self.backlinks),
+            "community": self.community,
+        }
+
+
 class BrainSearch:
     """Unified search facade across memory, living wiki, and knowledge graph."""
 
@@ -76,8 +115,13 @@ class BrainSearch:
         self._memos = memos
         self._kg = kg or getattr(memos, "_kg", None) or KnowledgeGraph()
         self._memos._kg = self._kg
-        self._bridge = getattr(memos, "_kg_bridge", None) or KGBridge(memos, self._kg)
+
+        existing_bridge = getattr(memos, "_kg_bridge", None)
+        if existing_bridge is not None and getattr(existing_bridge, "kg", None) is not self._kg:
+            existing_bridge = None
+        self._bridge = existing_bridge or KGBridge(memos, self._kg)
         self._memos._kg_bridge = self._bridge
+
         self._wiki = LivingWikiEngine(memos, wiki_dir=wiki_dir)
 
     def search(
@@ -119,6 +163,58 @@ class BrainSearch:
             context=context,
         )
 
+    def entity_detail(
+        self,
+        entity: str,
+        *,
+        top_memories: int = 5,
+        neighbor_limit: int = 12,
+    ) -> EntityDetail:
+        canonical = self._canonical_entity_name(entity)
+        self._ensure_wiki_page(canonical)
+
+        wiki_page = self._wiki.read_page(canonical) or ""
+        memories = self._entity_memories(canonical, top=top_memories)
+        kg_facts = self._entity_kg_facts(canonical)
+        kg_neighbors = self._entity_neighbors(canonical, limit=neighbor_limit)
+        backlinks = self._entity_backlinks(canonical)
+
+        if not wiki_page:
+            wiki_page = self._render_fallback_wiki(canonical, memories, kg_facts, backlinks)
+
+        return EntityDetail(
+            entity=canonical,
+            wiki_page=wiki_page,
+            memories=memories,
+            kg_facts=kg_facts,
+            kg_neighbors=kg_neighbors,
+            backlinks=backlinks,
+            community=self._community_for_entity(canonical),
+        )
+
+    def entity_subgraph(self, entity: str, depth: int = 2) -> EntitySubgraph:
+        canonical = self._canonical_entity_name(entity)
+        neighborhood = self._kg.neighbors(canonical, depth=depth, direction="both")
+        nodes = [{"id": name, "label": name, "is_center": name == canonical} for name in neighborhood["nodes"]]
+        edges = [
+            {
+                "id": edge["id"],
+                "source": edge["subject"],
+                "target": edge["object"],
+                "predicate": edge["predicate"],
+                "confidence": edge["confidence"],
+                "confidence_label": edge.get("confidence_label", "EXTRACTED"),
+            }
+            for edge in neighborhood["edges"]
+        ]
+        return EntitySubgraph(
+            center=canonical,
+            depth=depth,
+            nodes=nodes,
+            edges=edges,
+            layers=neighborhood["layers"],
+        )
+
     def _score_memories(self, results: list[Any]) -> list[ScoredMemory]:
         max_score = max((float(getattr(r, "score", 0.0)) for r in results), default=1.0) or 1.0
         scored: list[ScoredMemory] = []
@@ -138,6 +234,157 @@ class BrainSearch:
             )
         scored.sort(key=lambda item: item.score, reverse=True)
         return scored
+
+    def _canonical_entity_name(self, entity: str) -> str:
+        entity = " ".join(entity.split()).strip()
+        if not entity:
+            return entity
+        matches = self._kg.search_entities(entity)
+        for hit in matches:
+            if hit["name"].lower() == entity.lower():
+                return hit["name"]
+        page = next((page for page in self._wiki.list_pages() if page.entity.lower() == entity.lower()), None)
+        if page:
+            return page.entity
+        return matches[0]["name"] if matches else entity
+
+    def _ensure_wiki_page(self, entity: str) -> None:
+        if self._wiki.read_page(entity):
+            return
+        self._wiki.update(force=False)
+
+    def _entity_memories(self, entity: str, top: int) -> list[dict[str, Any]]:
+        ranked: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        db = self._wiki._get_db()
+        try:
+            rows = db.execute(
+                "SELECT memory_id, snippet, added_at FROM entity_memories WHERE LOWER(entity_name)=LOWER(?) ORDER BY added_at DESC",
+                (entity,),
+            ).fetchall()
+        finally:
+            db.close()
+
+        for row in rows:
+            item = self._memos._store.get(row["memory_id"], namespace=self._memos._namespace)
+            if item is None or item.id in seen:
+                continue
+            seen.add(item.id)
+            ranked.append(
+                {
+                    "id": item.id,
+                    "content": item.content,
+                    "tags": list(item.tags),
+                    "importance": float(item.importance),
+                    "created_at": float(item.created_at),
+                    "access_count": int(getattr(item, "access_count", 0)),
+                    "source": "wiki_link",
+                }
+            )
+
+        if len(ranked) < top:
+            entity_lower = entity.lower()
+            for item in self._memos._store.list_all(namespace=self._memos._namespace):
+                haystacks = [item.content.lower(), *[str(tag).lower() for tag in item.tags]]
+                if entity_lower not in " ".join(haystacks) or item.id in seen:
+                    continue
+                seen.add(item.id)
+                ranked.append(
+                    {
+                        "id": item.id,
+                        "content": item.content,
+                        "tags": list(item.tags),
+                        "importance": float(item.importance),
+                        "created_at": float(item.created_at),
+                        "access_count": int(getattr(item, "access_count", 0)),
+                        "source": "content_match",
+                    }
+                )
+
+        ranked.sort(
+            key=lambda item: (-item["importance"], -item["created_at"], -item["access_count"]),
+        )
+        return ranked[:top]
+
+    def _entity_kg_facts(self, entity: str) -> list[dict[str, Any]]:
+        facts = self._kg.query(entity)
+        facts.sort(key=lambda fact: (fact.get("created_at") or 0.0, fact.get("confidence") or 0.0), reverse=True)
+        return facts
+
+    def _entity_neighbors(self, entity: str, limit: int) -> list[EntityNeighbor]:
+        edges = self._kg.neighbors(entity, depth=1, direction="both")["edges"]
+        neighbor_meta: dict[str, dict[str, Any]] = {}
+        for edge in edges:
+            other = edge["object"] if edge["subject"] == entity else edge["subject"]
+            meta = neighbor_meta.setdefault(other, {"count": 0, "predicates": set()})
+            meta["count"] += 1
+            meta["predicates"].add(edge["predicate"])
+        ranked = [
+            EntityNeighbor(
+                entity=name,
+                relation_count=meta["count"],
+                predicates=sorted(meta["predicates"]),
+            )
+            for name, meta in neighbor_meta.items()
+        ]
+        ranked.sort(key=lambda item: (-item.relation_count, item.entity.lower()))
+        return ranked[:limit]
+
+    def _entity_backlinks(self, entity: str) -> list[str]:
+        db = self._wiki._get_db()
+        try:
+            rows = db.execute(
+                "SELECT target_entity FROM backlinks WHERE LOWER(source_entity)=LOWER(?) ORDER BY target_entity COLLATE NOCASE",
+                (entity,),
+            ).fetchall()
+        finally:
+            db.close()
+        return [row["target_entity"] for row in rows]
+
+    def _community_for_entity(self, entity: str) -> str | None:
+        engine = GraphWikiEngine(self._kg)
+        facts = engine._load_facts()
+        if not facts:
+            return None
+        adjacency: dict[str, set[str]] = {}
+        nodes: set[str] = set()
+        for fact in facts:
+            subject = fact["subject"]
+            obj = fact["object"]
+            nodes.update({subject, obj})
+            adjacency.setdefault(subject, set()).add(obj)
+            adjacency.setdefault(obj, set()).add(subject)
+        bridge_nodes = engine._find_bridge_nodes(nodes, adjacency)
+        communities = engine._detect_communities(nodes, adjacency, bridge_nodes=bridge_nodes)
+        for community in communities:
+            if entity in community.entities:
+                return community.community_id
+        return None
+
+    def _render_fallback_wiki(
+        self,
+        entity: str,
+        memories: list[dict[str, Any]],
+        kg_facts: list[dict[str, Any]],
+        backlinks: list[str],
+    ) -> str:
+        lines = [f"# {entity}", "", "## Overview", ""]
+        if memories:
+            lines.append(memories[0]["content"])
+        else:
+            lines.append("No living wiki page yet for this entity.")
+        lines.extend(["", "## Key Facts", ""])
+        if kg_facts:
+            for fact in kg_facts[:8]:
+                lines.append(f"- {fact['subject']} -{fact['predicate']}-> {fact['object']}")
+        else:
+            lines.append("- No graph facts yet.")
+        lines.extend(["", "## Backlinks", ""])
+        if backlinks:
+            lines.extend(f"- {name}" for name in backlinks[:12])
+        else:
+            lines.append("- No backlinks yet.")
+        return "\n".join(lines)
 
     def _expand_entities(self, query: str, results: list[Any], initial: list[str]) -> list[str]:
         expanded: list[str] = []

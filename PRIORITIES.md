@@ -582,65 +582,23 @@ Problème actuel : `recall` cherche dans les mémoires, `wiki-living search` che
 
 ---
 
-## [ ] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+## [x] P26 — Entity Detail API + Graph ↔ Wiki Bridge
+Implemented v0.47.1 — `BrainSearch.entity_detail()` + `entity_subgraph()`, REST `GET /api/v1/brain/entity/{name}` + `/subgraph`, dashboard slide-in panel navigable, wiki living pages enrichies avec `## Graph Neighbors`, 15 tests ciblés + suite complète verte.
 **Objectif :** Chaque entité connue de MemOS a une vue unifiée — mémoires + faits KG + page wiki + voisins de graphe. Le dashboard D3.js devient navigable, pas juste visuel.
 
-Actuellement : les nœuds D3.js sont des points morts. Les pages wiki existent mais ne sont pas connectées au graphe. Les faits KG ne sont pas liés aux mémoires qui les mentionnent.
-
-À implémenter :
-**API :**
-- `GET /api/v1/brain/entity/{name}` — vue complète :
-  ```json
-  {
-    "entity": "Alice",
-    "wiki_page": "...",             // page wiki vivante (Karpathy)
-    "memories": [...],              // top-5 mémoires liées (mempalace verbatim)
-    "kg_facts": [...],              // faits actifs avec confidence_label (graphify)
-    "kg_neighbors": [...],          // entités voisines (graphify path queries)
-    "backlinks": [...],             // autres entités qui mentionnent celle-ci
-    "community": "..."              // communauté Leiden d'appartenance
-  }
-  ```
-- `GET /api/v1/brain/entity/{name}/subgraph` — ego network depth=2 pour D3.js
-
-**Dashboard :**
-- Clic sur un nœud D3.js → slide-in panel avec la vue entity detail
-- Panel : wiki page rendu markdown + top mémoires + faits KG (colorés par confidence_label)
-- Backlinks cliquables → navigation entre entités
-- Nœuds "god nodes" (3+ communautés) mis en évidence visuellement
-
-**Wiki pages :**
-- Section `## Graph Neighbors` auto-générée (voisins KG directs)
-- Frontmatter enrichi : `community`, `kg_facts_count`, `backlinks_count`, `top_memories`
+Livré :
+- Vue unifiée par entité : page wiki vivante, top mémoires liées, faits KG actifs, voisins directs, backlinks, communauté graphe
+- Sous-graphe depth=2 exposé via l’API pour alimenter le dashboard
+- Dashboard D3.js relié à l’API entity detail via un slide-in panel navigable
+- Pages wiki vivantes enrichies avec une section `## Graph Neighbors`
 
 ---
 
-## [ ] P27 — Knowledge Export Universel (Markdown interopérable)
+## [x] P27 — Knowledge Export Universel (Markdown interopérable)
+Implémenté v0.47.1 — `MarkdownExporter`, export portable `INDEX.md`/`LOG.md` + `entities/` + `memories/` + `communities/`, mode incrémental `--update`, CLI `memos export --format markdown`, endpoint ZIP `GET /api/v1/export/markdown`, tests dédiés export/CLI/API verts.
 **Objectif :** Exporter tout le knowledge de MemOS en markdown portable — lisible par n'importe quel outil (Obsidian, Logseq, Foam, simple lecteur de fichiers, autre agent).
 
 Ce n'est pas un export "pour Obsidian" — c'est le format canonique du knowledge de MemOS, utile pour backup, migration, partage entre agents, ou audit humain.
-
-À implémenter dans `src/memos/export_markdown.py` :
-- `MarkdownExporter` classe
-- `export(output_dir: str)` — génère :
-  ```
-  export/
-  ├── INDEX.md              # entrée principale : communautés + god nodes + stats
-  ├── LOG.md                # journal append-only de toute l'activité
-  ├── entities/
-  │   ├── Alice.md          # page entité : mémoires + faits KG + voisins + backlinks
-  │   └── Project-X.md      # frontmatter YAML : importance, community, kg_facts_count
-  ├── memories/
-  │   ├── decisions.md      # mémoires par type-tag (auto-tagger P17)
-  │   └── milestones.md
-  └── communities/
-      └── engineering.md    # page communauté Leiden (P21)
-  ```
-- Inter-liens entre pages avec syntaxe markdown standard `[Alice](../entities/Alice.md)`
-- Frontmatter YAML : `tags`, `importance`, `community`, `confidence`, `created`, `backlinks`
-- Incrémental : `memos export --update` — ne régénère que les pages modifiées depuis le dernier export
-- CLI : `memos export --format markdown --output ./knowledge/`
-- REST : `GET /api/v1/export/markdown` → ZIP téléchargeable
 
 ---
 # ═══════════════════════════════════════════════════════

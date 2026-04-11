@@ -648,9 +648,29 @@ def cmd_subscribe(ns: argparse.Namespace) -> None:
 
 
 def cmd_export(ns: argparse.Namespace) -> None:
-    """Export memories to JSON or Parquet file."""
+    """Export memories to JSON, Parquet, or portable Markdown."""
     mem = _get_memos(ns)
     fmt = getattr(ns, "format", "json") or "json"
+
+    if fmt == "markdown":
+        out = ns.output
+        if not out:
+            print("Error: --output is required for markdown format", file=sys.stderr)
+            sys.exit(1)
+        from .export_markdown import MarkdownExporter
+        from .knowledge_graph import KnowledgeGraph
+
+        kg = KnowledgeGraph(db_path=getattr(ns, "kg_db", None))
+        try:
+            exporter = MarkdownExporter(mem, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
+            result = exporter.export(out, update=getattr(ns, "update", False))
+        finally:
+            kg.close()
+        print(
+            f"Exported markdown knowledge to {out} "
+            f"(memories={result.total_memories}, entities={result.total_entities}, facts={result.total_facts})"
+        )
+        return
 
     if fmt == "parquet":
         out = ns.output
@@ -1189,12 +1209,16 @@ def build_parser() -> argparse.ArgumentParser:
     ing_url.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
 
     # export
-    exp = sub.add_parser("export", help="Export all memories to JSON or Parquet")
-    exp.add_argument("--output", "-o", help="Output file (default: stdout)")
-    exp.add_argument("--format", "-f", choices=["json", "parquet"], default="json", help="Export format (default: json)")
+    exp = sub.add_parser("export", help="Export all memories to JSON, Parquet, or Markdown")
+    exp.add_argument("--output", "-o", help="Output file or directory (default: stdout for json)")
+    exp.add_argument("--format", "-f", choices=["json", "parquet", "markdown"], default="json", help="Export format (default: json)")
     exp.add_argument("--compression", choices=["zstd", "snappy", "gzip", "none"], default="zstd", help="Parquet compression (default: zstd)")
     exp.add_argument("--no-metadata", action="store_true", help="Exclude metadata")
-    exp.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "chroma", "qdrant", "pinecone"])
+    exp.add_argument("--update", action="store_true", help="Markdown export: only rewrite changed pages when possible")
+    exp.add_argument("--wiki-dir", default=None, help="Markdown export: living wiki root override")
+    exp.add_argument("--db", dest="kg_db", default=None, help="Markdown export: path to kg.db")
+    exp.add_argument("--persist-path", dest="persist_path", help="Path for json backend")
+    exp.add_argument("--backend", default=os.environ.get("MEMOS_BACKEND", "memory"), choices=["memory", "json", "chroma", "qdrant", "pinecone"])
 
     # import
     imp = sub.add_parser("import", help="Import memories from JSON")
