@@ -10,11 +10,12 @@ from .. import __version__ as MEMOS_VERSION
 from ..core import MemOS, MemoryStats
 
 try:
-    from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, Query, Request, WebSocket, WebSocketDisconnect
     from fastapi.responses import StreamingResponse, HTMLResponse
 except ImportError:  # pragma: no cover - optional server dependency
     FastAPI = None  # type: ignore[assignment]
     Query = None  # type: ignore[assignment]
+    Request = None  # type: ignore[assignment]
     WebSocket = None  # type: ignore[assignment]
     WebSocketDisconnect = None  # type: ignore[assignment]
     StreamingResponse = None  # type: ignore[assignment]
@@ -262,6 +263,7 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
         description="Memory Operating System for LLM Agents",
         version=MEMOS_VERSION,
     )
+    app.state.memos = memos
 
     routes = create_api(memos)
 
@@ -552,7 +554,8 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
     # Auth & rate limiting
     from .auth import APIKeyManager, create_auth_middleware
     from .ratelimit import RateLimiter, create_rate_limit_middleware, DEFAULT_RULES
-    key_manager = APIKeyManager(keys=api_keys)
+    key_manager = APIKeyManager.from_env(keys=api_keys)
+    app.state.auth_key_manager = key_manager
     key_manager.rate_limiter.max_requests = rate_limit
     if key_manager.auth_enabled:
         app.middleware("http")(create_auth_middleware(key_manager))
@@ -603,6 +606,27 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
 
     # Dashboard
     from ..web import DASHBOARD_HTML
+
+    @app.get("/api/v1/auth/whoami")
+    async def api_auth_whoami(request: Request):
+        identity = getattr(request.state, "auth_identity", None)
+        namespace = getattr(request.state, "namespace", "")
+        if identity is None:
+            return {
+                "status": "ok",
+                "auth_enabled": False,
+                "mode": "open",
+                "namespace": namespace,
+                "permissions": ["read", "write", "admin"],
+            }
+        return {
+            "status": "ok",
+            "auth_enabled": key_manager.auth_enabled,
+            "mode": "master" if identity.is_master else "namespace",
+            "name": identity.name,
+            "namespace": namespace,
+            "permissions": identity.permissions,
+        }
 
 
     @app.get("/api/v1/classify")
@@ -1173,6 +1197,8 @@ def create_fastapi_app(memos: Optional[MemOS] = None, api_keys: Optional[list[st
             "version": MEMOS_VERSION,
             "auth_enabled": key_manager.auth_enabled,
             "active_keys": key_manager.key_count,
+            "master_keys": key_manager.master_key_count,
+            "namespace_keys": key_manager.namespace_key_count,
             "rate_limiting": True,
         }
 

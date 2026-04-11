@@ -102,3 +102,4 @@
 - [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at).
 - [x] Multi-namespace support.
 - [x] Memory deduplication (exact + near-duplicate detection at write time).
+- [x] API authentication with Bearer master key + namespace-scoped keys.
