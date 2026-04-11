@@ -74,6 +74,7 @@ def create_api(memos: MemOS) -> dict[str, Any]:
         if retrieval_mode not in ("semantic", "keyword", "hybrid"):
             return {"status": "error", "message": "Invalid retrieval_mode. Must be semantic, keyword, or hybrid."}
 
+        explain = body.get("explain", False)
         results = memos.recall(
             query=body["query"],
             top=body.get("top_k", body.get("top", 5)),
@@ -86,21 +87,24 @@ def create_api(memos: MemOS) -> dict[str, Any]:
             min_importance=importance_payload.get("min"),
             max_importance=importance_payload.get("max"),
         )
+        serialized = []
+        for r in results:
+            entry = {
+                "id": r.item.id,
+                "content": r.item.content,
+                "score": round(r.score, 4),
+                "tags": r.item.tags,
+                "match_reason": r.match_reason,
+                "importance": r.item.importance,
+                "created_at": r.item.created_at,
+                "age_days": round((__import__("time").time() - r.item.created_at) / 86400, 1),
+            }
+            if explain and r.score_breakdown:
+                entry["score_breakdown"] = r.score_breakdown.to_dict()
+            serialized.append(entry)
         return {
             "status": "ok",
-            "results": [
-                {
-                    "id": r.item.id,
-                    "content": r.item.content,
-                    "score": round(r.score, 4),
-                    "tags": r.item.tags,
-                    "match_reason": r.match_reason,
-                    "importance": r.item.importance,
-                    "created_at": r.item.created_at,
-                    "age_days": round((__import__("time").time() - r.item.created_at) / 86400, 1),
-                }
-                for r in results
-            ],
+            "results": serialized,
         }
 
     async def prune(body: dict) -> dict:

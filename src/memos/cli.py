@@ -249,25 +249,28 @@ def cmd_recall(ns: argparse.Namespace) -> None:
             print("No memories found.")
         return
     if fmt == "json":
-        print(json.dumps({
-            "results": [
-                {
-                    "id": r.item.id,
-                    "content": r.item.content,
-                    "score": round(r.score, 4),
-                    "tags": r.item.tags,
-                    "match_reason": r.match_reason,
-                    "importance": r.item.importance,
-                    "created_at": r.item.created_at,
-                }
-                for r in results
-            ],
-            "total": len(results),
-        }, indent=2))
+        json_results = []
+        for r in results:
+            entry = {
+                "id": r.item.id,
+                "content": r.item.content,
+                "score": round(r.score, 4),
+                "tags": r.item.tags,
+                "match_reason": r.match_reason,
+                "importance": r.item.importance,
+                "created_at": r.item.created_at,
+            }
+            if getattr(ns, "explain", False) and r.score_breakdown:
+                entry["score_breakdown"] = r.score_breakdown.to_dict()
+            json_results.append(entry)
+        print(json.dumps({"results": json_results, "total": len(results)}, indent=2))
         return
     for r in results:
         tags_str = f" [{', '.join(r.item.tags)}]" if r.item.tags else ""
         print(f"  {r.score:.3f} {r.item.content[:120]}{tags_str}")
+        if getattr(ns, "explain", False) and r.score_breakdown:
+            bd = r.score_breakdown
+            print(f"    breakdown: semantic={bd.semantic:.3f} keyword={bd.keyword:.3f} importance={bd.importance:.3f} recency={bd.recency:.3f} tag_bonus={bd.tag_bonus:.3f} backend={bd.backend}")
     print(f"\n{len(results)} result(s)")
 
 
@@ -1090,6 +1093,7 @@ def build_parser() -> argparse.ArgumentParser:
     recall.add_argument("--mode", dest="retrieval_mode", default="semantic",
                         choices=["semantic", "keyword", "hybrid"],
                         help="Retrieval mode: semantic (default), keyword (BM25 only), hybrid (semantic+BM25)")
+    recall.add_argument("--explain", action="store_true", help="Show detailed score breakdown for each result")
 
     # search
     search_p = sub.add_parser("search", help="Keyword-only search across memories (no embeddings)")

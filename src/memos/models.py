@@ -43,11 +43,35 @@ class MemoryItem:
 
 
 @dataclass
+class ScoreBreakdown:
+    """Detailed score breakdown for a recall result."""
+    semantic: float = 0.0
+    keyword: float = 0.0
+    importance: float = 0.0
+    recency: float = 0.0
+    tag_bonus: float = 0.0
+    total: float = 0.0
+    backend: str = ""  # "hybrid" | "qdrant" | "keyword-only"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "semantic": round(self.semantic, 4),
+            "keyword": round(self.keyword, 4),
+            "importance": round(self.importance, 4),
+            "recency": round(self.recency, 4),
+            "tag_bonus": round(self.tag_bonus, 4),
+            "total": round(self.total, 4),
+            "backend": self.backend,
+        }
+
+
+@dataclass
 class RecallResult:
     """Result from a recall query."""
     item: MemoryItem
     score: float  # 0.0 to 1.0
     match_reason: str = ""  # "semantic" | "keyword" | "recent" | "tag"
+    score_breakdown: Optional[ScoreBreakdown] = None
 
 
 @dataclass
