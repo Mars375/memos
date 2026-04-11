@@ -46,6 +46,22 @@ class TestAPIKeyManager:
         assert mgr.validate("sk-admin") is True
         assert mgr._key_names  # name stored
 
+    def test_namespace_key_authentication(self):
+        mgr = APIKeyManager(namespace_keys={"orion": "ns-key"})
+        identity = mgr.authenticate("ns-key")
+        assert identity is not None
+        assert identity.namespace == "orion"
+        assert identity.is_master is False
+
+    def test_from_env_loads_master_and_namespace_keys(self, monkeypatch):
+        monkeypatch.setenv("API_KEY", "master-key")
+        monkeypatch.setenv("MEMOS_NAMESPACE_KEYS", '{"orion": "ns-key"}')
+        mgr = APIKeyManager.from_env()
+        assert mgr.master_key_count == 1
+        assert mgr.namespace_key_count == 1
+        assert mgr.authenticate("master-key").is_master is True
+        assert mgr.authenticate("ns-key").namespace == "orion"
+
 
 class TestRateLimiter:
     def test_basic_allow(self):
@@ -90,17 +106,23 @@ class TestRateLimiter:
 
 class TestFastAPIAuth:
     @pytest.fixture
-    def app_no_auth(self):
+    def app_no_auth(self, monkeypatch):
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("MEMOS_NAMESPACE_KEYS", raising=False)
         from memos.api import create_fastapi_app
         return create_fastapi_app(api_keys=None)
 
     @pytest.fixture
-    def app_with_auth(self):
+    def app_with_auth(self, monkeypatch):
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("MEMOS_NAMESPACE_KEYS", raising=False)
         from memos.api import create_fastapi_app
         return create_fastapi_app(api_keys=["sk-test-123"])
 
     @pytest.fixture
-    def app_rate_limited(self):
+    def app_rate_limited(self, monkeypatch):
+        monkeypatch.delenv("API_KEY", raising=False)
+        monkeypatch.delenv("MEMOS_NAMESPACE_KEYS", raising=False)
         from memos.api import create_fastapi_app
         return create_fastapi_app(api_keys=["sk-test"], rate_limit=2)
 
@@ -119,13 +141,13 @@ class TestFastAPIAuth:
     def test_auth_blocks_wrong_key(self, app_with_auth):
         from fastapi.testclient import TestClient
         client = TestClient(app_with_auth)
-        resp = client.get("/api/v1/stats", headers={"X-API-Key": "wrong"})
+        resp = client.get("/api/v1/stats", headers={"Authorization": "Bearer wrong"})
         assert resp.status_code == 403
 
     def test_auth_allows_valid_key(self, app_with_auth):
         from fastapi.testclient import TestClient
         client = TestClient(app_with_auth)
-        resp = client.get("/api/v1/stats", headers={"X-API-Key": "sk-test-123"})
+        resp = client.get("/api/v1/stats", headers={"Authorization": "Bearer sk-test-123"})
         assert resp.status_code == 200
 
     def test_health_no_auth_required(self, app_with_auth):
@@ -136,6 +158,8 @@ class TestFastAPIAuth:
         data = resp.json()
         assert data["auth_enabled"] is True
         assert data["active_keys"] == 1
+        assert data["master_keys"] == 1
+        assert data["namespace_keys"] == 0
 
     def test_dashboard_no_auth_required(self, app_with_auth):
         from fastapi.testclient import TestClient
@@ -146,7 +170,7 @@ class TestFastAPIAuth:
     def test_rate_limit_enforced(self, app_rate_limited):
         from fastapi.testclient import TestClient
         client = TestClient(app_rate_limited)
-        headers = {"X-API-Key": "sk-test"}
+        headers = {"Authorization": "Bearer sk-test"}
         resp1 = client.get("/api/v1/stats", headers=headers)
         assert resp1.status_code == 200
         resp2 = client.get("/api/v1/stats", headers=headers)
@@ -160,7 +184,7 @@ class TestFastAPIAuth:
         resp = client.post(
             "/api/v1/learn",
             json={"content": "test memory"},
-            headers={"X-API-Key": "sk-test-123"},
+            headers={"Authorization": "Bearer sk-test-123"},
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
@@ -173,3 +197,81 @@ class TestFastAPIAuth:
             json={"content": "test memory"},
         )
         assert resp.status_code == 401
+
+    def test_whoami_for_master_key(self, app_with_auth):
+        from fastapi.testclient import TestClient
+        client = TestClient(app_with_auth)
+        resp = client.get(
+            "/api/v1/auth/whoami",
+            headers={"Authorization": "Bearer sk-test-123"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode"] == "master"
+        assert "admin" in data["permissions"]
+
+    def test_namespace_key_forces_namespace(self, monkeypatch):
+        from fastapi.testclient import TestClient
+        from memos.api import create_fastapi_app
+
+        monkeypatch.setenv("MEMOS_NAMESPACE_KEYS", '{"agent-a": "ns-agent-a", "agent-b": "ns-agent-b"}')
+        monkeypatch.delenv("API_KEY", raising=False)
+        app = create_fastapi_app(api_keys=None)
+        client = TestClient(app)
+
+        resp = client.post(
+            "/api/v1/learn",
+            json={"content": "secret A"},
+            headers={"Authorization": "Bearer ns-agent-a", "X-Memos-Namespace": "agent-b"},
+        )
+        assert resp.status_code == 200
+        assert resp.headers["X-Memos-Namespace"] == "agent-a"
+
+        recall_a = client.post(
+            "/api/v1/recall",
+            json={"query": "secret", "top_k": 5},
+            headers={"Authorization": "Bearer ns-agent-a"},
+        )
+        recall_b = client.post(
+            "/api/v1/recall",
+            json={"query": "secret", "top_k": 5},
+            headers={"Authorization": "Bearer ns-agent-b"},
+        )
+        assert len(recall_a.json()["results"]) == 1
+        assert recall_a.json()["results"][0]["content"] == "secret A"
+        assert recall_b.json()["results"] == []
+
+    def test_master_key_can_scope_namespace_with_header(self, monkeypatch):
+        from fastapi.testclient import TestClient
+        from memos.api import create_fastapi_app
+
+        monkeypatch.setenv("API_KEY", "master-key")
+        monkeypatch.delenv("MEMOS_NAMESPACE_KEYS", raising=False)
+        app = create_fastapi_app(api_keys=None)
+        client = TestClient(app)
+
+        create_resp = client.post(
+            "/api/v1/learn",
+            json={"content": "ops-only memory"},
+            headers={"Authorization": "Bearer master-key", "X-Memos-Namespace": "ops"},
+        )
+        assert create_resp.status_code == 200
+
+        whoami = client.get(
+            "/api/v1/auth/whoami",
+            headers={"Authorization": "Bearer master-key", "X-Memos-Namespace": "ops"},
+        )
+        assert whoami.json()["namespace"] == "ops"
+
+        recall_scoped = client.post(
+            "/api/v1/recall",
+            json={"query": "ops-only", "top_k": 5},
+            headers={"Authorization": "Bearer master-key", "X-Memos-Namespace": "ops"},
+        )
+        recall_global = client.post(
+            "/api/v1/recall",
+            json={"query": "ops-only", "top_k": 5},
+            headers={"Authorization": "Bearer master-key"},
+        )
+        assert len(recall_scoped.json()["results"]) == 1
+        assert recall_global.json()["results"] == []
