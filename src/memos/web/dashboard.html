@@ -20,8 +20,8 @@
   --text2:   #4e5370;
   --danger:  #e74c3c;
   --node:    rgba(210,218,255,0.88);
-  --edge:    rgba(130,148,200,0.18);
-  --kg-edge: rgba(124,111,247,0.35);
+  --edge:    rgba(140,155,210,0.11);
+  --kg-edge: rgba(124,111,247,0.2);
 }
 html,body{height:100%;overflow:hidden;}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;}
@@ -84,7 +84,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .glink.hi{stroke:rgba(167,139,250,.65);stroke-opacity:1;}
 .glink.fd{opacity:.03;}
 .gnode circle{cursor:pointer;fill:var(--node);}
-.gnode.hi circle{stroke:var(--accent2);stroke-width:1.5px;fill:#fff;}
+.gnode.hi circle{stroke:var(--accent2);stroke-width:2px;fill:#fff;filter:drop-shadow(0 0 5px var(--accent2));}
 .gnode.fd{opacity:.06;}
 .gnode.hub circle{fill:#fff;}
 #tt{position:absolute;background:var(--bg2);border:1px solid var(--border);border-radius:7px;padding:7px 11px;font-size:.76em;pointer-events:none;max-width:200px;line-height:1.5;display:none;z-index:100;box-shadow:0 4px 20px rgba(0,0,0,.7);}
@@ -369,7 +369,7 @@ const tcmap={};let ci=0;
 function tc(t){if(!tcmap[t])tcmap[t]=PAL[ci++%PAL.length];return tcmap[t];}
 
 const degreeMap={};
-function nr(d){return 3+Math.min((degreeMap[d.id]||0)*.6,7)+d.importance*4;}
+function nr(d){const deg=degreeMap[d.id]||0;if(deg>=10)return 8;if(deg>=6)return 5.5;if(deg>=3)return 3.5;return 2+d.importance*1.2;}
 
 // GD now carries both memory edges AND KG edges
 let GD={nodes:[],edges:[],kgEdges:[]},sim,svg,zoom,lSel,kgLSel,nSel;
@@ -395,7 +395,7 @@ function initGraph(){
 
   const defs=svg.append('defs');
   const fl=defs.append('filter').attr('id','gw');
-  fl.append('feGaussianBlur').attr('stdDeviation','2').attr('result','b');
+  fl.append('feGaussianBlur').attr('stdDeviation','1.5').attr('result','b');
   const fm=fl.append('feMerge');
   fm.append('feMergeNode').attr('in','b');
   fm.append('feMergeNode').attr('in','SourceGraphic');
@@ -408,13 +408,13 @@ function initGraph(){
   lSel=g.append('g').selectAll('line')
     .data(GD.edges).join('line')
     .attr('class','glink')
-    .attr('stroke-width',d=>Math.min((d.weight||1)*.5+.3,1.8));
+    .attr('stroke-width',d=>Math.min((d.weight||1)*.3+.18,1.1));
 
   // KG edges (dashed, colored)
   kgLSel=g.append('g').selectAll('line')
     .data(GD.kgEdges).join('line')
     .attr('class','glink kg')
-    .attr('stroke-width',.8);
+    .attr('stroke-width',.45);
 
   nSel=g.append('g').selectAll('g')
     .data(GD.nodes).join('g')
@@ -427,15 +427,24 @@ function initGraph(){
   nSel.append('circle')
     .attr('r',d=>nr(d))
     .attr('fill',d=>d.namespace&&d.namespace!=='default'?tc(d.namespace):'var(--node)')
-    .attr('fill-opacity',d=>(degreeMap[d.id]||0)>=4?1:.82)
+    .attr('fill-opacity',d=>(degreeMap[d.id]||0)>=3?1:.75)
     .attr('filter','url(#gw)');
 
   // Combine all edges for force simulation
+  const _R=Math.min(W,H)*0.36;
   sim=d3.forceSimulation(GD.nodes)
-    .force('link',d3.forceLink(allEdges).id(d=>d.id).distance(60).strength(.3))
-    .force('charge',d3.forceManyBody().strength(-120))
-    .force('center',d3.forceCenter(W/2,H/2))
-    .force('col',d3.forceCollide().radius(d=>nr(d)+4))
+    .force('link',d3.forceLink(allEdges).id(d=>d.id)
+      .distance(d=>{const sd=degreeMap[typeof d.source==='object'?d.source.id:d.source]||0,td=degreeMap[typeof d.target==='object'?d.target.id:d.target]||0,mx=Math.max(sd,td);return mx>=6?50:mx>=3?32:18;})
+      .strength(d=>{const sd=degreeMap[typeof d.source==='object'?d.source.id:d.source]||0,td=degreeMap[typeof d.target==='object'?d.target.id:d.target]||0;return Math.max(sd,td)>=4?0.75:0.45;})
+    )
+    .force('charge',d3.forceManyBody()
+      .strength(d=>{const deg=degreeMap[d.id]||0;return deg>=6?-80:deg>=3?-50:-28;})
+      .distanceMax(180)
+    )
+    .force('center',d3.forceCenter(W/2,H/2).strength(0.04))
+    .force('radial',d3.forceRadial(_R,W/2,H/2).strength(d=>(degreeMap[d.id]||0)>=4?0.14:0.07))
+    .force('col',d3.forceCollide().radius(d=>nr(d)+2).strength(0.7))
+    .alphaDecay(0.018).velocityDecay(0.38)
     .on('tick',()=>{
       lSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
           .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
