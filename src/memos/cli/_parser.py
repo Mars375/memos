@@ -625,6 +625,19 @@ def build_parser() -> argparse.ArgumentParser:
                               default=str(Path.home() / ".memos" / "mine-cache.db"),
                               help="Path to mine cache SQLite DB")
 
+    # skills-export
+    skills_p = sub.add_parser("skills-export", help="Export MemOS workflows as agent skill files")
+    skills_p.add_argument("--output", "-o", default=None,
+                          help="Output directory (default: ~/.claude/commands/)")
+    skills_p.add_argument("--format", "-f", choices=["claude-code", "generic"],
+                          default="claude-code", help="Skill format (default: claude-code)")
+    skills_p.add_argument("--skills", nargs="*", default=None,
+                          help="Specific skills to export (default: all)")
+    skills_p.add_argument("--overwrite", action="store_true",
+                          help="Overwrite existing skill files")
+    skills_p.add_argument("--list", dest="list_skills", action="store_true",
+                          help="List available skill names without exporting")
+
     # kg-add
     kg_add = sub.add_parser("kg-add", help="Add a fact to the knowledge graph")
     kg_add.add_argument("subject", help="Subject entity")

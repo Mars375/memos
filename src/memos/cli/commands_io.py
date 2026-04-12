@@ -362,3 +362,34 @@ def cmd_mine_stale(ns: argparse.Namespace) -> None:
         print(f"  {len(fresh)} file(s) up to date")
 
 
+
+
+def cmd_skills_export(ns: argparse.Namespace) -> None:
+    """Export MemOS workflows as agent skill files (Claude Code slash commands, etc.)."""
+    from ..skills import SkillsExporter
+
+    memos = None
+    if getattr(ns, "with_context", False):
+        try:
+            from .._common import _get_memos  # noqa: F401
+            memos = _get_memos(ns)  # type: ignore[name-defined]
+        except Exception:
+            pass
+
+    exporter = SkillsExporter(memos)
+
+    if getattr(ns, "list_skills", False):
+        for s in exporter.list_skills():
+            print(f"  {s}")
+        return
+
+    out = ns.output or str(Path.home() / ".claude" / "commands")
+    fmt = getattr(ns, "format", "claude-code") or "claude-code"
+    skills = getattr(ns, "skills", None) or None
+    overwrite = getattr(ns, "overwrite", False)
+
+    result = exporter.export(out, format=fmt, skills=skills, overwrite=overwrite)
+    print(f"Skills exported to: {result.output_dir}")
+    print(f"  Written: {result.written}  |  Skipped: {result.skipped}")
+    if result.skills:
+        print(f"  Skills: {', '.join(result.skills)}")
