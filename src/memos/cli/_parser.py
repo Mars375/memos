@@ -687,6 +687,12 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Include invalidated facts")
     kg_labels.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
 
+    # kg-lint
+    kg_lint = sub.add_parser("kg-lint", help="Lint the KG — find contradictions, orphans, sparse entities")
+    kg_lint.add_argument("--min-facts", dest="min_facts", type=int, default=2,
+                         help="Minimum active facts per entity (default: 2)")
+    kg_lint.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
+
     # ---- Palace (P6) ----
     palace_db_help = "Path to palace.db (default: ~/.memos/palace.db)"
 

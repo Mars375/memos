@@ -465,6 +465,64 @@ class KnowledgeGraph:
                 new_ids.append(new_id)
         return new_ids
 
+    def lint(self, min_facts: int = 2) -> dict:
+        """Detect knowledge graph quality issues.
+
+        Returns a dict with:
+          - contradictions: list of {subject, predicate, objects} where one
+            subject+predicate points to multiple different objects
+          - orphans: list of entity names that appear in exactly one triple
+            (degree == 1, likely dangling references)
+          - sparse: list of entity names with fewer than `min_facts` active facts
+          - summary: {contradictions, orphans, sparse, total_entities, active_facts}
+        """
+        # Active facts only
+        rows = self._conn.execute(
+            "SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY subject, predicate"
+        ).fetchall()
+        facts = [_row_to_dict(r) for r in rows]
+
+        # --- Contradictions: same (subject, predicate) → multiple objects ---
+        from collections import defaultdict
+        sp_to_objects: dict[tuple, set] = defaultdict(set)
+        for f in facts:
+            sp_to_objects[(f["subject"], f["predicate"])].add(f["object"])
+
+        contradictions = [
+            {"subject": s, "predicate": p, "objects": sorted(objs)}
+            for (s, p), objs in sp_to_objects.items()
+            if len(objs) > 1
+        ]
+
+        # --- Orphans: entities with degree == 1 ---
+        degree: dict[str, int] = defaultdict(int)
+        for f in facts:
+            degree[f["subject"]] += 1
+            degree[f["object"]] += 1
+        orphans = sorted(e for e, d in degree.items() if d == 1)
+
+        # --- Sparse entities: fewer than min_facts active facts ---
+        sparse_counts: dict[str, int] = defaultdict(int)
+        for f in facts:
+            sparse_counts[f["subject"]] += 1
+        sparse = sorted(
+            e for e, count in sparse_counts.items() if count < min_facts
+        )
+
+        total_entities = len(degree)
+        return {
+            "contradictions": contradictions,
+            "orphans": orphans,
+            "sparse": sparse,
+            "summary": {
+                "contradictions": len(contradictions),
+                "orphans": len(orphans),
+                "sparse": len(sparse),
+                "total_entities": total_entities,
+                "active_facts": len(facts),
+            },
+        }
+
     def close(self) -> None:
         """Close the SQLite connection."""
         self._conn.close()

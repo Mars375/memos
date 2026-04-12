@@ -137,6 +137,42 @@ def cmd_kg_labels(ns: argparse.Namespace) -> None:
         kg.close()
 
 
+def cmd_kg_lint(ns: argparse.Namespace) -> None:
+    """Lint the knowledge graph — detect contradictions, orphans, sparse entities."""
+    kg = _get_kg(ns)
+    try:
+        min_facts = getattr(ns, "min_facts", 2)
+        report = kg.lint(min_facts=min_facts)
+        s = report["summary"]
+        issues = s["contradictions"] + s["orphans"] + s["sparse"]
+
+        print(f"KG Lint Report  (entities={s['total_entities']}, active_facts={s['active_facts']})")
+        print("-" * 60)
+
+        if report["contradictions"]:
+            print(f"\n[CONTRADICTION] {s['contradictions']} subject+predicate pair(s) with multiple objects:")
+            for c in report["contradictions"]:
+                objects = ", ".join(c["objects"])
+                print(f"  {c['subject']} -{c['predicate']}-> [{objects}]")
+
+        if report["orphans"]:
+            print(f"\n[ORPHAN] {s['orphans']} entity/entities appear in exactly one triple:")
+            for e in report["orphans"]:
+                print(f"  {e}")
+
+        if report["sparse"]:
+            print(f"\n[SPARSE] {s['sparse']} entity/entities with fewer than {min_facts} fact(s):")
+            for e in report["sparse"]:
+                print(f"  {e}")
+
+        if issues == 0:
+            print("\n✓ No issues found.")
+        else:
+            print(f"\nTotal issues: {issues}")
+    finally:
+        kg.close()
+
+
 def cmd_kg_path(ns: argparse.Namespace) -> None:
     """Find paths between two entities in the knowledge graph."""
     kg = _get_kg(ns)

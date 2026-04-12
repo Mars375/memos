@@ -24,7 +24,7 @@ from .commands_io import (
 )
 from .commands_knowledge import (
     cmd_kg_add, cmd_kg_query, cmd_kg_timeline, cmd_kg_invalidate, cmd_kg_stats,
-    cmd_kg_infer, cmd_kg_labels, cmd_kg_path, cmd_kg_neighbors,
+    cmd_kg_infer, cmd_kg_labels, cmd_kg_path, cmd_kg_neighbors, cmd_kg_lint,
     cmd_wiki_compile, cmd_wiki_list, cmd_wiki_read, cmd_wiki_living,
     cmd_wiki_graph, cmd_brain_search,
 )
@@ -124,6 +124,7 @@ def main(argv: list[str] | None = None) -> None:
         "kg-neighbors": cmd_kg_neighbors,
         "kg-infer": cmd_kg_infer,
         "kg-labels": cmd_kg_labels,
+        "kg-lint": cmd_kg_lint,
         "palace-init": cmd_palace_init,
         "palace-wing-create": cmd_palace_wing_create,
         "palace-wing-list": cmd_palace_wing_list,
