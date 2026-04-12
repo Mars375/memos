@@ -15,23 +15,31 @@ def cmd_export(ns: argparse.Namespace) -> None:
     mem = _get_memos(ns)
     fmt = getattr(ns, "format", "json") or "json"
 
-    if fmt == "markdown":
+    if fmt in ("markdown", "obsidian"):
         out = ns.output
         if not out:
-            print("Error: --output is required for markdown format", file=sys.stderr)
+            print(f"Error: --output is required for {fmt} format", file=sys.stderr)
             sys.exit(1)
-        from ..export_markdown import MarkdownExporter
         from ..knowledge_graph import KnowledgeGraph
 
         kg = KnowledgeGraph(db_path=getattr(ns, "kg_db", None))
         try:
-            exporter = MarkdownExporter(mem, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
+            if fmt == "obsidian":
+                from ..export_obsidian import ObsidianExporter
+                exporter = ObsidianExporter(mem, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
+            else:
+                from ..export_markdown import MarkdownExporter
+                exporter = MarkdownExporter(mem, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
             result = exporter.export(out, update=getattr(ns, "update", False))
         finally:
             kg.close()
+        extra = ""
+        if fmt == "obsidian" and hasattr(result, "wikilinks_added"):
+            extra = f", wikilinks={result.wikilinks_added}"
         print(
-            f"Exported markdown knowledge to {out} "
-            f"(memories={result.total_memories}, entities={result.total_entities}, facts={result.total_facts})"
+            f"Exported {fmt} knowledge to {out} "
+            f"(memories={result.total_memories}, entities={result.total_entities}, "
+            f"facts={result.total_facts}{extra})"
         )
         return
 

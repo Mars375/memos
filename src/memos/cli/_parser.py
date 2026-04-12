@@ -160,7 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
     # export
     exp = sub.add_parser("export", help="Export all memories to JSON, Parquet, or Markdown")
     exp.add_argument("--output", "-o", help="Output file or directory (default: stdout for json)")
-    exp.add_argument("--format", "-f", choices=["json", "parquet", "markdown"], default="json", help="Export format (default: json)")
+    exp.add_argument("--format", "-f", choices=["json", "parquet", "markdown", "obsidian"], default="json", help="Export format (default: json)")
     exp.add_argument("--compression", choices=["zstd", "snappy", "gzip", "none"], default="zstd", help="Parquet compression (default: zstd)")
     exp.add_argument("--no-metadata", action="store_true", help="Exclude metadata")
     exp.add_argument("--update", action="store_true", help="Markdown export: only rewrite changed pages when possible")
