@@ -85,10 +85,10 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
         import tempfile, os
         from ...ingest.conversation import ConversationMiner, parse_transcript
 
-        text_body = body.get("text", "")
+        text_body = body.get("text", "") or body.get("content", "")
         path_body = body.get("path", "")
         if not text_body and not path_body:
-            return {"status": "error", "message": "Either 'text' or 'path' is required"}
+            return {"status": "error", "message": "Either 'text'/'content' or 'path' is required"}
 
         per_speaker = bool(body.get("per_speaker", True))
         namespace_prefix = str(body.get("namespace_prefix", "conv"))
