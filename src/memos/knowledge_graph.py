@@ -465,6 +465,33 @@ class KnowledgeGraph:
                 new_ids.append(new_id)
         return new_ids
 
+    def backlinks(
+        self,
+        entity: str,
+        predicate: str | None = None,
+        active_only: bool = True,
+    ) -> List[dict]:
+        """Return all triples where *entity* is the object (incoming edges).
+
+        Args:
+            entity: The target entity to find backlinks for.
+            predicate: Optional filter — only return backlinks via this predicate.
+            active_only: If True (default), exclude invalidated facts.
+
+        Returns:
+            List of fact dicts, each with subject/predicate/object/confidence/...
+        """
+        sql = "SELECT * FROM triples WHERE object=?"
+        params: list[object] = [entity]
+        if predicate is not None:
+            sql += " AND predicate=?"
+            params.append(predicate)
+        if active_only:
+            sql += " AND invalidated_at IS NULL"
+        sql += " ORDER BY created_at ASC"
+        cur = self._conn.execute(sql, params)
+        return [_row_to_dict(r) for r in cur.fetchall()]
+
     def lint(self, min_facts: int = 2) -> dict:
         """Detect knowledge graph quality issues.
 

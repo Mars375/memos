@@ -693,6 +693,14 @@ def build_parser() -> argparse.ArgumentParser:
                          help="Minimum active facts per entity (default: 2)")
     kg_lint.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
 
+    # kg-backlinks
+    kg_backlinks = sub.add_parser("kg-backlinks", help="Show incoming edges (backlinks) for an entity")
+    kg_backlinks.add_argument("entity", help="Entity name to find backlinks for")
+    kg_backlinks.add_argument("--predicate", default=None, help="Filter by predicate")
+    kg_backlinks.add_argument("--all", dest="show_all", action="store_true",
+                              help="Include invalidated facts")
+    kg_backlinks.add_argument("--db", dest="kg_db", default=None, help="Path to kg.db")
+
     # ---- Palace (P6) ----
     palace_db_help = "Path to palace.db (default: ~/.memos/palace.db)"
 

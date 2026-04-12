@@ -137,6 +137,27 @@ def cmd_kg_labels(ns: argparse.Namespace) -> None:
         kg.close()
 
 
+def cmd_kg_backlinks(ns: argparse.Namespace) -> None:
+    """Show all incoming edges (backlinks) for an entity."""
+    kg = _get_kg(ns)
+    try:
+        predicate = getattr(ns, "predicate", None) or None
+        active_only = not getattr(ns, "show_all", False)
+        facts = kg.backlinks(ns.entity, predicate=predicate, active_only=active_only)
+        if not facts:
+            print(f"No backlinks found for: {ns.entity!r}")
+            return
+        print(f"Backlinks for {ns.entity!r}:")
+        for f in facts:
+            inv = " [INVALIDATED]" if f["invalidated_at"] else ""
+            label = f.get("confidence_label", "EXTRACTED")
+            print(f"  [{f['id']}] {f['subject']} -[{f['predicate']}]-> {f['object']} "
+                  f"(conf={f['confidence']:.2f}, label={label}){inv}")
+        print(f"\n{len(facts)} backlink(s)")
+    finally:
+        kg.close()
+
+
 def cmd_kg_lint(ns: argparse.Namespace) -> None:
     """Lint the knowledge graph — detect contradictions, orphans, sparse entities."""
     kg = _get_kg(ns)
