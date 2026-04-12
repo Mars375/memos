@@ -317,3 +317,48 @@ def cmd_mine_status(ns: argparse.Namespace) -> None:
             print(f"    sha256={e['sha256'][:12]}…  mined={mined}  memories={mem_count}  chunks={chunk_count}")
 
 
+def cmd_mine_stale(ns: argparse.Namespace) -> None:
+    """Report sources that have changed since last mine (staleness detection)."""
+    from ..ingest.cache import MinerCache
+    import datetime as _dt
+
+    cache_db = getattr(ns, "cache_db", str(Path.home() / ".memos" / "mine-cache.db"))
+    only_stale = getattr(ns, "only_stale", False)
+
+    with MinerCache(cache_db) as cache:
+        report = cache.staleness_report()
+
+    if not report:
+        print("No cached files found. Run `memos mine` first.")
+        return
+
+    changed = [r for r in report if r["status"] == "changed"]
+    missing = [r for r in report if r["status"] == "missing"]
+    fresh = [r for r in report if r["status"] == "fresh"]
+
+    if only_stale:
+        to_show = changed + missing
+    else:
+        to_show = report
+
+    if not to_show:
+        print("✓ All sources are fresh — no re-mining needed.")
+        return
+
+    status_icon = {"changed": "~", "missing": "✗", "fresh": "✓"}
+
+    for r in to_show:
+        mined = _dt.datetime.fromtimestamp(r["mined_at"]).strftime("%Y-%m-%d %H:%M")
+        icon = status_icon[r["status"]]
+        print(f"  [{icon}] {r['path']}")
+        print(f"       status={r['status']}  mined={mined}  memories={r['memory_count']}")
+
+    print()
+    if changed:
+        print(f"  {len(changed)} file(s) changed — run: memos mine --update <path>")
+    if missing:
+        print(f"  {len(missing)} file(s) missing (deleted or moved)")
+    if not only_stale and fresh:
+        print(f"  {len(fresh)} file(s) up to date")
+
+

@@ -20,7 +20,7 @@ from .commands_memory import (
 )
 from .commands_io import (
     cmd_export, cmd_import, cmd_ingest, cmd_ingest_url, cmd_migrate,
-    cmd_mine, cmd_mine_conversation, cmd_mine_status,
+    cmd_mine, cmd_mine_conversation, cmd_mine_status, cmd_mine_stale,
 )
 from .commands_knowledge import (
     cmd_kg_add, cmd_kg_query, cmd_kg_timeline, cmd_kg_invalidate, cmd_kg_stats,
@@ -116,6 +116,7 @@ def main(argv: list[str] | None = None) -> None:
         "mine": cmd_mine,
         "mine-conversation": cmd_mine_conversation,
         "mine-status": cmd_mine_status,
+        "mine-stale": cmd_mine_stale,
         "kg-add": cmd_kg_add,
         "kg-query": cmd_kg_query,
         "kg-timeline": cmd_kg_timeline,

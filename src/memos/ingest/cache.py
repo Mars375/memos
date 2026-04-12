@@ -147,6 +147,50 @@ class MinerCache:
             "total_memories": row[1] or 0,
         }
 
+    def staleness_report(self) -> list[dict]:
+        """Check all cached paths against the current filesystem.
+
+        For each cached entry, compare the file's current SHA-256 against the
+        stored hash.  Returns a list of dicts (sorted by staleness severity)
+        with the following keys:
+
+        ``path``
+            Absolute path string.
+        ``status``
+            One of ``"changed"``, ``"missing"``, or ``"fresh"``.
+        ``mined_at``
+            Unix timestamp of the last mine.
+        ``memory_count``
+            Number of memories created from this file.
+        """
+        import hashlib as _hashlib
+
+        entries = self.list_all()
+        results: list[dict] = []
+
+        for entry in entries:
+            p = Path(entry["path"])
+            if not p.exists():
+                status = "missing"
+            else:
+                try:
+                    current_hash = _hashlib.sha256(p.read_bytes()).hexdigest()
+                    status = "fresh" if current_hash == entry["sha256"] else "changed"
+                except OSError:
+                    status = "missing"
+
+            results.append({
+                "path": entry["path"],
+                "status": status,
+                "mined_at": entry["mined_at"],
+                "memory_count": len(entry["memory_ids"]),
+            })
+
+        # Sort: changed first, then missing, then fresh
+        order = {"changed": 0, "missing": 1, "fresh": 2}
+        results.sort(key=lambda r: (order[r["status"]], -r["mined_at"]))
+        return results
+
     # ------------------------------------------------------------------
     # Context manager
     # ------------------------------------------------------------------

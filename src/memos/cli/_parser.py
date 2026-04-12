@@ -617,6 +617,14 @@ def build_parser() -> argparse.ArgumentParser:
                                default=str(Path.home() / ".memos" / "mine-cache.db"),
                                help="Path to mine cache SQLite DB")
 
+    # mine-stale
+    mine_stale_p = sub.add_parser("mine-stale", help="Report sources changed since last mine (staleness detection)")
+    mine_stale_p.add_argument("--only-stale", dest="only_stale", action="store_true",
+                              help="Only show changed/missing files (hide fresh)")
+    mine_stale_p.add_argument("--cache-db", dest="cache_db",
+                              default=str(Path.home() / ".memos" / "mine-cache.db"),
+                              help="Path to mine cache SQLite DB")
+
     # kg-add
     kg_add = sub.add_parser("kg-add", help="Add a fact to the knowledge graph")
     kg_add.add_argument("subject", help="Subject entity")
