@@ -194,6 +194,36 @@ class MemOS:
         self._dedup_engine: Optional[DedupEngine] = None
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
+        # Compounding ingest (P8) — auto-update wiki pages on every learn()
+        self._compounding_ingest: bool = False
+        self._compounding_wiki: Optional[Any] = None
+
+    def enable_compounding_ingest(self, wiki_dir: Optional[str] = None) -> None:
+        """Enable compounding ingest: auto-update wiki pages on every ``learn()`` call.
+
+        When enabled, each new memory triggers a lightweight
+        :meth:`~memos.wiki_living.LivingWikiEngine.update_for_item` call
+        that creates or updates entity pages for the memory's entities and tags.
+
+        Parameters
+        ----------
+        wiki_dir:
+            Optional path to the wiki directory.  Defaults to ``~/.memos/wiki``.
+        """
+        from .wiki_living import LivingWikiEngine
+        self._compounding_wiki = LivingWikiEngine(self, wiki_dir=wiki_dir)
+        self._compounding_ingest = True
+
+    def disable_compounding_ingest(self) -> None:
+        """Disable compounding ingest."""
+        self._compounding_ingest = False
+        self._compounding_wiki = None
+
+    @property
+    def compounding_ingest(self) -> bool:
+        """Whether compounding ingest is currently enabled."""
+        return self._compounding_ingest
+
     @property
     def namespace(self) -> str:
         return self._namespace
@@ -347,6 +377,13 @@ class MemOS:
             "importance": item.importance,
             "ttl": item.ttl,
         }, namespace=self._namespace)
+
+        # Compounding ingest (P8): auto-update wiki pages on learn
+        if self._compounding_ingest and self._compounding_wiki is not None:
+            try:
+                self._compounding_wiki.update_for_item(item)
+            except Exception:
+                pass  # Never let wiki update break learn()
 
         return item
 

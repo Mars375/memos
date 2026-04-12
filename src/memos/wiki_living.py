@@ -567,6 +567,109 @@ class LivingWikiEngine:
 
         return result
 
+    def update_for_item(self, item: Any) -> UpdateResult:
+        """Incrementally update wiki pages for a single newly-learned memory.
+
+        Faster than a full :meth:`update` — only processes the one item.
+        Creates or updates entity pages for every entity and tag found in
+        *item*.  Skips the item if it was already indexed.
+
+        Parameters
+        ----------
+        item:
+            A :class:`~memos.models.MemoryItem` instance, as returned by
+            :meth:`~memos.core.MemOS.learn`.
+
+        Returns
+        -------
+        :class:`UpdateResult` with counts for this single item.
+        """
+        self.init()
+        db = self._get_db()
+        result = UpdateResult()
+        result.memories_indexed = 1
+
+        try:
+            # Skip if already indexed
+            already = db.execute(
+                "SELECT COUNT(*) FROM entity_memories WHERE memory_id = ?", (item.id,)
+            ).fetchone()[0]
+            if already > 0:
+                return result
+
+            entities = extract_entities(item.content)
+            for tag in (item.tags or []):
+                entities.append((tag, "topic"))
+
+            for ename, etype in entities:
+                row = db.execute(
+                    "SELECT name FROM entities WHERE name = ?", (ename,)
+                ).fetchone()
+
+                slug = self._safe_slug(ename)
+                page_path = self._wiki_dir / "pages" / f"{slug}.md"
+
+                if row is None:
+                    meta = {
+                        "entity": ename,
+                        "type": etype,
+                        "created": time.strftime("%Y-%m-%d", time.localtime()),
+                        "updated": time.strftime("%Y-%m-%d", time.localtime()),
+                        "memory_count": 1,
+                        "tags": [],
+                    }
+                    template_fn = _PAGE_TEMPLATES.get(etype, _PAGE_TEMPLATES["default"])
+                    page_content = template_fn(ename, meta)
+                    page_content += f"\n## Memory Snippet\n\n> {item.content[:200]}\n"
+                    page_path.parent.mkdir(parents=True, exist_ok=True)
+                    page_path.write_text(page_content, encoding="utf-8")
+                    db.execute(
+                        "INSERT INTO entities (name, entity_type, page_path, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (ename, etype, str(page_path), time.time(), time.time()),
+                    )
+                    self._log_action(db, "create", ename, f"New {etype} page (compounding)")
+                    result.pages_created += 1
+                else:
+                    if page_path.exists():
+                        existing_content = page_path.read_text(encoding="utf-8")
+                        snippet = (
+                            f"\n## Snippet ({time.strftime('%Y-%m-%d %H:%M')})\n\n"
+                            f"> {item.content[:200]}\n"
+                        )
+                        existing_content = re.sub(
+                            r"memory_count: \d+",
+                            lambda m: f"memory_count: {int(m.group().split(': ')[1]) + 1}",
+                            existing_content,
+                        )
+                        existing_content = re.sub(
+                            r'updated: "[^"]*"',
+                            f'updated: "{time.strftime("%Y-%m-%d")}"',
+                            existing_content,
+                        )
+                        existing_content += snippet
+                        page_path.write_text(existing_content, encoding="utf-8")
+                    db.execute(
+                        "UPDATE entities SET updated_at = ? WHERE name = ?",
+                        (time.time(), ename),
+                    )
+                    result.pages_updated += 1
+
+                db.execute(
+                    "INSERT OR IGNORE INTO entity_memories "
+                    "(entity_name, memory_id, snippet, added_at) VALUES (?, ?, ?, ?)",
+                    (ename, item.id, item.content[:100], time.time()),
+                )
+
+            result.entities_found += len(entities)
+            db.commit()
+        finally:
+            db.close()
+
+        return result
+
+        return result
+
     def lint(self) -> LintReport:
         """Detect orphan pages, contradictions, empty pages, and stale content.
 
