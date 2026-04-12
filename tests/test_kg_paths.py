@@ -207,16 +207,12 @@ class TestCLI:
             direction="both",
             kg_db=None,
         )
-        import memos.cli as cli_mod
-        original_get_kg = cli_mod._get_kg
-        cli_mod._get_kg = lambda ns: kg
-        try:
+        from unittest.mock import patch
+        with patch("memos.cli.commands_knowledge._get_kg", return_value=kg):
             cmd_kg_neighbors(ns)
-            captured = capsys.readouterr()
-            assert "Neighborhood" in captured.out
-            assert "ProjectX" in captured.out
-        finally:
-            cli_mod._get_kg = original_get_kg
+        captured = capsys.readouterr()
+        assert "Neighborhood" in captured.out
+        assert "ProjectX" in captured.out
 
     def test_kg_path_cli_no_path(self, kg, capsys):
         import argparse

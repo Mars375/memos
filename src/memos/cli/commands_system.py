@@ -19,7 +19,7 @@ def cmd_serve(ns: argparse.Namespace) -> None:
         print("Error: install memos[server] first", file=sys.stderr)
         sys.exit(1)
 
-    from .api import create_fastapi_app
+    from ..api import create_fastapi_app
 
     kwargs: dict = {}
     import os
@@ -46,7 +46,7 @@ def cmd_serve(ns: argparse.Namespace) -> None:
 
 def cmd_mcp_serve(ns: argparse.Namespace) -> None:
     """Start MCP HTTP server."""
-    from .mcp_server import create_mcp_app
+    from ..mcp_server import create_mcp_app
     try:
         import uvicorn
     except ImportError:
@@ -62,7 +62,7 @@ def cmd_mcp_serve(ns: argparse.Namespace) -> None:
 
 def cmd_mcp_stdio(ns: argparse.Namespace) -> None:
     """Start MCP server over stdio."""
-    from .mcp_server import run_stdio
+    from ..mcp_server import run_stdio
     memos = _get_memos(ns)
     run_stdio(memos)
 

@@ -124,7 +124,7 @@ class TestMigrationCLI:
 
         from unittest.mock import patch
 
-        with patch("memos.cli._get_memos", return_value=FakeMemOS()):
+        with patch("memos.cli.commands_io._get_memos", return_value=FakeMemOS()):
             cmd_migrate(ns)
 
         out = capsys.readouterr().out

@@ -68,7 +68,7 @@ def cmd_ns_stats(ns: argparse.Namespace) -> None:
 
 def cmd_share_offer(ns: argparse.Namespace) -> None:
     """Offer to share memories with another agent."""
-    from .sharing.models import ShareScope, SharePermission
+    from ..sharing.models import ShareScope, SharePermission
     memos = _get_memos(ns)
     import time as _time
     expires = ns.expires
@@ -127,7 +127,7 @@ def cmd_share_export(ns: argparse.Namespace) -> None:
 
 def cmd_share_import(ns: argparse.Namespace) -> None:
     """Import memories from an envelope file."""
-    from .sharing.models import MemoryEnvelope
+    from ..sharing.models import MemoryEnvelope
     with open(ns.input_file, "r") as f:
         data = json.load(f)
     envelope = MemoryEnvelope.from_dict(data)
@@ -142,7 +142,7 @@ def cmd_share_import(ns: argparse.Namespace) -> None:
 
 def cmd_share_list(ns: argparse.Namespace) -> None:
     """List shares."""
-    from .sharing.models import ShareStatus
+    from ..sharing.models import ShareStatus
     memos = _get_memos(ns)
     status = ShareStatus(ns.status) if ns.status else None
     shares = memos.list_shares(agent=ns.agent, status=status)
@@ -175,8 +175,8 @@ def cmd_share_stats(ns: argparse.Namespace) -> None:
 
 def cmd_sync_check(ns: argparse.Namespace) -> None:
     """Check for conflicts between local store and a remote export file."""
-    from .conflict import ConflictDetector
-    from .sharing.models import MemoryEnvelope
+    from ..conflict import ConflictDetector
+    from ..sharing.models import MemoryEnvelope
 
     memos = _get_memos(ns)
     path = ns.remote_file
@@ -220,8 +220,8 @@ def cmd_sync_check(ns: argparse.Namespace) -> None:
 
 def cmd_sync_apply(ns: argparse.Namespace) -> None:
     """Apply remote memories with conflict resolution."""
-    from .conflict import ConflictDetector, ResolutionStrategy
-    from .sharing.models import MemoryEnvelope
+    from ..conflict import ConflictDetector, ResolutionStrategy
+    from ..sharing.models import MemoryEnvelope
 
     memos = _get_memos(ns)
     path = ns.remote_file

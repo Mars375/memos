@@ -107,15 +107,15 @@ def _parse_kv_options(values: list[str] | None) -> dict[str, object]:
 
 def _get_kg(ns: argparse.Namespace):
     """Return a KnowledgeGraph instance from CLI namespace."""
-    from .knowledge_graph import KnowledgeGraph
+    from ..knowledge_graph import KnowledgeGraph
     db_path = getattr(ns, "kg_db", None)
     return KnowledgeGraph(db_path=db_path)
 
 
 def _get_kg_bridge(ns: argparse.Namespace, memos: Any | None = None):
     """Return a KGBridge instance from CLI namespace."""
-    from .kg_bridge import KGBridge
-    from .knowledge_graph import KnowledgeGraph
+    from ..kg_bridge import KGBridge
+    from ..knowledge_graph import KnowledgeGraph
     if memos is None:
         memos = _get_memos(ns)
     kg = KnowledgeGraph(db_path=getattr(ns, "kg_db", None))
@@ -173,7 +173,7 @@ def _fmt_ts(epoch: float) -> str:
 
 def _get_palace(ns: argparse.Namespace):
     """Return a PalaceIndex using the --db flag or the default path."""
-    from .palace import PalaceIndex
+    from ..palace import PalaceIndex
     db = getattr(ns, "palace_db", None) or None
     if db:
         return PalaceIndex(db_path=db)

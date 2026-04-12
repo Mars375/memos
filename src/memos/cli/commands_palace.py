@@ -90,7 +90,7 @@ def cmd_palace_assign(ns: argparse.Namespace) -> None:
 
 def cmd_palace_recall(ns: argparse.Namespace) -> None:
     """Scoped recall using Palace wing/room filter."""
-    from .palace import PalaceRecall
+    from ..palace import PalaceRecall
     palace = _get_palace(ns)
     memos = _get_memos(ns)
     try:

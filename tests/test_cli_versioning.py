@@ -56,7 +56,7 @@ def mem_with_versions(mem):
 @pytest.fixture
 def mock_mem(mem):
     """Patch _get_memos to return our shared MemOS instance."""
-    with patch('memos.cli._get_memos', return_value=mem):
+    with patch('memos.cli.commands_versioning._get_memos', return_value=mem):
         yield mem
 
 

@@ -410,7 +410,7 @@ class TestDeleteTagCLI:
         parser = build_parser()
         sys.argv = ["memos", "tags", "delete", "remove-me"]
         import unittest.mock
-        with unittest.mock.patch("memos.cli._get_memos", return_value=m):
+        with unittest.mock.patch("memos.cli.commands_memory._get_memos", return_value=m):
             main()
         captured = capsys.readouterr()
         assert "Deleted tag" in captured.out
@@ -431,7 +431,7 @@ class TestDeleteTagCLI:
 
         parser = build_parser()
         sys.argv = ["memos", "tags", "delete", "ghost"]
-        with unittest.mock.patch("memos.cli._get_memos", return_value=m):
+        with unittest.mock.patch("memos.cli.commands_memory._get_memos", return_value=m):
             main()
         captured = capsys.readouterr()
         assert "0 memory(s)" in captured.out

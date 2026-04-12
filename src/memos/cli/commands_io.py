@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from ._common import _get_memos
+from ._common import _get_memos, _parse_kv_options
 
 
 def cmd_export(ns: argparse.Namespace) -> None:
@@ -20,8 +20,8 @@ def cmd_export(ns: argparse.Namespace) -> None:
         if not out:
             print("Error: --output is required for markdown format", file=sys.stderr)
             sys.exit(1)
-        from .export_markdown import MarkdownExporter
-        from .knowledge_graph import KnowledgeGraph
+        from ..export_markdown import MarkdownExporter
+        from ..knowledge_graph import KnowledgeGraph
 
         kg = KnowledgeGraph(db_path=getattr(ns, "kg_db", None))
         try:
@@ -175,7 +175,7 @@ def cmd_migrate(ns: argparse.Namespace) -> None:
 
 def cmd_mine(ns: argparse.Namespace) -> None:
     """Mine files or directories into memories (smart chunker + multi-format)."""
-    from .ingest.miner import Miner
+    from ..ingest.miner import Miner
     memos = _get_memos(ns)
     fmt = getattr(ns, "format", "auto")
     dry_run = getattr(ns, "dry_run", False)
@@ -190,7 +190,7 @@ def cmd_mine(ns: argparse.Namespace) -> None:
 
     cache = None
     if not no_cache and not dry_run:
-        from .ingest.cache import MinerCache
+        from ..ingest.cache import MinerCache
         cache = MinerCache(cache_db)
 
     miner = Miner(
@@ -248,7 +248,7 @@ def cmd_mine(ns: argparse.Namespace) -> None:
 
 def cmd_mine_conversation(ns: argparse.Namespace) -> None:
     """Mine a speaker-attributed transcript into MemOS."""
-    from .ingest.conversation import ConversationMiner
+    from ..ingest.conversation import ConversationMiner
 
     memos = _get_memos(ns)
     extra_tags = [t.strip() for t in (ns.tags or "").split(",") if t.strip()]
@@ -283,7 +283,7 @@ def cmd_mine_conversation(ns: argparse.Namespace) -> None:
 
 def cmd_mine_status(ns: argparse.Namespace) -> None:
     """Show the incremental mine cache."""
-    from .ingest.cache import MinerCache
+    from ..ingest.cache import MinerCache
     import datetime as _dt
 
     cache_db = getattr(ns, "cache_db", str(Path.home() / ".memos" / "mine-cache.db"))

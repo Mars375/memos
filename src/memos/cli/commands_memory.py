@@ -595,7 +595,7 @@ def cmd_compact(ns: argparse.Namespace) -> None:
 
 def cmd_benchmark(ns: argparse.Namespace) -> None:
     """Run performance benchmarks."""
-    from .benchmark import run_benchmark
+    from ..benchmark import run_benchmark
 
     memos = _get_memos(ns)
     report = run_benchmark(
@@ -614,7 +614,7 @@ def cmd_benchmark(ns: argparse.Namespace) -> None:
 
 def cmd_benchmark_quality(ns: argparse.Namespace) -> None:
     """Run recall quality benchmarks."""
-    from .benchmark_quality import run_quality_benchmark
+    from ..benchmark_quality import run_quality_benchmark
 
     report = run_quality_benchmark(
         memories_per_category=10,
@@ -693,7 +693,7 @@ def cmd_tags(ns: argparse.Namespace) -> None:
 
 def cmd_wake_up(ns: argparse.Namespace) -> None:
     """Print L0 (identity) + L1 (top memories) context for session priming."""
-    from .context import ContextStack
+    from ..context import ContextStack
     memos = _get_memos(ns)
     cs = ContextStack(memos)
     output = cs.wake_up(
@@ -706,7 +706,7 @@ def cmd_wake_up(ns: argparse.Namespace) -> None:
 
 def cmd_identity(ns: argparse.Namespace) -> None:
     """Manage agent identity (L0 context)."""
-    from .context import ContextStack
+    from ..context import ContextStack
     action = getattr(ns, "identity_action", None) or "show"
     # identity uses its own path, not a memos backend
     # We instantiate ContextStack with a dummy memos only if needed
@@ -736,7 +736,7 @@ def cmd_identity(ns: argparse.Namespace) -> None:
 
 def cmd_context_for(ns: argparse.Namespace) -> None:
     """Print context optimised for a specific query (L0 + L3)."""
-    from .context import ContextStack
+    from ..context import ContextStack
     memos = _get_memos(ns)
     cs = ContextStack(memos)
     output = cs.context_for(
@@ -749,7 +749,7 @@ def cmd_context_for(ns: argparse.Namespace) -> None:
 
 def cmd_classify(ns: argparse.Namespace) -> None:
     """Classify text into memory type tags."""
-    from .tagger import AutoTagger
+    from ..tagger import AutoTagger
     tagger = AutoTagger()
     text = ns.text
 
@@ -770,7 +770,7 @@ def cmd_classify(ns: argparse.Namespace) -> None:
 
 def cmd_decay(ns: argparse.Namespace) -> None:
     """Apply importance decay to memories."""
-    from .core import MemOS
+    from ..core import MemOS
     m = _get_memos(ns)
     items = m._store.list_all(namespace=m._namespace)
     report = m._decay.run_decay(
@@ -797,7 +797,7 @@ def cmd_decay(ns: argparse.Namespace) -> None:
 
 def cmd_reinforce(ns: argparse.Namespace) -> None:
     """Boost a memory's importance."""
-    from .core import MemOS
+    from ..core import MemOS
     m = _get_memos(ns)
     item = m._store.get(ns.memory_id, namespace=m._namespace)
     if item is None:
@@ -828,7 +828,7 @@ def cmd_compress(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_living(ns: argparse.Namespace) -> None:
     """Living wiki commands."""
-    from .wiki_living import LivingWikiEngine
+    from ..wiki_living import LivingWikiEngine
     memos = _get_memos(ns)
     wiki_dir = getattr(ns, "wiki_dir", None)
     engine = LivingWikiEngine(memos, wiki_dir=wiki_dir)
@@ -931,7 +931,7 @@ def cmd_wiki_living(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_graph(ns: argparse.Namespace) -> None:
     """Generate or read graph-community wiki pages."""
-    from .wiki_graph import GraphWikiEngine
+    from ..wiki_graph import GraphWikiEngine
 
     kg = _get_kg(ns)
     try:
@@ -960,7 +960,7 @@ def cmd_wiki_graph(ns: argparse.Namespace) -> None:
 
 def cmd_brain_search(ns: argparse.Namespace) -> None:
     """Run unified search across memories, living wiki pages, and the knowledge graph."""
-    from .brain import BrainSearch
+    from ..brain import BrainSearch
 
     memos = _get_memos(ns)
     kg = _get_kg(ns)

@@ -187,7 +187,7 @@ def test_cli_ingest_url_command(capsys):
                 },
             )()
 
-    with patch("memos.cli._get_memos", return_value=FakeMemOS()):
+    with patch("memos.cli.commands_io._get_memos", return_value=FakeMemOS()):
         main(["ingest-url", "https://example.com/post", "--tags", "web,example", "--dry-run"])
 
     out = capsys.readouterr().out

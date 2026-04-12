@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 
 from ._common import _get_memos, _get_kg, _get_kg_bridge, _ts
 
@@ -187,7 +188,7 @@ def cmd_kg_neighbors(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_compile(ns: argparse.Namespace) -> None:
     """Compile memories into per-tag wiki pages."""
-    from .wiki import WikiEngine
+    from ..wiki import WikiEngine
     memos = _get_memos(ns)
     wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
     tags = getattr(ns, "tags", None) or None
@@ -202,7 +203,7 @@ def cmd_wiki_compile(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_list(ns: argparse.Namespace) -> None:
     """List compiled wiki pages."""
-    from .wiki import WikiEngine
+    from ..wiki import WikiEngine
     memos = _get_memos(ns)
     wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
     pages = wiki.list_pages()
@@ -218,7 +219,7 @@ def cmd_wiki_list(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_read(ns: argparse.Namespace) -> None:
     """Read a compiled wiki page by tag."""
-    from .wiki import WikiEngine
+    from ..wiki import WikiEngine
     memos = _get_memos(ns)
     wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
     content = wiki.read(ns.tag)
@@ -233,7 +234,7 @@ def cmd_wiki_read(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_living(ns: argparse.Namespace) -> None:
     """Living wiki commands."""
-    from .wiki_living import LivingWikiEngine
+    from ..wiki_living import LivingWikiEngine
     memos = _get_memos(ns)
     wiki_dir = getattr(ns, "wiki_dir", None)
     engine = LivingWikiEngine(memos, wiki_dir=wiki_dir)
@@ -336,7 +337,7 @@ def cmd_wiki_living(ns: argparse.Namespace) -> None:
 
 def cmd_wiki_graph(ns: argparse.Namespace) -> None:
     """Generate or read graph-community wiki pages."""
-    from .wiki_graph import GraphWikiEngine
+    from ..wiki_graph import GraphWikiEngine
 
     kg = _get_kg(ns)
     try:
@@ -365,7 +366,7 @@ def cmd_wiki_graph(ns: argparse.Namespace) -> None:
 
 def cmd_brain_search(ns: argparse.Namespace) -> None:
     """Run unified search across memories, living wiki pages, and the knowledge graph."""
-    from .brain import BrainSearch
+    from ..brain import BrainSearch
 
     memos = _get_memos(ns)
     kg = _get_kg(ns)

@@ -177,7 +177,7 @@ class TestCLIConfig:
         from contextlib import redirect_stdout
 
         cfg_file = tmp_path / ".memos.toml"
-        with patch("memos.cli.config_path", return_value=cfg_file):
+        with patch("memos.cli.commands_system.config_path", return_value=cfg_file):
             f = io.StringIO()
             with redirect_stdout(f):
                 main(["config", "init"])
@@ -189,7 +189,7 @@ class TestCLIConfig:
 
         cfg_file = tmp_path / ".memos.toml"
         cfg_file.write_text("[memos]\n")
-        with patch("memos.cli.config_path", return_value=cfg_file), \
+        with patch("memos.cli.commands_system.config_path", return_value=cfg_file), \
              patch("memos.config.config_path", return_value=cfg_file):
             with pytest.raises(SystemExit):
                 main(["config", "init"])
@@ -201,7 +201,7 @@ class TestCLIConfig:
 
         cfg_file = tmp_path / ".memos.toml"
         cfg_file.write_text("old content")
-        with patch("memos.cli.config_path", return_value=cfg_file), \
+        with patch("memos.cli.commands_system.config_path", return_value=cfg_file), \
              patch("memos.config.config_path", return_value=cfg_file):
             f = io.StringIO()
             with redirect_stdout(f):
