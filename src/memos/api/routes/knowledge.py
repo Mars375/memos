@@ -249,8 +249,11 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     # ── Memory Graph ──────────────────────────────────────────
 
     @router.get("/api/v1/graph")
-    async def api_graph(min_shared_tags: int = 1, limit: int = 500):
-        """Return memory graph: nodes + edges based on shared tags."""
+    async def api_graph(min_shared_tags: int = 1, limit: int = 500, created_before: Optional[float] = None):
+        """Return memory graph: nodes + edges based on shared tags.
+
+        created_before: optional Unix timestamp — only include memories created before this time.
+        """
         import time as _time
         items = memos._store.list_all(namespace=memos._namespace)
         now = _time.time()
@@ -258,12 +261,21 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         for item in items[:limit]:
             if item.is_expired:
                 continue
+            if created_before is not None and item.created_at > created_before:
+                continue
             age_days = (now - item.created_at) / 86400
             nodes.append({
-                "id": item.id, "label": item.content[:60] + ("…" if len(item.content) > 60 else ""),
-                "content": item.content, "tags": item.tags, "importance": item.importance,
-                "relevance": item.relevance_score, "age_days": round(age_days, 1),
-                "access_count": item.access_count, "primary_tag": item.tags[0] if item.tags else "__untagged__",
+                "id": item.id,
+                "label": item.content[:60] + ("…" if len(item.content) > 60 else ""),
+                "content": item.content,
+                "tags": item.tags,
+                "importance": item.importance,
+                "relevance": item.relevance_score,
+                "age_days": round(age_days, 1),
+                "access_count": item.access_count,
+                "primary_tag": item.tags[0] if item.tags else "__untagged__",
+                "namespace": getattr(item, "namespace", memos._namespace or "default"),
+                "created_at": item.created_at,
             })
         edges = []
         tag_to_ids: dict[str, list[str]] = {}
@@ -289,7 +301,66 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         stats = memos.stats()
         return {
             "nodes": nodes, "edges": edges,
-            "meta": {"total_nodes": len(nodes), "total_edges": len(edges), "total_memories": stats.total_memories, "total_tags": stats.total_tags},
+            "meta": {
+                "total_nodes": len(nodes), "total_edges": len(edges),
+                "total_memories": stats.total_memories, "total_tags": stats.total_tags,
+                "created_before": created_before,
+            },
         }
+
+    # ── Living Wiki ────────────────────────────────────────────────
+
+    @router.get("/api/v1/wiki/pages")
+    async def wiki_list_pages():
+        """List all living wiki pages (name, slug, memory_count, updated_at)."""
+        try:
+            from ...wiki_living import LivingWikiEngine
+            wiki = LivingWikiEngine(memos)
+            pages = wiki.list_pages()
+            return {
+                "status": "ok",
+                "pages": [
+                    {
+                        "name": p.entity,
+                        "slug": p.slug,
+                        "memory_count": p.memory_count,
+                        "updated_at": p.updated_at,
+                    }
+                    for p in pages
+                ],
+                "total": len(pages),
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "pages": [], "total": 0}
+
+    @router.get("/api/v1/wiki/page/{slug}")
+    async def wiki_read_page(slug: str):
+        """Read a single living wiki page by slug or entity name."""
+        try:
+            from ...wiki_living import LivingWikiEngine
+            wiki = LivingWikiEngine(memos)
+            # Try slug first, then as entity name directly
+            content = wiki.read_page(slug)
+            if content is None:
+                # Try with spaces instead of hyphens
+                content = wiki.read_page(slug.replace("-", " "))
+            return {
+                "status": "ok" if content is not None else "not_found",
+                "slug": slug,
+                "content": content or "",
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e), "content": ""}
+
+    @router.get("/api/v1/wiki/search")
+    async def wiki_search_pages(q: str):
+        """Search living wiki pages."""
+        try:
+            from ...wiki_living import LivingWikiEngine
+            wiki = LivingWikiEngine(memos)
+            results = wiki.search(q)
+            return {"status": "ok", "results": results, "query": q}
+        except Exception as e:
+            return {"status": "error", "error": str(e), "results": []}
 
     return router

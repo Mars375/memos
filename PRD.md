@@ -1,6 +1,6 @@
 # MemOS — Product Requirements Document (PRD)
 
-**Version:** v1.0  
+**Version:** v3.0-draft  
 **Status:** Active  
 **Product:** MemOS (`memos-agent` on PyPI)  
 **Tagline:** The memory layer every LLM agent should use instead of brute-force context injection.
@@ -576,7 +576,7 @@ Provides tools for debugging, retrospective analysis and reproducibility.
 
 ---
 
-## 15. v2.0 Priorities — Inspired by MemPalace, Karpathy Wiki, Obsidian, Graphify, GitNexus
+## 15. v2.0 — SHIPPED (April 2026)
 
 These are the next high-impact features to implement, ranked by value:
 
@@ -614,5 +614,155 @@ Package common MemOS workflows (onboarding a new project, reviewing memory healt
 
 ## 16. Recommended README Pitch
 
-> MemOS is a local-first Memory Operating System for LLM agents. 
+> MemOS is a local-first Memory Operating System for LLM agents.
 > It mines raw conversations and events into structured memory, compiles them into a living wiki and knowledge graph, and returns only the context an agent actually needs — instead of replaying entire chat histories.
+
+---
+
+## 16. v3.0 Roadmap — Memory OS Orchestration (Q4 2026)
+
+Inspired by GitNexus (blast radius), MemPalace (temporal validity + specialist agents),
+Graphify (multimodal + confidence scoring), and Karpathy LLM Wiki (compilation philosophy).
+
+Core thesis: **knowledge should be compiled, not retrieved**. MemOS moves from
+"search at query time" to "compile at maintenance time" — facts are pre-structured,
+impacts pre-computed, synthesis pre-generated.
+
+### Phase A — Temporal Intelligence
+
+**Temporal validity windows on KG edges**
+Every KG fact gets `valid_from` / `valid_to`. When a contradicting fact is added,
+the old one's `valid_to` is auto-set. `kg_query_as_of(entity, timestamp)` enables
+retrospective queries. _(inspired by MemPalace's temporal KG)_
+
+**Contradiction detection**
+Semantic scan across memories and KG facts; flag conflicting information for review.
+Extends the existing `kg-lint` structural check with embedding-based semantic comparison.
+
+**Blast radius / impact analysis**
+When a fact is added or changed, pre-compute which memories and decisions depend on it.
+`memory_impact(id, direction="downstream")` returns the dependency chain.
+_(inspired by GitNexus impact analysis)_
+
+**God nodes detection**
+Rank entities by degree centrality (what everything connects through).
+Surface in dashboard widget and as MCP tool `memory_central_concepts()`.
+_(inspired by Graphify god nodes)_
+
+### Phase B — Specialist Agent Architecture
+
+**Per-agent namespaces with identity**
+Each agent persona (`--agent reviewer`, `--agent architect`) gets its own namespace
+and accumulated expertise. `memos wake-up --agent reviewer` injects only reviewer-relevant context.
+_(inspired by MemPalace specialist agents)_
+
+**Agent diaries**
+Structured session log per agent: decisions, rationale, open questions.
+Compressed with AAAK-style abbreviation for dense identity injection.
+
+**Rationale extraction pipeline**
+Parse memories for linguistic patterns ("because", "in order to", "the reason is")
+and auto-create `rationale_for` KG triples. Answers "why?" questions from the graph.
+_(inspired by Graphify rationale comment extraction)_
+
+**`memos compile` — weekly full wiki recompilation**
+Full synthesis of all memories + KG into updated wiki articles with cross-references.
+Not just per-item updates (P8 compounding ingest) but full structural recompilation.
+_(inspired by Karpathy LLM Wiki compilation philosophy)_
+
+### Phase C — Enriched MCP Tools (12 → 20+)
+
+New tools beyond the current 12:
+- `memory_impact(id)` — blast radius, downstream dependencies
+- `memory_compare(A, B)` — structured tradeoff comparison
+- `memory_timeline(topic)` — chronological evolution of a topic
+- `memory_detect_contradictions()` — conflicting fact pairs
+- `memory_suggest_next()` — gap analysis (mentioned but never expanded)
+- `memory_central_concepts()` — god nodes by degree centrality
+- `memory_rationale(id)` — why was this decided?
+- `memory_specialist_context(agent)` — agent-specific wake-up pack
+
+### Phase D — Multimodal Memory
+
+**Image ingestion**: `memos ingest image.png` via vision API —
+extract entities, describe content, link to KG.
+
+**Audio/video ingestion**: `memos ingest talk.mp4` via local Whisper —
+transcribe, chunk, mine into memories (no cloud upload).
+
+**Code AST ingestion**: `memos ingest src/` via Tree-sitter (14 languages) —
+extract classes, functions, call graph, rationale comments (`# WHY:`, `# IMPORTANT:`).
+_(inspired by GitNexus + Graphify AST extraction)_
+
+All multimodal extractions tagged EXTRACTED/INFERRED/AMBIGUOUS.
+Cross-domain edges (code ↔ doc ↔ conversation) scored for "surprising connections".
+
+### Phase E — Memory Scheduler & Policies
+
+**Memory scheduler**: Background jobs for mining, consolidation, decay, reindexing.
+Priority queue with configurable intervals per namespace.
+
+**Policy model**: Per-namespace read/write rules. Agent A reads team space, writes only own.
+Configurable via `memos ns-policies` (extend existing RBAC).
+
+**Evaluation benchmarks**: Internal metrics — token savings vs naive replay,
+LongMemEval R@5 score, retrieval precision/recall per namespace.
+
+**Integration templates**: Framework connectors for LangChain, AutoGen, CrewAI, Pydantic AI.
+
+### Phase F — Advanced Dashboard
+
+- Leiden community detection — graph nodes colored by community cluster
+- Surprising connections widget — top 5 unexpected cross-domain links
+- Time-travel comparison — diff two graph snapshots side-by-side
+- Wiki graph view — nodes are wiki pages, edges are `[[wikilinks]]`
+- Palace map — spatial visualization of wings → rooms → memories
+- Recall logs — inspect which memories were used for recent queries
+- Scheduler dashboard — ingestion pipelines, freshness indicators
+
+---
+
+## 17. Design Decisions
+
+### Compilation over Summarization
+_(from Karpathy LLM Wiki)_
+Store raw memories immutably. Run compilation separately (weekly or on-demand).
+Compilations are derivative artifacts — delete and regenerate anytime.
+Raw memories are the source of truth. Summaries are never the source of truth.
+
+### Precomputed context over query-time discovery
+_(from GitNexus)_
+Impact analysis, blast radius, and god node rankings are computed at write time.
+MCP tools return complete answers in one call, not 10 queries.
+Smaller LLMs work better because tools do the heavy lifting.
+
+### Structural retrieval boost
+_(from MemPalace)_
+Metadata filters (namespace/wing/room/tag) applied before semantic search.
+Wing + room filtering gives ~34% R@10 improvement vs flat search.
+Hybrid: metadata first, then semantic within the filtered set.
+
+### Verbatim storage over lossy compression
+_(from MemPalace)_
+Store original content verbatim. Structure makes it findable.
+AAAK-style compression is a separate layer for identity injection only.
+96.6% recall accuracy comes from verbatim storage, not from summaries.
+
+### Confidence tagging everywhere
+_(from Graphify)_
+Every extracted relation: EXTRACTED (explicit in source), INFERRED (LLM deduction),
+AMBIGUOUS (conflicting signals, needs review).
+Agents know what to trust vs what to verify.
+
+---
+
+## 18. Inspiration Sources
+
+| Project | Core Insight for MemOS |
+|---------|------------------------|
+| **MemPalace** (96.6% LongMemEval R@5) | Structural retrieval, temporal validity, specialist agents, verbatim storage |
+| **Karpathy LLM Wiki** | Compilation over RAG, `/raw` → `/wiki` → `/index` architecture |
+| **Obsidian** | Wikilinks, backlinks, local-first markdown, graph view, plugin ecosystem |
+| **Graphify** | Confidence labels, god nodes, surprising connections, multimodal ingestion, SHA-256 cache |
+| **GitNexus** | Blast radius, precomputed impact, skills-as-markdown, staleness detection, pre/post MCP hooks |
+
