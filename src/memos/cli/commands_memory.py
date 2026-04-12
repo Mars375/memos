@@ -235,6 +235,12 @@ def cmd_stats(ns: argparse.Namespace) -> None:
             "avg_importance": round(s.avg_importance, 3),
             "decay_candidates": s.decay_candidates,
             "top_tags": s.top_tags,
+            "token_stats": {
+                "total_chars": s.total_chars,
+                "total_tokens": s.total_tokens,
+                "prunable_tokens": s.prunable_tokens,
+                "expired_tokens": s.expired_tokens,
+            },
         }, indent=2))
         return
     print(f"  Total memories:  {s.total_memories}")
@@ -244,6 +250,14 @@ def cmd_stats(ns: argparse.Namespace) -> None:
     print(f"  Decay candidates:{s.decay_candidates}")
     if s.top_tags:
         print(f"  Top tags:        {', '.join(s.top_tags[:5])}")
+    # Token compression reporting (P9)
+    if s.total_tokens > 0:
+        print(f"\n  Token estimate:  ~{s.total_tokens:,} tokens ({s.total_chars:,} chars)")
+        if s.prunable_tokens > 0:
+            pct = round(s.prunable_tokens / s.total_tokens * 100)
+            print(f"  Prunable tokens: ~{s.prunable_tokens:,} ({pct}% of total, run: memos decay)")
+        if s.expired_tokens > 0:
+            print(f"  Expired tokens:  ~{s.expired_tokens:,} (run: memos prune --expired)")
 
 
 

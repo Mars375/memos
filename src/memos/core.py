@@ -767,9 +767,13 @@ class MemOS:
                 tags[tag] = tags.get(tag, 0) + 1
 
         top_tags = sorted(tags, key=tags.get, reverse=True)[:10]
-        decay_candidates = len(
-            self._decay.find_prune_candidates(items, threshold=0.2)
-        )
+        decay_candidate_items = self._decay.find_prune_candidates(items, threshold=0.2)
+        decay_candidates = len(decay_candidate_items)
+        expired_items = [i for i in items if i.is_expired]
+
+        total_chars = sum(len(i.content) for i in items)
+        prunable_chars = sum(len(i.content) for i in decay_candidate_items)
+        expired_chars = sum(len(i.content) for i in expired_items)
 
         return MemoryStats(
             total_memories=len(items),
@@ -779,8 +783,12 @@ class MemOS:
             oldest_memory_days=(now - min(i.created_at for i in items)) / 86400,
             newest_memory_days=(now - max(i.created_at for i in items)) / 86400,
             decay_candidates=decay_candidates,
-            expired_memories=sum(1 for i in items if i.is_expired),
+            expired_memories=len(expired_items),
             top_tags=top_tags,
+            total_chars=total_chars,
+            total_tokens=total_chars // 4,
+            prunable_tokens=prunable_chars // 4,
+            expired_tokens=expired_chars // 4,
         )
 
     def list_tags(self, sort: str = "count", limit: int = 0) -> list[tuple[str, int]]:

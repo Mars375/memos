@@ -86,6 +86,11 @@ class MemoryStats:
     decay_candidates: int = 0
     expired_memories: int = 0
     top_tags: list[str] = field(default_factory=list)
+    # Token compression reporting (P9)
+    total_chars: int = 0        # sum of len(content) across all memories
+    total_tokens: int = 0       # estimated tokens (chars // 4)
+    prunable_tokens: int = 0    # tokens in decay-candidate memories
+    expired_tokens: int = 0     # tokens in expired (TTL) memories
 
 
 def generate_id(content: str) -> str:
