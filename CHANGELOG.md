@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.0.0 (2026-04-12) — Agent-Native Memory
+
+### v2 Features (all 10 roadmap items)
+
+- **P1** Confidence labels on KG edges (`EXTRACTED` / `INFERRED` / `AMBIGUOUS`) — already shipped in v1
+- **P2** `memos kg-lint` — detect contradictions, orphans, sparse entities
+- **P3** `memos wake-up --compact` — ~200-token compressed identity injection
+- **P4** MCP pre/post hooks (`MCPHookRegistry`, `hook_prepend_context`, `hook_auto_capture_kg`)
+- **P5** `memos mine-stale` — staleness detection for mined sources
+- **P6** `memos export --format obsidian` — Obsidian vault with `[[wikilinks]]` + YAML aliases
+- **P7** `memos kg-backlinks <entity>` — first-class backlink queries
+- **P8** Compounding ingest — `memos.enable_compounding_ingest()` auto-updates wiki on `learn()`
+- **P9** Token compression reporting in `memos stats` (total_tokens, prunable_tokens, expired_tokens)
+- **P10** `memos skills-export` — 8 Claude Code slash commands / generic markdown skill files
+
+### Also
+- Code architecture: split monoliths `cli.py` → `cli/`, `api/__init__.py` → `api/routes/`, `miner.py` → `chunker.py` + `parsers.py`
+- **1534 tests passing**
+
+---
+
 ## v1.0.0 (2026-04-11) — Stable Release
 
 - **Package renamed to `memos-agent`** for PyPI publication

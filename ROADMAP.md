@@ -37,16 +37,16 @@
 
 ---
 
-## NEXT — v2.0 Agent-Native Memory (Q3 2026)
+## DONE — v2.0 Agent-Native Memory (April 2026)
 
 Inspired by MemPalace, Karpathy Wiki, Obsidian, Graphify, GitNexus:
 
 ### Knowledge Quality
-- [ ] **P1: Confidence labels** on all KG edges (EXTRACTED/INFERRED/AMBIGUOUS)
-- [ ] **P2: Lint command** — detect contradictions, orphan entities, coverage gaps
-- [ ] **P7: Backlinks** as first-class KG queries
-- [ ] **P8: Compounding ingest** — auto-update wiki pages when memories are added
-- [ ] **P9: Token compression reporting** — quantify token savings in `memos stats`
+- [x] **P1: Confidence labels** on all KG edges (EXTRACTED/INFERRED/AMBIGUOUS)
+- [x] **P2: Lint command** — detect contradictions, orphan entities, coverage gaps
+- [x] **P7: Backlinks** as first-class KG queries
+- [x] **P8: Compounding ingest** — auto-update wiki pages when memories are added
+- [x] **P9: Token compression reporting** — quantify token savings in `memos stats`
 
 ### Agent Integration
 - [ ] **P3: Wake-up context optimization** — ~200 token compressed identity injection
