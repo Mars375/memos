@@ -136,7 +136,7 @@ class TestCLIFunctional:
         class FakeMemOS:
             analytics = FakeAnalytics()
 
-        with patch("memos.cli._get_memos", return_value=FakeMemOS()):
+        with patch("memos.cli.commands_memory._get_memos", return_value=FakeMemOS()):
             main(["analytics", "top", "--n", "2"])
         out = capsys.readouterr().out
         assert "abc12345" in out
@@ -167,7 +167,7 @@ class TestCLIFunctional:
                 assert tag == "test"
                 return 1
 
-        with patch("memos.cli._get_memos", return_value=FakeMemOS()):
+        with patch("memos.cli.commands_memory._get_memos", return_value=FakeMemOS()):
             main(["forget", "--tag", "test"])
         out = capsys.readouterr().out
         assert "Forgotten" in out

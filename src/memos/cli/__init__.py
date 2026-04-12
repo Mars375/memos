@@ -1,0 +1,149 @@
+"""MemOS CLI — package entry point."""
+
+from __future__ import annotations
+
+import sys
+
+from ._common import (
+    _get_memos, _get_kg, _get_kg_bridge, _get_palace,
+    _ts, _parse_timestamp, _fmt_ts,
+    _coerce_cli_value, _parse_kv_options,
+)
+from ._parser import build_parser
+from .commands_memory import (
+    cmd_init, cmd_learn, cmd_batch_learn, cmd_recall, cmd_search,
+    cmd_stats, cmd_analytics, cmd_forget, cmd_get, cmd_prune, cmd_prune_expired,
+    cmd_consolidate, cmd_watch, cmd_subscribe, cmd_feedback, cmd_feedback_list,
+    cmd_feedback_stats, cmd_compact, cmd_benchmark, cmd_benchmark_quality,
+    cmd_cache_stats, cmd_tags, cmd_wake_up, cmd_identity, cmd_context_for,
+    cmd_classify, cmd_decay, cmd_reinforce, cmd_compress, cmd_dedup_check, cmd_dedup_scan,
+)
+from .commands_io import (
+    cmd_export, cmd_import, cmd_ingest, cmd_ingest_url, cmd_migrate,
+    cmd_mine, cmd_mine_conversation, cmd_mine_status,
+)
+from .commands_knowledge import (
+    cmd_kg_add, cmd_kg_query, cmd_kg_timeline, cmd_kg_invalidate, cmd_kg_stats,
+    cmd_kg_infer, cmd_kg_labels, cmd_kg_path, cmd_kg_neighbors,
+    cmd_wiki_compile, cmd_wiki_list, cmd_wiki_read, cmd_wiki_living,
+    cmd_wiki_graph, cmd_brain_search,
+)
+from .commands_versioning import (
+    cmd_history, cmd_diff, cmd_rollback, cmd_snapshot_at, cmd_recall_at,
+    cmd_version_stats, cmd_version_gc,
+)
+from .commands_namespace import (
+    cmd_ns_grant, cmd_ns_revoke, cmd_ns_policies, cmd_ns_stats,
+    cmd_share_offer, cmd_share_accept, cmd_share_reject, cmd_share_revoke,
+    cmd_share_export, cmd_share_import, cmd_share_list, cmd_share_stats,
+    cmd_sync_check, cmd_sync_apply,
+)
+from .commands_palace import (
+    cmd_palace_init, cmd_palace_wing_create, cmd_palace_wing_list,
+    cmd_palace_room_create, cmd_palace_room_list, cmd_palace_assign,
+    cmd_palace_recall, cmd_palace_stats,
+)
+from .commands_system import cmd_serve, cmd_mcp_serve, cmd_mcp_stdio, cmd_config
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = build_parser()
+    ns = parser.parse_args(argv)
+    if not ns.command:
+        parser.print_help()
+        sys.exit(0)
+
+    commands = {
+        "init": cmd_init,
+        "learn": cmd_learn,
+        "batch-learn": cmd_batch_learn,
+        "recall": cmd_recall,
+        "search": cmd_search,
+        "stats": cmd_stats,
+        "analytics": cmd_analytics,
+        "forget": cmd_forget,
+        "get": cmd_get,
+        "prune-expired": cmd_prune_expired,
+        "prune": cmd_prune,
+        "mcp-serve": cmd_mcp_serve,
+        "mcp-stdio": cmd_mcp_stdio,
+        "serve": cmd_serve,
+        "watch": cmd_watch,
+        "subscribe": cmd_subscribe,
+        "consolidate": cmd_consolidate,
+        "ingest": cmd_ingest,
+        "ingest-url": cmd_ingest_url,
+        "export": cmd_export,
+        "import": cmd_import,
+        "migrate": cmd_migrate,
+        "config": cmd_config,
+        "history": cmd_history,
+        "diff": cmd_diff,
+        "rollback": cmd_rollback,
+        "snapshot-at": cmd_snapshot_at,
+        "recall-at": cmd_recall_at,
+        "version-stats": cmd_version_stats,
+        "version-gc": cmd_version_gc,
+        "ns-grant": cmd_ns_grant,
+        "ns-revoke": cmd_ns_revoke,
+        "ns-policies": cmd_ns_policies,
+        "ns-stats": cmd_ns_stats,
+        "compact": cmd_compact,
+        "cache-stats": cmd_cache_stats,
+        "benchmark": cmd_benchmark,
+        "benchmark-quality": cmd_benchmark_quality,
+        "tags": cmd_tags,
+        "share-offer": cmd_share_offer,
+        "share-accept": cmd_share_accept,
+        "share-reject": cmd_share_reject,
+        "share-revoke": cmd_share_revoke,
+        "share-export": cmd_share_export,
+        "share-import": cmd_share_import,
+        "share-list": cmd_share_list,
+        "share-stats": cmd_share_stats,
+        "sync-check": cmd_sync_check,
+        "sync-apply": cmd_sync_apply,
+        "feedback": cmd_feedback,
+        "feedback-list": cmd_feedback_list,
+        "feedback-stats": cmd_feedback_stats,
+        "wiki-compile": cmd_wiki_compile,
+        "wiki-list": cmd_wiki_list,
+        "wiki-read": cmd_wiki_read,
+        "wiki-living": cmd_wiki_living,
+        "wiki-graph": cmd_wiki_graph,
+        "brain-search": cmd_brain_search,
+        "mine": cmd_mine,
+        "mine-conversation": cmd_mine_conversation,
+        "mine-status": cmd_mine_status,
+        "kg-add": cmd_kg_add,
+        "kg-query": cmd_kg_query,
+        "kg-timeline": cmd_kg_timeline,
+        "kg-invalidate": cmd_kg_invalidate,
+        "kg-stats": cmd_kg_stats,
+        "kg-path": cmd_kg_path,
+        "kg-neighbors": cmd_kg_neighbors,
+        "kg-infer": cmd_kg_infer,
+        "kg-labels": cmd_kg_labels,
+        "palace-init": cmd_palace_init,
+        "palace-wing-create": cmd_palace_wing_create,
+        "palace-wing-list": cmd_palace_wing_list,
+        "palace-room-create": cmd_palace_room_create,
+        "palace-room-list": cmd_palace_room_list,
+        "palace-assign": cmd_palace_assign,
+        "palace-recall": cmd_palace_recall,
+        "palace-stats": cmd_palace_stats,
+        "wake-up": cmd_wake_up,
+        "identity": cmd_identity,
+        "context-for": cmd_context_for,
+        "classify": cmd_classify,
+        "decay": cmd_decay,
+        "reinforce": cmd_reinforce,
+        "compress": cmd_compress,
+        "dedup-check": cmd_dedup_check,
+        "dedup-scan": cmd_dedup_scan,
+    }
+    commands[ns.command](ns)
+
+
+if __name__ == "__main__":
+    main()
