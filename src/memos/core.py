@@ -11,11 +11,8 @@ from typing import Any, Optional
 from .models import MemoryItem, RecallResult, MemoryStats, FeedbackEntry, FeedbackStats, generate_id
 from .retrieval.engine import RetrievalEngine
 from .storage.base import StorageBackend
-from .storage.chroma_backend import ChromaBackend
 from .storage.memory_backend import InMemoryBackend
 from .storage.json_backend import JsonFileBackend
-from .storage.qdrant_backend import QdrantBackend
-from .storage.pinecone_backend import PineconeBackend
 from .decay.engine import DecayEngine
 from .sanitizer import MemorySanitizer
 from .crypto import MemoryCrypto
@@ -27,7 +24,7 @@ from .compression import MemoryCompressor
 from .namespaces.acl import NamespaceACL, Role
 from .cache.embedding_cache import EmbeddingCache
 from .analytics import RecallAnalytics
-from .embeddings import LocalEmbedder
+# LocalEmbedder imported lazily when backend=="local"
 from .tagger import AutoTagger
 from .sharing.engine import SharingEngine
 from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
@@ -65,6 +62,7 @@ class MemOS:
         # Storage
         if backend == "chroma":
             import os as _os
+            from .storage.chroma_backend import ChromaBackend
             # Only enable client-side Ollama embeddings when MEMOS_EMBED_HOST is
             # explicitly configured. When unset, Chroma uses its built-in ONNX
             # embedder (backward compatible with existing collections).
@@ -76,6 +74,7 @@ class MemOS:
                 embed_model=embed_model,
             )
         elif backend == "qdrant":
+            from .storage.qdrant_backend import QdrantBackend
             store = QdrantBackend(
                 host=kwargs.get("qdrant_host", "localhost"),
                 port=kwargs.get("qdrant_port", 6333),
@@ -86,6 +85,7 @@ class MemOS:
                 vector_size=kwargs.get("vector_size", 768),
             )
         elif backend == "pinecone":
+            from .storage.pinecone_backend import PineconeBackend
             store = PineconeBackend(
                 api_key=kwargs.get("pinecone_api_key", ""),
                 environment=kwargs.get("pinecone_environment"),
@@ -123,6 +123,7 @@ class MemOS:
         retrieval_model = embed_model
         if backend == "local":
             local_model = kwargs.get("local_model") or "all-MiniLM-L6-v2"
+            from .embeddings import LocalEmbedder
             retrieval_embedder = LocalEmbedder(
                 model=local_model,
                 device=kwargs.get("local_device"),
@@ -188,7 +189,7 @@ class MemOS:
 
 
         # Dedup engine (prevent duplicate memories at write time)
-        self._dedup_enabled: bool = kwargs.get("dedup_enabled", False)
+        self._dedup_enabled: bool = kwargs.get("dedup_enabled", True)
         self._dedup_threshold: float = kwargs.get("dedup_threshold", 0.95)
         self._dedup_engine: Optional[DedupEngine] = None
         # Feedback is stored in memory item metadata["_feedback"] for persistence
@@ -295,16 +296,23 @@ class MemOS:
                 raise ValueError(f"Memory failed sanitization: {issues}")
 
         # Dedup check — skip if duplicate found and allow_duplicate=False
+        # Only block true duplicates: same content AND same tags/importance.
+        # If tags or importance differ, treat as an intentional update (versioning).
         if self._dedup_enabled and not allow_duplicate:
             dedup_result = self.dedup_check(content)
-            if dedup_result.is_duplicate:
-                logger.info(
-                    "Skipping duplicate memory (reason=%s, similarity=%.3f, original=%s)",
-                    dedup_result.reason,
-                    dedup_result.similarity,
-                    dedup_result.match.id if dedup_result.match else "N/A",
-                )
-                return dedup_result.match
+            if dedup_result.is_duplicate and dedup_result.match:
+                existing = dedup_result.match
+                final_tags_check = list(tags) if tags else []
+                same_tags = set(existing.tags) == set(final_tags_check)
+                same_importance = abs(existing.importance - importance) < 0.01
+                if same_tags and same_importance:
+                    logger.info(
+                        "Skipping duplicate memory (reason=%s, similarity=%.3f, original=%s)",
+                        dedup_result.reason,
+                        dedup_result.similarity,
+                        existing.id,
+                    )
+                    return existing
 
         # Auto-tag with type tags (decision, preference, milestone, etc.)
         final_tags = list(tags) if tags else []

@@ -237,11 +237,11 @@ class TestMemOSDedupIntegration:
 
     def test_dedup_enabled_property(self):
         m = MemOS(backend="memory")
+        assert m.dedup_enabled is True  # enabled by default since v1.0
+        m.dedup_set_enabled(False)
         assert m.dedup_enabled is False
         m.dedup_set_enabled(True)
         assert m.dedup_enabled is True
-        m.dedup_set_enabled(False)
-        assert m.dedup_enabled is False
 
     def test_dedup_with_namespace(self):
         m = MemOS(backend="memory")

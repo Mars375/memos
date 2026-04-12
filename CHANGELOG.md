@@ -1,5 +1,158 @@
 # Changelog
 
+## v1.0.0 (2026-04-11) — Stable Release
+
+- **Package renamed to `memos-agent`** for PyPI publication
+- Deduplication enabled by default with smart comparison
+- Lazy imports for all optional backends (Qdrant, Pinecone, ChromaDB)
+- **1434 tests passing**
+
+---
+
+## v0.47.0 — Advanced Recall Filters (P31)
+
+- Ship P31 advanced recall filters — extended query predicates for fine-grained memory retrieval
+
+## v0.46.0 — Namespace Management API (P30)
+
+- Ship P30 namespace management API — CRUD endpoints for namespace lifecycle
+
+## v0.45.0 — Memory Deduplication (P29)
+
+- Ship P29 memory deduplication — automatic detection and merging of duplicate memories
+
+## v0.44.0 — API Auth (P28)
+
+- Complete P28 API authentication — token-based auth layer for all REST endpoints
+
+## v0.43.0 — Universal Markdown Export (P27)
+
+- Ship P27 universal markdown export — export entire brain as structured markdown
+
+## v0.42.0 — Entity Graph Dashboard Bridge (P26)
+
+- Deliver P26 entity graph dashboard bridge — live KG visualization in web UI
+
+## v0.41.0 — Unified Brain Search (P25)
+
+- P25 Unified Brain Search — one query across memories, wiki, and knowledge graph
+
+## v0.40.0 — Memory Compression (P24)
+
+- Ship P24 memory compression — reduce storage footprint for large memory stores
+
+## v0.39.0 — Auto KG Extraction (P33)
+
+- Ship P33 auto knowledge-graph extraction — entities and relations mined from memories automatically
+
+## v0.38.0 — Speaker Ownership (P23)
+
+- Conversation miner with per-speaker namespaces — attribute memories to individual speakers
+
+## v0.37.0 — URL Ingest (P22)
+
+- P22 URL ingest support — `memos learn <url>` fetches and stores web content
+
+## v0.36.0 — Hybrid Retrieval Semantic + BM25 (P20)
+
+- P20 hybrid retrieval combining semantic embeddings and BM25 scoring in a single pipeline
+
+## v0.35.0 — Miner Incremental SHA-256 Cache (P19)
+
+- P19 incremental mining cache — SHA-256 content hashing skips already-imported paragraphs
+
+## v0.34.0 — Confidence Labels KG (P18)
+
+- P18 confidence labels on knowledge-graph edges — trust scoring for extracted relations
+
+## v0.33.0 — Zero-LLM Auto-Tagger (P17)
+
+- Zero-LLM auto-tagger for memory type classification — rule-based tagging without API calls
+
+## v0.32.0 — Analytics, KG Bridge, KG Path Queries
+
+- Analytics dashboard improvements and KG bridge fixes
+- Living wiki mode — auto-regenerating wiki from memory changes
+- **KG Path Queries** — multi-hop graph traversal (P15)
+- Universal MCP HTTP endpoint + P16-P24 priority planning
+
+## v0.31.0 — Memory Decay & Reinforcement Engine (P9)
+
+- P9 memory decay and reinforcement — memories weaken over time unless reinforced by access
+
+## v0.30.0 — MCP Server, Wiki Compile, Markdown Migration, Smart Miner
+
+- **MCP server** — JSON-RPC 2.0 bridge for agent tool use (P2)
+- **Wiki compile mode** — per-tag markdown pages (P3)
+- **Markdown migration tool** — import existing `.md` notes into MemOS (P4)
+- **Smart memory miner** — multi-format import with paragraph-aware chunking (P8)
+- Discord, Telegram, OpenClaw importers (P8+)
+
+## v0.29.0 — Second Brain Graph Dashboard
+
+- Interactive graph dashboard + `/api/v1/graph` endpoint for memory relationship visualization
+
+## v0.28.0 — Delete Tag
+
+- `delete_tag` — remove a tag from all memories without deleting the memories themselves
+
+## v0.27.0 — Tags Rename
+
+- `tags rename` — rename a tag across all memories (core + CLI + REST, 13 tests)
+
+## v0.26.0 — Tags List
+
+- `memos tags list` — CLI command, core method, and REST endpoint for listing all tags
+
+## v0.25.0 — Search CLI Command
+
+- `memos search` CLI command — keyword-only search mirroring the REST API
+
+## v0.24.0 — Pipe Support for CLI
+
+- `memos learn --stdin` — pipe content into learn from stdin
+
+## v0.23.0 — Get by ID + TTL Fix
+
+- `memos get <id>` — retrieve a specific memory by ID
+- Fix TTL persistence in JSON backend
+
+## v0.22.0 — JSON Output + Relevance Feedback
+
+- `recall --format json` — structured JSON output for recall
+- Relevance feedback loop for improving retrieval quality
+
+## v0.21.0 — Recall CLI Filters
+
+- `recall` CLI filters: `--tags`, `--after`, `--before` for scoped retrieval
+
+## v0.20.0 — Per-Memory TTL
+
+- Per-memory TTL (time-to-live) with automatic expiry
+
+## v0.19.0 — Backend Migration Engine
+
+- Backend migration command and engine — move data between storage backends
+
+## v0.18.0 — JSON File Backend + Tag-Based Bulk Forget
+
+- **JsonFileBackend** — CLI data now persists across invocations
+- Tag-based bulk forget — delete all memories matching a tag set
+
+## v0.17.0 — Filtered Subscriptions & Live Events
+
+- Filtered subscriptions and live event streams on the EventBus
+
+## v0.16.0 — Multi-Agent Memory Sharing
+
+- Multi-agent memory sharing protocol — agents can share and access each other's memories
+
+## v0.15.0 — Per-Endpoint Rate Limiting
+
+- Per-endpoint rate limiting + performance benchmarks
+
+---
+
 ## v0.14.0 (2026-04-07) — Memory Compaction + Embedding Cache
 
 ### New Features

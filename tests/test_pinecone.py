@@ -236,7 +236,7 @@ class TestPineconeInMemOS:
 
     def test_memos_pinecone_init(self):
         """MemOS can be initialized with pinecone backend (mocked)."""
-        with patch("memos.core.PineconeBackend"):
+        with patch("memos.storage.pinecone_backend.PineconeBackend") as MockPB:
             mem = MemOSCore(
                 backend="pinecone",
                 pinecone_api_key="test-key",
@@ -246,7 +246,7 @@ class TestPineconeInMemOS:
 
     def test_memos_pinecone_batch_learn(self):
         """Batch learn works with Pinecone backend (mocked)."""
-        with patch("memos.core.PineconeBackend"):
+        with patch("memos.storage.pinecone_backend.PineconeBackend") as MockPB:
             mem = MemOSCore(
                 backend="pinecone",
                 pinecone_api_key="test-key",

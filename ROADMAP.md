@@ -1,108 +1,74 @@
 # MemOS Roadmap
 
-## Status Overview
+## v1.0.0 — Shipped (April 2026)
 
-- Core memory store: **Shipped**
-- Developer interfaces (CLI, SDK, REST, MCP): **Shipped**
-- Local-first / self-hosting (pip, Docker, multiple backends): **Shipped**
-- Memory mining & imports: **Shipped (first wave)**
-- Knowledge graph: **Shipped (base)**
-- Living wiki: **Shipped (base)**
-- Memory lifecycle (decay, prune, reinforce, versioning): **Shipped (base)**
-- Inspectability (dashboard, graph, stats): **Partial**
-- Knowledge export (portable markdown snapshot): **Shipped**
-- Team / policy memory: **Partial (namespaces only)**
-- Task / skill / tool memory: **Planned**
-- Evaluation & token savings benchmarks: **Planned**
-
----
-
-## NOW — Stabilize and Clarify Core (Q2 2026)
-
-- [ ] Align README and docs with the PRD (Capture / Engine / Knowledge Surface).
-- [ ] Document the golden path: `learn → recall → context_for → wake_up → reinforce/decay`.
-- [ ] Clarify when to use `recall`, `search`, `memory_context_for`, `memory_recall_enriched`.
-- [ ] Improve dashboard UX around:
-  - [ ] Inspecting which memories were used for an answer.
-  - [ ] Showing freshness / importance / decay state.
-  - [ ] Navigating namespaces and backends.
-- [ ] Provide example integrations for agent loops (MCP + SDK):
-  - [ ] Minimal Claude Code / MCP example.
-  - [ ] Minimal OpenClaw / orchestrator example.
-- [ ] Harden existing importers & mining flows (Claude / ChatGPT / Slack / Discord / Telegram / OpenClaw).
+- [x] Core memory store (learn, recall, forget, prune, reinforce, decay)
+- [x] 6 backends: memory, JSON, ChromaDB, Qdrant, Pinecone, local (sentence-transformers)
+- [x] Hybrid retrieval (BM25 + semantic) with advanced filters
+- [x] Recall explainability (score breakdown per component)
+- [x] Deduplication enabled by default (SHA-256 exact + Jaccard near-duplicate)
+- [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at)
+- [x] Memory compression + compaction engine
+- [x] TTL, ACL (RBAC), multi-agent sharing, conflict resolution
+- [x] Temporal knowledge graph + auto KG extraction
+- [x] Living wiki (update/read/search/lint) + graph-wiki bridge
+- [x] Unified brain search (memories + wiki + KG)
+- [x] Mine from 7 chat formats + URL ingest + speaker ownership
+- [x] Portable markdown export + Parquet export/import
+- [x] MCP server (HTTP + stdio, 12 tools)
+- [x] REST API (20+ endpoints, SSE streaming, auth, rate limiting)
+- [x] CLI (30+ commands) + Python SDK
+- [x] Second brain dashboard (D3.js graph view)
+- [x] Docker + CI (tests + PyPI publish workflow)
+- [x] Package: `pip install memos-agent` — 1434 tests
 
 ---
 
-## NEXT — Make MemOS Agent-Native (Q3 2026)
+## NOW — v1.1 Polish & Observability (Q2 2026)
 
-- Task Memory
-  - [ ] Define a `task` memory type (schema, metadata).
-  - [ ] Add API/CLI to create task memories at end of runs.
-  - [ ] Implement automatic task summarization from logs/traces.
-
-- Tool Memory
-  - [ ] Define a `tool_trace` memory type.
-  - [ ] Capture tool calls (tool, inputs, success/failure, latency, cost).
-  - [ ] Expose simple planning hints based on past tool performance.
-
-- Skill Memory
-  - [ ] Define a `skill` memory type.
-  - [ ] Detect repeated successful patterns and promote them to skills.
-  - [ ] Add APIs to list, apply and refine skills.
-
-- Feedback & Correction
-  - [ ] Add API to flag memories as wrong / outdated / incomplete.
-  - [ ] Implement correction flow (update, link or supersede + version history).
-  - [ ] Surface corrections in the wiki and graph.
-
-- Retrieval & Context Packaging
-  - [ ] Improve ranking (semantic + tags + recency + importance + graph signals).
-  - [ ] Stabilize `memory_context_for` as the main way to build task-specific context packs.
-  - [ ] Add metrics/logging for recall usefulness.
+- [ ] Align README and docs with PRD (Capture / Engine / Knowledge Surface)
+- [ ] Document the golden path: `learn → recall → context_for → wake_up → reinforce/decay`
+- [ ] Clarify when to use `recall`, `search`, `memory_context_for`, `memory_recall_enriched`
+- [ ] Improve dashboard UX (recall logs, freshness indicators, namespace nav)
+- [ ] Provide example integrations (MCP + SDK):
+  - [ ] Claude Code / MCP minimal example
+  - [ ] OpenClaw / orchestrator example
+- [ ] Harden existing importers & mining flows
 
 ---
 
-## LATER — Memory OS Orchestration (Q4 2026+)
+## NEXT — v2.0 Agent-Native Memory (Q3 2026)
 
-- Policies & Shared Memory
-  - [ ] Design a simple policy model for namespaces/cubes (read/write rules).
-  - [ ] Implement per-agent / per-user / per-project / team spaces.
-  - [ ] Add policy-aware inspection in the UI.
+Inspired by MemPalace, Karpathy Wiki, Obsidian, Graphify, GitNexus:
 
-- Memory Scheduler
-  - [ ] Add a scheduler for background jobs (mining, consolidation, decay, reindexing).
-  - [ ] Dashboard for job status, queue health, failures.
+### Knowledge Quality
+- [ ] **P1: Confidence labels** on all KG edges (EXTRACTED/INFERRED/AMBIGUOUS)
+- [ ] **P2: Lint command** — detect contradictions, orphan entities, coverage gaps
+- [ ] **P7: Backlinks** as first-class KG queries
+- [ ] **P8: Compounding ingest** — auto-update wiki pages when memories are added
+- [ ] **P9: Token compression reporting** — quantify token savings in `memos stats`
 
-- Multi-Modal Memory
-  - [ ] Design schema for multimodal memories (docs, images, artefacts).
-  - [ ] Provide at least one reference integration.
+### Agent Integration
+- [ ] **P3: Wake-up context optimization** — ~200 token compressed identity injection
+- [ ] **P4: Pre/Post MCP hooks** — auto-capture and context injection
+- [ ] **P5: Staleness detection** — warn when sources need re-mining
+- [ ] **P10: Skills-as-markdown** — packaged workflows for Claude Code / Cursor
 
-- Evaluation & Benchmarks
-  - [ ] Define evaluation protocols (token savings, continuity, task quality).
-  - [ ] Build internal benchmarks comparing MemOS vs naive history / RAG.
-  - [ ] Publish results and guidance.
+### Export & Interop
+- [ ] **P6: Obsidian-compatible export** — markdown with `[[wikilinks]]` + YAML frontmatter
 
-- Integration Templates
-  - [ ] Ready-made templates for popular agent frameworks (Claude Code, OpenClaw, Cursor, etc.).
+### Memory Types
+- [ ] Task memory (schema, auto-summarization from logs)
+- [ ] Tool memory (traces, success/failure, planning hints)
+- [ ] Skill memory (detect patterns, promote to reusable skills)
+- [ ] Feedback & correction workflows
 
 ---
 
-## Already Shipped (High-Level)
+## LATER — v3.0 Memory OS Orchestration (Q4 2026+)
 
-- [x] Python package (`pip install`).
-- [x] CLI (`memos learn/recall/forget/prune/serve/...`).
-- [x] Python SDK.
-- [x] REST API + docs + SSE recall.
-- [x] MCP server (HTTP + stdio).
-- [x] Web dashboard.
-- [x] Multiple backends (JSON, Chroma, Qdrant, Pinecone, etc.).
-- [x] Import/mine from multiple sources.
-- [x] Knowledge graph APIs and visualization.
-- [x] Entity detail API + Graph ↔ Wiki bridge (wiki + memories + KG + subgraph).
-- [x] Living wiki (update/read/search/lint).
-- [x] Portable markdown knowledge export (`INDEX.md`, `LOG.md`, entities, memories, communities).
-- [x] Memory lifecycle (decay, prune, reinforce).
-- [x] Versioning & time-travel (history, diff, rollback, recall-at, snapshot-at).
-- [x] Multi-namespace support.
-- [x] Memory deduplication (exact + near-duplicate detection at write time).
-- [x] API authentication (Bearer master key + namespace-scoped keys + rate limiting).
+- [ ] Policy model for namespaces/cubes (read/write rules, sharing policies)
+- [ ] Memory scheduler (background mining, consolidation, decay, reindexing)
+- [ ] Multi-modal memory (images, documents, charts)
+- [ ] Evaluation benchmarks (token savings, continuity, task quality)
+- [ ] Integration templates for popular agent frameworks
