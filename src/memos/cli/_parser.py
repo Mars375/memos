@@ -751,6 +751,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="Top-N memories by importance (default: 15)")
     wake_up_p.add_argument("--no-stats", dest="no_stats", action="store_true",
                            help="Omit the STATS section")
+    wake_up_p.add_argument("--compact", dest="compact", action="store_true",
+                           help="~200-token compressed output (no headers, top-5 snippets)")
     wake_up_p.add_argument("--backend", default="memory",
                            choices=["memory", "chroma", "qdrant", "pinecone"])
 

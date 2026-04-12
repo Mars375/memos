@@ -75,6 +75,7 @@ class ContextStack:
         max_chars: int = 2000,
         l1_top: int = 15,
         include_stats: bool = True,
+        compact: bool = False,
     ) -> str:
         """Return L0 + L1 as a string ready to inject into a system prompt.
 
@@ -98,11 +99,20 @@ class ContextStack:
         max_chars:
             Hard upper bound on the total character count of the output.
             The result is truncated if it would exceed this limit.
+            Ignored when ``compact=True`` (uses ~800 char cap).
         l1_top:
             Number of top-importance memories to include in L1.
         include_stats:
             Whether to append a ``=== STATS ===`` section.
+        compact:
+            If True, produce a compressed ~200-token injection with no
+            section headers. Suitable for tight context windows.
+            Format: one-line identity summary + top-5 memories as
+            semicolon-separated snippets + brief stats.
         """
+        if compact:
+            return self._wake_up_compact()
+
         parts: list[str] = []
 
         # L0 — Identity
@@ -150,6 +160,53 @@ class ContextStack:
         if max_chars > 0 and len(output) > max_chars:
             output = output[:max_chars]
 
+        return output
+
+    def _wake_up_compact(self, max_chars: int = 800, l1_top: int = 5) -> str:
+        """Produce a ~200-token compressed context injection.
+
+        Format (header-free, semicolon-separated)::
+
+            [ID] <first line of identity>
+            [MEM] snippet1 | snippet2 | snippet3
+            [STATS] 142 mem, 3 prunable
+
+        Returns at most ~800 chars (~200 tokens).
+        """
+        lines: list[str] = []
+
+        # L0 — first non-empty line of identity
+        identity = self.get_identity().strip()
+        if identity:
+            first_line = next(
+                (ln.strip() for ln in identity.splitlines() if ln.strip()), ""
+            )
+            if first_line:
+                lines.append(f"[ID] {first_line[:200]}")
+
+        # L1 — top-N snippets (first 80 chars of each)
+        all_items = self._memos._store.list_all(namespace=self._memos.namespace)
+        top_items = sorted(
+            all_items,
+            key=lambda x: (x.importance, x.access_count),
+            reverse=True,
+        )[:l1_top]
+        if top_items:
+            snippets = " | ".join(item.content[:80].replace("\n", " ") for item in top_items)
+            lines.append(f"[MEM] {snippets}")
+
+        # Stats
+        s = self._memos.stats()
+        stats_parts = [f"{s.total_memories} mem"]
+        if s.decay_candidates:
+            stats_parts.append(f"{s.decay_candidates} prunable")
+        if s.expired_tokens:
+            stats_parts.append(f"~{s.expired_tokens} expired tok")
+        lines.append(f"[STATS] {', '.join(stats_parts)}")
+
+        output = "\n".join(lines)
+        if max_chars > 0 and len(output) > max_chars:
+            output = output[:max_chars]
         return output
 
     # ------------------------------------------------------------------ #

@@ -714,6 +714,7 @@ def cmd_wake_up(ns: argparse.Namespace) -> None:
         max_chars=ns.max_chars,
         l1_top=ns.l1_top,
         include_stats=not ns.no_stats,
+        compact=getattr(ns, "compact", False),
     )
     print(output)
 

@@ -470,3 +470,107 @@ def test_cli_identity_set_and_show(tmp_path: Path, capsys) -> None:
 
     result = cs.get_identity()
     assert result == "Test identity content"
+
+
+# ── P3: compact wake-up ────────────────────────────────────────────────────
+
+
+class _FakeMemosCompact:
+    namespace = ""
+
+    def __init__(self, items=None):
+        self._items = items or []
+
+    def stats(self):
+        from memos.models import MemoryStats
+        return MemoryStats(
+            total_memories=len(self._items),
+            decay_candidates=1,
+        )
+
+    class _FakeStore:
+        def __init__(self, items):
+            self._items = items
+        def list_all(self, namespace=""):
+            return self._items
+
+    @property
+    def _store(self):
+        return self._FakeStore(self._items)
+
+
+def test_wake_up_compact_format(tmp_path):
+    """compact=True produces [ID], [MEM], [STATS] lines without section headers."""
+    from memos.context import ContextStack
+    from memos.models import MemoryItem
+
+    items = [
+        MemoryItem(id="a1", content="Python async patterns", importance=0.9),
+        MemoryItem(id="a2", content="Docker multi-stage builds", importance=0.8),
+        MemoryItem(id="a3", content="Redis caching strategy", importance=0.7),
+    ]
+    fake = _FakeMemosCompact(items)
+    identity_path = tmp_path / "identity.txt"
+    cs = ContextStack(fake, identity_path=str(identity_path))  # type: ignore[arg-type]
+    cs.set_identity("Tachikoma — AI agent on Cortex")
+
+    output = cs.wake_up(compact=True)
+
+    assert "===" not in output, "compact mode must not include section headers"
+    assert "[ID]" in output
+    assert "[MEM]" in output
+    assert "[STATS]" in output
+    assert "Tachikoma" in output
+    assert "Python async" in output
+
+
+def test_wake_up_compact_fits_in_200_tokens(tmp_path):
+    """compact output should fit in ~200 tokens (≤800 chars)."""
+    from memos.context import ContextStack
+    from memos.models import MemoryItem
+
+    items = [
+        MemoryItem(id=f"i{i}", content="x" * 200, importance=0.9 - i * 0.1)
+        for i in range(10)
+    ]
+    fake = _FakeMemosCompact(items)
+    cs = ContextStack(fake, identity_path=str(tmp_path / "id.txt"))  # type: ignore[arg-type]
+    output = cs.wake_up(compact=True)
+    assert len(output) <= 800
+
+
+def test_wake_up_compact_no_identity(tmp_path):
+    """compact mode works when no identity file exists."""
+    from memos.context import ContextStack
+
+    fake = _FakeMemosCompact([])
+    cs = ContextStack(fake, identity_path=str(tmp_path / "no_id.txt"))  # type: ignore[arg-type]
+    output = cs.wake_up(compact=True)
+    assert "[STATS]" in output
+    assert "[ID]" not in output  # no identity → no [ID] line
+
+
+def test_wake_up_compact_cli_flag(tmp_path, capsys):
+    """--compact flag wires through to compact=True in CLI."""
+    import argparse
+    from memos.cli import cmd_wake_up
+    from unittest.mock import patch, MagicMock
+    from memos.models import MemoryItem, MemoryStats
+
+    fake_memos = MagicMock()
+    fake_memos.namespace = ""
+    fake_memos.stats.return_value = MemoryStats(total_memories=2)
+    fake_memos._store.list_all.return_value = [
+        MemoryItem(id="x1", content="Important fact one", importance=0.9),
+    ]
+
+    ns = argparse.Namespace(
+        max_chars=2000, l1_top=15, no_stats=False, compact=True,
+        backend="memory", db=None, namespace=None,
+    )
+    with patch("memos.cli.commands_memory._get_memos", return_value=fake_memos):
+        cmd_wake_up(ns)
+
+    out = capsys.readouterr().out
+    assert "===" not in out
+    assert "[MEM]" in out or "[STATS]" in out
