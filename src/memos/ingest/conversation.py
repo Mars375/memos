@@ -58,7 +58,7 @@ class ConversationMineResult:
 _TS_PREFIX = r"(?:\[[\d]{1,2}:[\d]{2}(?::[\d]{2})?\]\s*)?"
 
 # Speaker name: starts with letter, up to 40 chars (letters, digits, space, hyphen, underscore, dot)
-_SPEAKER_PAT = r"([A-Za-z][A-Za-z0-9 _\-\.]{0,39})"
+_SPEAKER_PAT = r"([A-Za-z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff][A-Za-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff _\-\.]{0,39})"
 
 # Pattern 1: [HH:MM] Speaker: message
 _RE_PLAIN = re.compile(
