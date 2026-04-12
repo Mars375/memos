@@ -55,6 +55,7 @@ class RetrievalEngine:
         embed_model: str = "nomic-embed-text",
         semantic_weight: float = 0.6,
         embedder: Optional[Embedder] = None,
+        embed_timeout: float = 30.0,
     ) -> None:
         self._store = store
         self._embed_host = embed_host
@@ -64,6 +65,7 @@ class RetrievalEngine:
         # Pluggable local embedder (sentence-transformers, ONNX, etc.)
         # When set, _get_embedding() tries this before Ollama.
         self._embedder = embedder
+        self._embed_timeout = embed_timeout
         # Local embedding cache for small stores
         self._embed_cache: dict[str, list[float]] = {}
         # Optional persistent cache (set via set_cache)
@@ -267,7 +269,7 @@ class RetrievalEngine:
                 resp = httpx.post(
                     f"{self._embed_host}/api/embed",
                     json={"model": self._embed_model, "input": text},
-                    timeout=10.0,
+                    timeout=self._embed_timeout,
                 )
                 resp.raise_for_status()
                 data = resp.json()

@@ -35,6 +35,7 @@ DEFAULTS: dict[str, Any] = {
     "embed_host": "localhost",
     "embed_model": "nomic-embed-text",
     "embed_port": 11434,
+    "embed_timeout": 30,
     "persist_path": "",
     "pinecone_api_key": "",
     "pinecone_environment": "",
@@ -62,6 +63,7 @@ ENV_MAP: dict[str, str] = {
     "qdrant_path": "MEMOS_QDRANT_PATH",
     "embed_host": "MEMOS_EMBED_HOST",
     "embed_model": "MEMOS_EMBED_MODEL",
+    "embed_timeout": "MEMOS_EMBED_TIMEOUT",
     "persist_path": "MEMOS_PERSIST_PATH",
     "pinecone_api_key": "MEMOS_PINECONE_API_KEY",
     "pinecone_environment": "MEMOS_PINECONE_ENVIRONMENT",
@@ -114,7 +116,7 @@ def resolve(cli_args: dict[str, Any] | None = None) -> dict[str, Any]:
         val = os.environ.get(env_var)
         if val is not None:
             # Type coercion for known int/bool keys
-            if key in ("chroma_port", "embed_port", "port", "qdrant_port", "vector_size") and val:
+            if key in ("chroma_port", "embed_port", "port", "qdrant_port", "vector_size", "embed_timeout") and val:
                 result[key] = int(val)
             elif key in ("sanitize", "pinecone_serverless"):
                 result[key] = val.lower() not in ("0", "false", "no")

@@ -121,7 +121,8 @@ class MemOS:
         # Retrieval
         retrieval_embedder = None
         retrieval_model = embed_model
-        if backend == "local":
+        _use_local = backend == "local" or embed_model == "local"
+        if _use_local:
             local_model = kwargs.get("local_model") or "all-MiniLM-L6-v2"
             from .embeddings import LocalEmbedder
             retrieval_embedder = LocalEmbedder(
@@ -137,6 +138,7 @@ class MemOS:
             embed_model=retrieval_model,
             semantic_weight=kwargs.get("semantic_weight", 0.6),
             embedder=retrieval_embedder,
+            embed_timeout=kwargs.get("embed_timeout", 30),
         )
 
         # Decay

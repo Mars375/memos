@@ -71,6 +71,8 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         kwargs["embed_host"] = cfg["embed_host"]
     if cfg.get("embed_model"):
         kwargs["embed_model"] = cfg["embed_model"]
+    if cfg.get("embed_timeout"):
+        kwargs["embed_timeout"] = int(cfg["embed_timeout"])
     if cfg.get("persist_path"):
         kwargs["persist_path"] = cfg["persist_path"]
     if not cfg.get("sanitize", True):
