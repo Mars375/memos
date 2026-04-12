@@ -292,8 +292,8 @@ def _error(msg: str) -> dict:
     return {"content": [{"type": "text", "text": f"Error: {msg}"}], "isError": True}
 
 
-def _dispatch(memos: Any, tool: str, args: dict) -> dict:
-    """Dispatch a tool call to the MemOS instance."""
+def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
+    """Core tool dispatch — no hooks."""
     try:
         if tool == "memory_search":
             from datetime import datetime as _dt
@@ -581,7 +581,29 @@ def _dispatch(memos: Any, tool: str, args: dict) -> dict:
         return _error(str(exc))
 
 
-def add_mcp_routes(app: Any, memos: Any) -> None:
+def _dispatch(memos: Any, tool: str, args: dict, hooks: Any = None) -> dict:
+    """Dispatch a tool call with optional pre/post hooks.
+
+    Parameters
+    ----------
+    hooks:
+        Optional :class:`~memos.mcp_hooks.MCPHookRegistry`.
+        Pre-hooks run first and may short-circuit; post-hooks run after.
+    """
+    if hooks is not None:
+        early = hooks.run_pre(tool, args, memos)
+        if early is not None:
+            return early
+
+    result = _dispatch_inner(memos, tool, args)
+
+    if hooks is not None:
+        result = hooks.run_post(tool, args, result, memos)
+
+    return result
+
+
+def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
     """Mount MCP Streamable HTTP 2025-03-26 routes onto an existing FastAPI app.
 
     Routes added:
@@ -627,7 +649,7 @@ def add_mcp_routes(app: Any, memos: Any) -> None:
         elif method == "tools/list":
             return _ok(req_id, {"tools": TOOLS}, sid)
         elif method == "tools/call":
-            result = _dispatch(memos, params.get("name", ""), params.get("arguments") or {})
+            result = _dispatch(memos, params.get("name", ""), params.get("arguments") or {}, hooks=hooks)
             return _ok(req_id, result, sid)
         elif method == "ping":
             return _ok(req_id, {}, sid)
