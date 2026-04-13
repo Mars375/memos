@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from memos.api import create_fastapi_app
 
 
@@ -13,7 +14,7 @@ def app():
 
 @pytest.mark.asyncio
 async def test_dashboard_html_served(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/")
@@ -24,7 +25,7 @@ async def test_dashboard_html_served(app):
 
 @pytest.mark.asyncio
 async def test_dashboard_css_served(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/static/dashboard.css")
@@ -39,7 +40,7 @@ async def test_dashboard_css_served(app):
     "sidebar", "panels", "wiki", "palace", "controls",
 ])
 async def test_dashboard_js_modules_served(app, module):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get(f"/static/js/{module}.js")
@@ -51,7 +52,7 @@ async def test_dashboard_js_modules_served(app, module):
 
 @pytest.mark.asyncio
 async def test_dashboard_html_references_static_assets(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/")
