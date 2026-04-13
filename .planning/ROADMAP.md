@@ -40,7 +40,10 @@ Plans:
   5. Clicking "Local graph" on a node collapses the view to that node and its direct neighbors — the user can focus without losing the full graph
   6. Hovering any node shows a tooltip with: content snippet (150 chars), tags, namespace, importance score, and in/out degree — the user gets context without clicking
   7. The hovered node's edges are highlighted — the user can trace connections at a glance
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Cluster coloring fix, tag/namespace-seeded detection, dynamic legend
+- [ ] 02-02-PLAN.md — In/out degree maps, local graph button, tooltip upgrade, hover highlight fix
 **UI hint**: yes
 
 ### Phase 3: Documentation Polish
@@ -59,5 +62,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Maintenance | 2/2 | Complete    | 2026-04-13 |
-| 2. Dashboard P1 | 0/? | Not started | - |
+| 2. Dashboard P1 | 0/2 | Not started | - |
 | 3. Documentation Polish | 0/? | Not started | - |
