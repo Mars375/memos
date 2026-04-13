@@ -35,13 +35,13 @@ An agent that remembers everything relevant without token bloat — recall must 
 
 ### Active
 
-#### Tier 1 — Maintenance (priorité bloquante)
-- [ ] Synchroniser version `pyproject.toml` (1.0.0) ↔ `__init__.py` (2.2.0) — bloque release PyPI propre
-- [ ] Épingler images Docker tiers (`chromadb/chroma:latest`, `qdrant/qdrant:latest`) à une version concrète
-- [ ] Ajouter log limits JSON au `docker-compose.yml` (SD card protection)
-- [ ] Ajouter Python 3.13 au matrix CI
-- [ ] Mettre à jour `ACTIVE.md` (8 commits de retard depuis le 11 avril)
-- [ ] Vérifier et supprimer/intégrer `src/memos/miner/` orphelin (413 lignes non utilisées par core)
+#### Tier 1 — Maintenance ✅ COMPLETE (Phase 1, 2026-04-13)
+- ✓ Version `pyproject.toml` ↔ `__init__.py` = `2.2.0` — Validated Phase 1
+- ✓ Docker tiers épinglés (`chromadb/chroma:1.5.7`, `qdrant/qdrant:v1.17.1`) — Validated Phase 1
+- ✓ Log limits JSON sur 5 services (`max-size: 10m, max-file: 3`) — Validated Phase 1
+- ✓ CI matrix Python 3.11 / 3.12 / 3.13 — Validated Phase 1
+- ✓ `ACTIVE.md` mis à jour (v2.2.0, 1534 tests, canvas graph) — Validated Phase 1
+- ✓ `src/memos/miner/` supprimé (413 lignes orphelines) — Validated Phase 1
 
 #### Tier 2 — Dashboard P1 (impact utilisateur immédiat)
 - [ ] Community detection + nœuds colorés par cluster (Leiden ou connected components)
@@ -66,7 +66,7 @@ An agent that remembers everything relevant without token bloat — recall must 
 - **Stack** : Python 3.11+, FastAPI, Uvicorn, sentence-transformers, SQLite (KG/Palace), ChromaDB/Qdrant/Pinecone optionnels
 - **Infrastructure** : homelab Raspberry Pi 5 (orion-cortex), Docker, NFS storage, Tailscale
 - **Déployé** : `ghcr.io/mars375/memos:latest` — image all-in-one `docker compose up memos-standalone`
-- **Tests** : 1534 tests (pytest), CI GitHub Actions — test matrix 3.11/3.12, lint ruff, docker multi-arch (amd64+arm64)
+- **Tests** : 1534 tests (pytest), CI GitHub Actions — test matrix 3.11/3.12/3.13, lint ruff, docker multi-arch (amd64+arm64)
 - **Codebase map** : `.planning/codebase/` (créé le 13 avril 2026)
 - **Problème connu** : `core.py` est un god object (1816 lignes, 78 méthodes) — à refactorer progressivement
 - **Problème connu** : `src/memos/miner/` est orphelin (413 lignes, non importé par core ou tests)
@@ -109,4 +109,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-13 after initialization (brownfield — v2.2.0 in production)*
+*Last updated: 2026-04-13 after Phase 1 (Maintenance) — codebase clean, releasable*
