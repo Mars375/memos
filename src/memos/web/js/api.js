@@ -48,10 +48,13 @@ async function fetchEntityExtra(entity) {
 // Build KG edges: map KG entity names to node IDs by matching content/tags
 function buildKGEdges(nodes, kgFacts) {
   // Build a lookup: entity name (lowercase) -> node id
+  // Pass 1: tags first (canonical entity names)
   const entityToNode = {};
   nodes.forEach(n => {
     (n.tags || []).forEach(t => { entityToNode[t.toLowerCase()] = entityToNode[t.toLowerCase()] || n.id; });
-    // Try first word / phrase from content
+  });
+  // Pass 2: content words only for entities NOT already mapped by tags
+  nodes.forEach(n => {
     const words = (n.content || '').match(/\b[A-Z][a-z]{2,}\b/g) || [];
     words.forEach(w => { entityToNode[w.toLowerCase()] = entityToNode[w.toLowerCase()] || n.id; });
   });
