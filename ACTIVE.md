@@ -1,28 +1,45 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ P28 DONE, chantier ACTIVE
+## Statut : ✅ Dashboard modularisé + Docker all-in-one, Phase 1 Maintenance EN COURS
 
-**Dernière session** : 2026-04-11 — P28 API Authentication (Bearer + Namespace Keys)
-**Base** : `main` v0.47.0 → branche `feat/p28-api-authentication`, PR #15
-**Validation** : `pytest -q` → **1389 passed** (25 tests auth dédiés)
+**Dernière session** : 2026-04-13 — Dashboard modularisation (#40) + image Docker all-in-one
+**Base** : `main` v2.2.0 — branche `main` (stable)
+**Validation** : `pytest -q` → **1534 passed**
 
 ## Dernière action
-- P28 implémentée : `APIKeyManager` avec master key + namespace-scoped keys
-- Middleware FastAPI : Bearer token + X-API-Key, namespace forcing, rate limiting
-- `GET /api/v1/auth/whoami` — identité + permissions
-- Mode open (pas de clé) = backward compatible avec log warning
-- PR rebasée sur main, conflit résolu : https://github.com/Mars375/memos/pull/15
+
+### Corrections de bugs (avril 2026)
+- **#31** — Noms de speakers Unicode corrigés (regex étendue aux caractères non-ASCII)
+- **#32** — Endpoint `mine/conversation` accepte désormais `text` ET `content` comme champs d'entrée
+- **#35** — Utilisation de `host.docker.internal` à la place de l'IP bridge Docker fixe
+
+### Dashboard — Canvas force-graph (#36)
+- Remplacement du SVG D3 par un Canvas force-graph (bibliothèque `force-graph`)
+- P1 : clustering, filtre de profondeur, tooltip survol, modes de couleur
+- P2 : slider time-lapse, panneau santé, correction visibilité des liens
+
+### Dashboard — Modularisation (#40)
+- Refactorisation du dashboard monolithique en modules distincts (fix #40)
+- Tests et lint corrigés suite à la modularisation
+- P2/P3 complétés : issue #39 clôturée (feat(dashboard))
+
+### Docker all-in-one
+- Image Docker tout-en-un : `ghcr.io/mars375/memos:latest`
+- Profil `memos-standalone` dans `docker-compose.yml` — démarrage zéro-dépendance
+- Déploiement : `docker compose up memos-standalone`
+
+### Planning initialisé
+- Répertoire `.planning/` créé le 13 avril 2026 (cartographie codebase + feuille de route)
 
 ## OPEN dans PRIORITIES.md
-- P26 — Entity Detail API + Graph ↔ Wiki Bridge
-- P27 — Knowledge Export Universel (Markdown)
-- P32 — PyPI Release + README v1
-- P33 — Auto-extraction KG (NER zéro-LLM)
+- **MAINT-01** — Synchroniser version `pyproject.toml` (1.0.0) ↔ `__init__.py` (2.2.0)
+- **MAINT-02** — Épingler images Docker tiers à des versions concrètes
+- **MAINT-03** — Ajouter log limits JSON au `docker-compose.yml`
+- **MAINT-04** — Ajouter Python 3.13 au matrix CI
 
 ## IN PROGRESS / IN REVIEW
-- P25 [~] — Unified Brain Search (PR #12)
-- P31 [~] — Advanced Recall Filters (PR #9, merged sur main)
-- P34 [~] — Embeddings intégrés (PR #11)
+- **Phase 1 — Maintenance** [EN COURS] — Plans 01-01 à 01-02 (version drift, miner orphelin, etc.)
 
 ## Prochaine étape
-- **P32** (PyPI Release) ou **P26** (Entity Detail API) — selon priorité forge
+- **Phase 1 — Maintenance** : compléter les 2 plans restants (01-01, 01-02)
+- **Phase 2 — Dashboard P1** : community detection, depth filter, hover preview enrichi
