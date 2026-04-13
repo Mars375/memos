@@ -17,7 +17,7 @@ services:
   memos-standalone:
     image: ghcr.io/mars375/memos:latest
     ports:
-      - "8000:8000"
+      - "8100:8000"
     volumes:
       - memos-data:/root/.memos
     environment:

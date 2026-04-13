@@ -1,17 +1,4 @@
-// ── wiki.js — Wiki view: pages, rendering, search, sidebar ──
-
-let wikiPages = [];
-let currentWikiPage = null;
-let wikiSearchTimeout = null;
-
-async function loadWikiPagesList() {
-  try {
-    const r = await fetch(API + '/wiki/pages').then(res => res.json());
-    wikiPages = r.pages || [];
-    buildWikiSidebar();
-    return wikiPages;
-  } catch(_) { return []; }
-}
+/* ── wiki.js ── Wiki view ─────────────────────────────────────── */
 
 function buildWikiSidebar() {
   const tl = document.getElementById('tags-children');
@@ -68,28 +55,6 @@ function renderMarkdown(md) {
   return md;
 }
 
-async function loadWikiPage(nameOrSlug) {
-  const content = document.getElementById('wiki-content');
-  content.innerHTML = '<div style="color:var(--text2);padding:40px;text-align:center">Loading\u2026</div>';
-  currentWikiPage = nameOrSlug;
-  // Update breadcrumb
-  document.getElementById('bc-sep').style.display = '';
-  document.getElementById('bc-page').textContent = nameOrSlug;
-  // Highlight in sidebar
-  document.querySelectorAll('.wiki-page-item').forEach(el => el.classList.toggle('active', el.dataset.name === nameOrSlug));
-  try {
-    const slug = nameOrSlug.toLowerCase().replace(/\s+/g, '-');
-    const r = await fetch(API + '/wiki/page/' + encodeURIComponent(slug)).then(res => res.json());
-    if (r.status === 'not_found' || !r.content) {
-      content.innerHTML = '<div id="wiki-empty">Page not found: <strong>' + escHtml(nameOrSlug) + '</strong></div>';
-      return;
-    }
-    content.innerHTML = renderMarkdown(r.content);
-  } catch(e) {
-    content.innerHTML = '<div style="color:var(--danger);padding:40px">Error loading page.</div>';
-  }
-}
-
 function goWikiHome() {
   currentWikiPage = null;
   document.getElementById('bc-sep').style.display = 'none';
@@ -97,12 +62,12 @@ function goWikiHome() {
   document.querySelectorAll('.wiki-page-item').forEach(el => el.classList.remove('active'));
   const content = document.getElementById('wiki-content');
   if (!wikiPages.length) {
-    content.innerHTML = '<div id="wiki-empty">&#128216; No wiki pages yet.<br>Run <code>memos wiki-compile</code> or add memories with compounding ingest enabled.</div>';
+    content.innerHTML = '<div id="wiki-empty">\uD83D\uDCD6 No wiki pages yet.<br>Run <code>memos wiki-compile</code> or add memories with compounding ingest enabled.</div>';
     return;
   }
   // Show page list
   content.textContent = '';
-  const h = document.createElement('h1'); h.textContent = 'Living Wiki — ' + wikiPages.length + ' pages'; content.appendChild(h);
+  const h = document.createElement('h1'); h.textContent = 'Living Wiki \u2014 ' + wikiPages.length + ' pages'; content.appendChild(h);
   const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:16px';
   wikiPages.forEach(p => {
     const card = document.createElement('div');
@@ -160,13 +125,16 @@ function onWikiSearch(q) {
         results.appendChild(row);
       });
       results.style.display = 'block';
-    } catch(_) {}
+    } catch (_) {}
   }, 300);
 }
+
 function showWikiSearchResults() {
   const r = document.getElementById('wiki-search-results');
   if (r.children.length) r.style.display = 'block';
 }
+
+// Close wiki search results on outside click
 document.addEventListener('click', e => {
   const r = document.getElementById('wiki-search-results');
   if (r && !r.contains(e.target) && e.target.id !== 'wiki-search-bar') r.style.display = 'none';
