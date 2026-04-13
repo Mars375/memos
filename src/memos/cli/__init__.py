@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import sys
 
-from ._common import _coerce_cli_value, _fmt_ts, _get_kg, _get_kg_bridge, _get_memos, _get_palace, _parse_timestamp  # noqa: F401
+from ._common import (  # noqa: F401
+    _coerce_cli_value,
+    _fmt_ts,
+    _get_kg,
+    _get_kg_bridge,
+    _get_memos,
+    _get_palace,
+    _parse_timestamp,
+)
 from ._parser import build_parser
 from .commands_io import (
     cmd_export,
