@@ -13,7 +13,7 @@ services:
     volumes:
       - memos-data:/root/.memos
       - /mnt/shared-storage/openclaw/workspace-labs:/data/host:ro
-      - ./src/memos/web/dashboard.html:/usr/local/lib/python3.11/site-packages/memos/web/dashboard.html:ro
+      - ./src/memos/web:/usr/local/lib/python3.11/site-packages/memos/web:ro
     environment:
       - MEMOS_BACKEND=chroma
       - MEMOS_CHROMA_URL=http://chroma:8000
