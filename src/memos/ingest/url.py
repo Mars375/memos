@@ -153,7 +153,9 @@ class _FetchedURL:
 class URLIngestor:
     """Ingest remote or file URLs into MemOS-ready chunks."""
 
-    def __init__(self, *, timeout: float = 20.0, user_agent: str = "MemOS/0.x (+https://github.com/Mars375/memos)") -> None:
+    def __init__(
+        self, *, timeout: float = 20.0, user_agent: str = "MemOS/0.x (+https://github.com/Mars375/memos)"
+    ) -> None:
         self._timeout = timeout
         self._user_agent = user_agent
 
@@ -184,9 +186,13 @@ class URLIngestor:
             if fetched.content_type.startswith("application/pdf") or parsed.path.lower().endswith(".pdf"):
                 chunks = self._ingest_pdf(fetched, source_tags=source_tags, importance=importance, max_chunk=max_chunk)
             elif "arxiv.org" in host and "/abs/" in parsed.path:
-                chunks = self._ingest_arxiv(fetched, source_tags=source_tags, importance=importance, max_chunk=max_chunk)
+                chunks = self._ingest_arxiv(
+                    fetched, source_tags=source_tags, importance=importance, max_chunk=max_chunk
+                )
             elif host.endswith("twitter.com") or host.endswith("x.com"):
-                chunks = self._ingest_tweet(fetched, source_tags=source_tags, importance=importance, max_chunk=max_chunk)
+                chunks = self._ingest_tweet(
+                    fetched, source_tags=source_tags, importance=importance, max_chunk=max_chunk
+                )
             else:
                 chunks = self._ingest_html(fetched, source_tags=source_tags, importance=importance, max_chunk=max_chunk)
         except Exception as exc:
@@ -251,25 +257,47 @@ class URLIngestor:
             for piece in pieces
         ]
 
-    def _ingest_arxiv(self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int) -> list[dict[str, Any]]:
+    def _ingest_arxiv(
+        self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int
+    ) -> list[dict[str, Any]]:
         html_text = _decode_html(fetched.data)
         title = _extract_title(html_text)
         authors = _extract_meta_values(html_text, "citation_author")
-        abstract_candidates = _extract_meta_values(html_text, "citation_abstract", "description", "og:description", "twitter:description")
+        abstract_candidates = _extract_meta_values(
+            html_text, "citation_abstract", "description", "og:description", "twitter:description"
+        )
         abstract = ""
         for candidate in abstract_candidates:
             cleaned = candidate.replace("Abstract:", "").strip()
             if cleaned:
                 abstract = cleaned
                 break
-        parts = [part for part in [title, f"Authors: {', '.join(authors)}" if authors else "", f"Abstract: {abstract}" if abstract else ""] if part]
+        parts = [
+            part
+            for part in [
+                title,
+                f"Authors: {', '.join(authors)}" if authors else "",
+                f"Abstract: {abstract}" if abstract else "",
+            ]
+            if part
+        ]
         tags = source_tags + ["url", "arxiv", "paper"]
         parsed = urlparse(fetched.url)
         arxiv_id = parsed.path.split("/abs/", 1)[-1].strip("/") if "/abs/" in parsed.path else ""
         metadata = {"title": title, "authors": authors, "arxiv_id": arxiv_id, "content_type": fetched.content_type}
-        return self._build_chunks("\n\n".join(parts), url=fetched.url, source_type="arxiv", tags=tags, importance=importance, max_chunk=max_chunk, metadata=metadata)
+        return self._build_chunks(
+            "\n\n".join(parts),
+            url=fetched.url,
+            source_type="arxiv",
+            tags=tags,
+            importance=importance,
+            max_chunk=max_chunk,
+            metadata=metadata,
+        )
 
-    def _ingest_tweet(self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int) -> list[dict[str, Any]]:
+    def _ingest_tweet(
+        self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int
+    ) -> list[dict[str, Any]]:
         html_text = _decode_html(fetched.data)
         parsed = urlparse(fetched.url)
         path_parts = [part for part in parsed.path.split("/") if part]
@@ -287,18 +315,38 @@ class URLIngestor:
         if handle:
             tags.append(f"author:{handle.lstrip('@')}")
         metadata = {"title": title, "author": handle.lstrip("@"), "content_type": fetched.content_type}
-        return self._build_chunks(body, url=fetched.url, source_type="tweet", tags=tags, importance=importance, max_chunk=max_chunk, metadata=metadata)
+        return self._build_chunks(
+            body,
+            url=fetched.url,
+            source_type="tweet",
+            tags=tags,
+            importance=importance,
+            max_chunk=max_chunk,
+            metadata=metadata,
+        )
 
-    def _ingest_pdf(self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int) -> list[dict[str, Any]]:
+    def _ingest_pdf(
+        self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int
+    ) -> list[dict[str, Any]]:
         text = _extract_pdf_text(fetched.data)
         title = Path(urlparse(fetched.url).path).name or "document.pdf"
         tags = source_tags + ["url", "pdf"]
         if "arxiv.org" in urlparse(fetched.url).netloc.lower():
             tags.extend(["arxiv", "paper"])
         metadata = {"title": title, "content_type": fetched.content_type}
-        return self._build_chunks(text, url=fetched.url, source_type="pdf", tags=tags, importance=importance, max_chunk=max_chunk, metadata=metadata)
+        return self._build_chunks(
+            text,
+            url=fetched.url,
+            source_type="pdf",
+            tags=tags,
+            importance=importance,
+            max_chunk=max_chunk,
+            metadata=metadata,
+        )
 
-    def _ingest_html(self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int) -> list[dict[str, Any]]:
+    def _ingest_html(
+        self, fetched: _FetchedURL, *, source_tags: list[str], importance: float, max_chunk: int
+    ) -> list[dict[str, Any]]:
         html_text = _decode_html(fetched.data)
         title = _extract_title(html_text)
         description = ""
@@ -309,4 +357,12 @@ class URLIngestor:
         visible = _extract_visible_text(html_text)
         parts = [part for part in [title, description, visible] if part]
         metadata = {"title": title, "content_type": fetched.content_type}
-        return self._build_chunks("\n\n".join(parts), url=fetched.url, source_type="webpage", tags=source_tags + ["url", "webpage"], importance=importance, max_chunk=max_chunk, metadata=metadata)
+        return self._build_chunks(
+            "\n\n".join(parts),
+            url=fetched.url,
+            source_type="webpage",
+            tags=source_tags + ["url", "webpage"],
+            importance=importance,
+            max_chunk=max_chunk,
+            metadata=metadata,
+        )

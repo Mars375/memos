@@ -219,11 +219,13 @@ class TestPineconeBackendInit:
     def test_import_error_without_pinecone(self):
         """Verify the import guard in _ensure_client gives a helpful message."""
         import memos.storage.pinecone_backend as pb
+
         # The actual ImportError is raised inside _ensure_client when pinecone is missing
         # We test the error message pattern directly
         assert "pinecone-client" in pb.PineconeBackend.__doc__ or True  # doc mentions requirement
         # Verify the import guard code path exists
         import inspect
+
         source = inspect.getsource(pb.PineconeBackend._ensure_client)
         assert "pinecone-client" in source
 
@@ -249,9 +251,11 @@ class TestPineconeInMemOS:
                 pinecone_api_key="test-key",
             )
 
-            result = mem.batch_learn([
-                {"content": "Test A", "tags": ["a"]},
-                {"content": "Test B", "tags": ["b"]},
-            ])
+            result = mem.batch_learn(
+                [
+                    {"content": "Test A", "tags": ["a"]},
+                    {"content": "Test B", "tags": ["b"]},
+                ]
+            )
 
             assert result["learned"] == 2

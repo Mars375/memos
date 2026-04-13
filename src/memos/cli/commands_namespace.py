@@ -18,7 +18,7 @@ def cmd_ns_grant(ns: argparse.Namespace) -> None:
         expires_at=ns.expires,
     )
     print(f"✓ Granted {ns.role} access to '{ns.namespace}' for agent '{ns.agent}'")
-    if ns.json if hasattr(ns, 'json') else False:
+    if ns.json if hasattr(ns, "json") else False:
         print(json.dumps(policy, indent=2))
 
 
@@ -35,15 +35,15 @@ def cmd_ns_revoke(ns: argparse.Namespace) -> None:
 def cmd_ns_policies(ns: argparse.Namespace) -> None:
     """List namespace ACL policies."""
     memos = _get_memos(ns)
-    policies = memos.list_namespace_policies(namespace=getattr(ns, 'namespace', None))
-    if getattr(ns, 'json', False):
+    policies = memos.list_namespace_policies(namespace=getattr(ns, "namespace", None))
+    if getattr(ns, "json", False):
         print(json.dumps(policies, indent=2))
         return
     if not policies:
         print("No policies found")
         return
     for p in policies:
-        expires = f" (expires: {p['expires_at']})" if p.get('expires_at') else ""
+        expires = f" (expires: {p['expires_at']})" if p.get("expires_at") else ""
         print(f"  {p['agent_id']}  {p['namespace']}  {p['role']}{expires}")
     print(f"\n{len(policies)} policy(ies)")
 
@@ -52,24 +52,24 @@ def cmd_ns_stats(ns: argparse.Namespace) -> None:
     """Show namespace ACL statistics."""
     memos = _get_memos(ns)
     stats = memos.namespace_acl_stats()
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(stats, indent=2))
         return
     print(f"  Total policies:  {stats['total_policies']}")
     print(f"  Total agents:    {stats['total_agents']}")
     print(f"  Total namespaces:{stats['total_namespaces']}")
-    if stats.get('role_distribution'):
-        for role, count in stats['role_distribution'].items():
+    if stats.get("role_distribution"):
+        for role, count in stats["role_distribution"].items():
             print(f"    {role}: {count}")
-
-
 
 
 def cmd_share_offer(ns: argparse.Namespace) -> None:
     """Offer to share memories with another agent."""
     from ..sharing.models import SharePermission, ShareScope
+
     memos = _get_memos(ns)
     import time as _time
+
     expires = ns.expires
     if expires is not None:
         expires = _time.time() + expires
@@ -127,6 +127,7 @@ def cmd_share_export(ns: argparse.Namespace) -> None:
 def cmd_share_import(ns: argparse.Namespace) -> None:
     """Import memories from an envelope file."""
     from ..sharing.models import MemoryEnvelope
+
     with open(ns.input_file, "r") as f:
         data = json.load(f)
     envelope = MemoryEnvelope.from_dict(data)
@@ -142,10 +143,11 @@ def cmd_share_import(ns: argparse.Namespace) -> None:
 def cmd_share_list(ns: argparse.Namespace) -> None:
     """List shares."""
     from ..sharing.models import ShareStatus
+
     memos = _get_memos(ns)
     status = ShareStatus(ns.status) if ns.status else None
     shares = memos.list_shares(agent=ns.agent, status=status)
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps([s.to_dict() for s in shares], indent=2, default=str))
         return
     if not shares:
@@ -153,23 +155,24 @@ def cmd_share_list(ns: argparse.Namespace) -> None:
         return
     print(f"Shares ({len(shares)}):")
     for s in shares:
-        print(f"  {s.id}  {s.source_agent} → {s.target_agent}  [{s.status.value}]  scope={s.scope.value}({s.scope_key})")
+        print(
+            f"  {s.id}  {s.source_agent} → {s.target_agent}  [{s.status.value}]  scope={s.scope.value}({s.scope_key})"
+        )
 
 
 def cmd_share_stats(ns: argparse.Namespace) -> None:
     """Show sharing statistics."""
     memos = _get_memos(ns)
     stats = memos.sharing_stats()
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(stats, indent=2))
         return
     print(f"  Total shares:     {stats['total_shares']}")
     print(f"  Active shares:    {stats['active_shares']}")
     print(f"  Pending shares:   {stats['pending_shares']}")
     print(f"  Total agents:     {stats['total_agents']}")
-    for status, count in stats.get('status_distribution', {}).items():
+    for status, count in stats.get("status_distribution", {}).items():
         print(f"    {status}: {count}")
-
 
 
 def cmd_sync_check(ns: argparse.Namespace) -> None:
@@ -190,7 +193,7 @@ def cmd_sync_check(ns: argparse.Namespace) -> None:
     detector = ConflictDetector()
     report = detector.detect(memos, envelope)
 
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(report.to_dict(), indent=2))
         return
 
@@ -237,9 +240,9 @@ def cmd_sync_apply(ns: argparse.Namespace) -> None:
     detector = ConflictDetector()
     report = detector.detect(memos, envelope)
 
-    if getattr(ns, 'dry_run', False):
+    if getattr(ns, "dry_run", False):
         detector.resolve(report.conflicts, strategy)
-        if getattr(ns, 'json', False):
+        if getattr(ns, "json", False):
             out = report.to_dict()
             out["dry_run"] = True
             print(json.dumps(out, indent=2))
@@ -255,7 +258,7 @@ def cmd_sync_apply(ns: argparse.Namespace) -> None:
 
     report = detector.apply(memos, report, strategy)
 
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(report.to_dict(), indent=2))
         return
 
@@ -268,5 +271,3 @@ def cmd_sync_apply(ns: argparse.Namespace) -> None:
         print(f"  Errors:           {len(report.errors)}")
         for e in report.errors[:5]:
             print(f"    - {e}")
-
-

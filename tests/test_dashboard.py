@@ -22,6 +22,7 @@ def test_dashboard_html_contains_title():
 async def test_dashboard_route():
     app = create_fastapi_app(backend="memory")
     from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/")
@@ -34,6 +35,7 @@ async def test_dashboard_route():
 async def test_dashboard_learn_and_recall():
     app = create_fastapi_app(backend="memory")
     from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Learn

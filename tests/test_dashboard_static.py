@@ -15,6 +15,7 @@ def app():
 @pytest.mark.asyncio
 async def test_dashboard_html_served(app):
     from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/")
@@ -26,6 +27,7 @@ async def test_dashboard_html_served(app):
 @pytest.mark.asyncio
 async def test_dashboard_css_served(app):
     from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/static/dashboard.css")
@@ -35,12 +37,24 @@ async def test_dashboard_css_served(app):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("module", [
-    "state", "utils", "api", "graph", "filters",
-    "sidebar", "panels", "wiki", "palace", "controls",
-])
+@pytest.mark.parametrize(
+    "module",
+    [
+        "state",
+        "utils",
+        "api",
+        "graph",
+        "filters",
+        "sidebar",
+        "panels",
+        "wiki",
+        "palace",
+        "controls",
+    ],
+)
 async def test_dashboard_js_modules_served(app, module):
     from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get(f"/static/js/{module}.js")
@@ -53,16 +67,16 @@ async def test_dashboard_js_modules_served(app, module):
 @pytest.mark.asyncio
 async def test_dashboard_html_references_static_assets(app):
     from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.get("/")
         html = r.text
         # CSS link
-        assert '/static/dashboard.css' in html
+        assert "/static/dashboard.css" in html
         # All JS modules
-        for module in ["state", "utils", "api", "graph", "filters",
-                        "sidebar", "panels", "wiki", "palace", "controls"]:
-            assert f'/static/js/{module}.js' in html, f"Missing script reference: {module}"
+        for module in ["state", "utils", "api", "graph", "filters", "sidebar", "panels", "wiki", "palace", "controls"]:
+            assert f"/static/js/{module}.js" in html, f"Missing script reference: {module}"
         # No inline <style> block
         assert "<style>" not in html
         # CDN deps

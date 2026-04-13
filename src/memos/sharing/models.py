@@ -17,27 +17,27 @@ from typing import Any, Optional
 class ShareStatus(Enum):
     """Lifecycle states for a share."""
 
-    PENDING = "pending"      # Offered but not yet accepted
-    ACCEPTED = "accepted"    # Active share
-    REJECTED = "rejected"    # Recipient declined
-    REVOKED = "revoked"      # Owner revoked access
-    EXPIRED = "expired"      # TTL expired
+    PENDING = "pending"  # Offered but not yet accepted
+    ACCEPTED = "accepted"  # Active share
+    REJECTED = "rejected"  # Recipient declined
+    REVOKED = "revoked"  # Owner revoked access
+    EXPIRED = "expired"  # TTL expired
 
 
 class SharePermission(Enum):
     """Permission level granted to the recipient."""
 
-    READ = "read"              # Recipient can recall shared memories
+    READ = "read"  # Recipient can recall shared memories
     READ_WRITE = "read_write"  # Recipient can recall + append
-    ADMIN = "admin"            # Recipient can re-share (transitive)
+    ADMIN = "admin"  # Recipient can re-share (transitive)
 
 
 class ShareScope(Enum):
     """What is being shared."""
 
-    ITEMS = "items"            # Specific memory IDs
-    TAG = "tag"                # All memories with a given tag
-    NAMESPACE = "namespace"    # Full namespace
+    ITEMS = "items"  # Specific memory IDs
+    TAG = "tag"  # All memories with a given tag
+    NAMESPACE = "namespace"  # Full namespace
 
 
 def _generate_share_id(source: str, target: str) -> str:

@@ -1,7 +1,5 @@
 """Tests for the consolidation engine — semantic dedup."""
 
-
-
 from memos.consolidation.engine import ConsolidationEngine
 from memos.models import MemoryItem
 from memos.storage.memory_backend import InMemoryBackend
@@ -20,6 +18,7 @@ def _item(content: str, *, tags: list[str] | None = None, importance: float = 0.
 
 _counter = 0
 
+
 def _make_item(content: str, **kw) -> MemoryItem:
     """Create a MemoryItem with a unique ID (even for same content)."""
     global _counter
@@ -28,6 +27,7 @@ def _make_item(content: str, **kw) -> MemoryItem:
 
 
 # --- Tests ---
+
 
 class TestExactDedup:
     def test_identical_content_detected(self):

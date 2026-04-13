@@ -52,10 +52,7 @@ class QdrantBackend(StorageBackend):
         try:
             from qdrant_client import QdrantClient
         except ImportError:
-            raise ImportError(
-                "qdrant-client is required for QdrantBackend. "
-                "Install with: pip install memos[qdrant]"
-            )
+            raise ImportError("qdrant-client is required for QdrantBackend. Install with: pip install memos[qdrant]")
 
         if self._path:
             self._client = QdrantClient(path=self._path)
@@ -97,6 +94,7 @@ class QdrantBackend(StorageBackend):
             return self._embed_cache[text]
         try:
             import httpx
+
             resp = httpx.post(
                 f"{self._embed_host}/api/embed",
                 json={"model": self._embed_model, "input": text},
@@ -167,6 +165,7 @@ class QdrantBackend(StorageBackend):
         name = self._collection_name(namespace)
         point_id = self._id_to_uuid(item_id)
         from qdrant_client.models import PointIdsList
+
         try:
             self._client.delete(
                 collection_name=name,
@@ -274,6 +273,7 @@ class QdrantBackend(StorageBackend):
         keyword_scores: dict[str, float] = {}
         import math
         import re
+
         query_tokens = set(re.findall(r"\w+", query.lower()))
         for item in all_items:
             content_tokens = set(re.findall(r"\w+", item.content.lower()))
@@ -305,19 +305,13 @@ class QdrantBackend(StorageBackend):
         prefix = f"{self.COLLECTION_PREFIX}__"
         try:
             collections = self._client.get_collections().collections
-            return sorted(
-                c.name[len(prefix):]
-                for c in collections
-                if c.name.startswith(prefix)
-            )
+            return sorted(c.name[len(prefix) :] for c in collections if c.name.startswith(prefix))
         except Exception:
             return []
 
     # --- Internal helpers ---
 
-    def _keyword_search(
-        self, query: str, limit: int, namespace: str
-    ) -> list[MemoryItem]:
+    def _keyword_search(self, query: str, limit: int, namespace: str) -> list[MemoryItem]:
         """Simple keyword fallback when vector search is unavailable."""
         all_items = self.list_all(namespace=namespace)
         q = query.lower()

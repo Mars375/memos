@@ -20,6 +20,7 @@ def app():
 def client(app):
     """Create a test client."""
     from starlette.testclient import TestClient
+
     return TestClient(app)
 
 
@@ -63,6 +64,7 @@ def mem_app():
 @pytest.fixture
 def mem_client(mem_app):
     from starlette.testclient import TestClient
+
     app, item1_id, item2_id = mem_app
     client = TestClient(app)
     return client, item1_id, item2_id

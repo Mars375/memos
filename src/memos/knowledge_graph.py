@@ -113,14 +113,9 @@ class KnowledgeGraph:
             CREATE INDEX IF NOT EXISTS idx_triples_valid_from ON triples(valid_from);
             CREATE INDEX IF NOT EXISTS idx_triples_valid_to   ON triples(valid_to);
         """)
-        columns = {
-            row["name"]
-            for row in self._conn.execute("PRAGMA table_info(triples)").fetchall()
-        }
+        columns = {row["name"] for row in self._conn.execute("PRAGMA table_info(triples)").fetchall()}
         if "confidence_label" not in columns:
-            self._conn.execute(
-                "ALTER TABLE triples ADD COLUMN confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED'"
-            )
+            self._conn.execute("ALTER TABLE triples ADD COLUMN confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED'")
         self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -143,9 +138,7 @@ class KnowledgeGraph:
         Returns the ID of the new triple.
         """
         if confidence_label not in self.VALID_LABELS:
-            raise ValueError(
-                f"Invalid confidence_label: {confidence_label!r}. Must be one of {self.VALID_LABELS}"
-            )
+            raise ValueError(f"Invalid confidence_label: {confidence_label!r}. Must be one of {self.VALID_LABELS}")
         fact_id = _short_id()
         now = time.time()
         vf = _parse_date(valid_from)
@@ -173,9 +166,7 @@ class KnowledgeGraph:
         # Auto-upsert subject and object into the entities table so that
         # stats()["total_entities"] and search_entities() reflect reality.
         for entity_name in {subject, str(object)}:
-            existing = self._conn.execute(
-                "SELECT id FROM entities WHERE name=?", (entity_name,)
-            ).fetchone()
+            existing = self._conn.execute("SELECT id FROM entities WHERE name=?", (entity_name,)).fetchone()
             if existing is None:
                 self._conn.execute(
                     """
@@ -269,9 +260,7 @@ class KnowledgeGraph:
     ) -> List[dict]:
         """Return all facts with the given confidence_label."""
         if label not in self.VALID_LABELS:
-            raise ValueError(
-                f"Invalid label {label!r}. Must be one of {self.VALID_LABELS}"
-            )
+            raise ValueError(f"Invalid label {label!r}. Must be one of {self.VALID_LABELS}")
         if active_only:
             cur = self._conn.execute(
                 "SELECT * FROM triples WHERE confidence_label=? AND invalidated_at IS NULL",
@@ -313,8 +302,7 @@ class KnowledgeGraph:
             inferred_predicate = predicate
 
         active = self._conn.execute(
-            "SELECT subject, object FROM triples "
-            "WHERE predicate=? AND invalidated_at IS NULL",
+            "SELECT subject, object FROM triples WHERE predicate=? AND invalidated_at IS NULL",
             (predicate,),
         ).fetchall()
 
@@ -338,10 +326,7 @@ class KnowledgeGraph:
                         new_path = path + [neighbor]
                         # If path length >= 3, we have a transitive chain
                         if len(new_path) >= 3:
-                            chain_key = frozenset(
-                                (new_path[i], new_path[i + 1])
-                                for i in range(len(new_path) - 1)
-                            )
+                            chain_key = frozenset((new_path[i], new_path[i + 1]) for i in range(len(new_path) - 1))
                             if chain_key not in visited_chains:
                                 visited_chains.add(chain_key)
                                 # Check if inferred fact already exists
@@ -387,9 +372,7 @@ class KnowledgeGraph:
     def stats(self) -> dict:
         """Return aggregate statistics."""
         total_facts = self._conn.execute("SELECT COUNT(*) FROM triples").fetchone()[0]
-        active_facts = self._conn.execute(
-            "SELECT COUNT(*) FROM triples WHERE invalidated_at IS NULL"
-        ).fetchone()[0]
+        active_facts = self._conn.execute("SELECT COUNT(*) FROM triples WHERE invalidated_at IS NULL").fetchone()[0]
         invalidated_facts = total_facts - active_facts
         total_entities = self._conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         return {
@@ -445,6 +428,7 @@ class KnowledgeGraph:
 
         # --- Contradictions: same (subject, predicate) → multiple objects ---
         from collections import defaultdict
+
         sp_to_objects: dict[tuple, set] = defaultdict(set)
         for f in facts:
             sp_to_objects[(f["subject"], f["predicate"])].add(f["object"])
@@ -466,9 +450,7 @@ class KnowledgeGraph:
         sparse_counts: dict[str, int] = defaultdict(int)
         for f in facts:
             sparse_counts[f["subject"]] += 1
-        sparse = sorted(
-            e for e, count in sparse_counts.items() if count < min_facts
-        )
+        sparse = sorted(e for e, count in sparse_counts.items() if count < min_facts)
 
         total_entities = len(degree)
         return {
@@ -492,9 +474,7 @@ class KnowledgeGraph:
     # Path Queries — multi-hop graph traversal
     # ------------------------------------------------------------------
 
-    def _get_active_neighbors(
-        self, entity: str, direction: str = "both"
-    ) -> List[dict]:
+    def _get_active_neighbors(self, entity: str, direction: str = "both") -> List[dict]:
         """Get all active triples connected to *entity* (internal helper)."""
         t = _current_time()
         rows: list[sqlite3.Row] = []
@@ -523,9 +503,7 @@ class KnowledgeGraph:
                 deduped.append(d)
         return deduped
 
-    def neighbors(
-        self, entity: str, depth: int = 1, direction: str = "both"
-    ) -> dict:
+    def neighbors(self, entity: str, depth: int = 1, direction: str = "both") -> dict:
         """Expand entity neighborhood up to *depth* hops.
 
         Returns a dict with:
@@ -609,9 +587,7 @@ class KnowledgeGraph:
         # BFS with path tracking
         # State: (current_entity, path_of_triples, visited_edge_ids)
         paths_found: list[list[dict]] = []
-        queue: list[tuple[str, list[dict], frozenset[str]]] = [
-            (entity_a, [], frozenset())
-        ]
+        queue: list[tuple[str, list[dict], frozenset[str]]] = [(entity_a, [], frozenset())]
 
         for hop in range(max_hops + 1):
             next_queue: list[tuple[str, list[dict], frozenset[str]]] = []
@@ -635,9 +611,7 @@ class KnowledgeGraph:
                     else:
                         continue  # shouldn't happen
                     new_edges = visited_edges | {triple["id"]}
-                    next_queue.append(
-                        (next_entity, path + [triple], new_edges)
-                    )
+                    next_queue.append((next_entity, path + [triple], new_edges))
                     visited_this_level.add(next_entity)
             queue = next_queue
             if not queue:
@@ -672,6 +646,7 @@ class KnowledgeGraph:
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _current_time() -> float:
     return time.time()

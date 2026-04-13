@@ -99,11 +99,7 @@ class SubscriptionRegistry:
         return sorted(self._records.values(), key=lambda r: r.created_at)
 
     def matching(self, event: Any) -> list[SubscriptionRecord]:
-        return [
-            record
-            for record in self._records.values()
-            if record.active and record.filters.matches(event)
-        ]
+        return [record for record in self._records.values() if record.active and record.filters.matches(event)]
 
     def queue_count(self) -> int:
         return sum(1 for record in self._records.values() if record.kind == "queue")

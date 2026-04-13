@@ -55,16 +55,12 @@ class MinerCache:
 
     def is_fresh(self, path: str | Path, sha256: str) -> bool:
         """Return True if *path* was already mined with this exact *sha256*."""
-        row = self._conn.execute(
-            "SELECT sha256 FROM mine_cache WHERE path=?", (str(path),)
-        ).fetchone()
+        row = self._conn.execute("SELECT sha256 FROM mine_cache WHERE path=?", (str(path),)).fetchone()
         return row is not None and row[0] == sha256
 
     def get_chunk_hashes(self, path: str | Path) -> set[str]:
         """Return the set of chunk hashes previously stored for *path*."""
-        row = self._conn.execute(
-            "SELECT chunk_hashes FROM mine_cache WHERE path=?", (str(path),)
-        ).fetchone()
+        row = self._conn.execute("SELECT chunk_hashes FROM mine_cache WHERE path=?", (str(path),)).fetchone()
         if row is None:
             return set()
         return set(json.loads(row[0]))
@@ -98,8 +94,7 @@ class MinerCache:
     def get(self, path: str | Path) -> dict | None:
         """Return the full cache entry for *path*, or None if not cached."""
         row = self._conn.execute(
-            "SELECT path, sha256, mined_at, memory_ids, chunk_hashes "
-            "FROM mine_cache WHERE path=?",
+            "SELECT path, sha256, mined_at, memory_ids, chunk_hashes FROM mine_cache WHERE path=?",
             (str(path),),
         ).fetchone()
         if row is None:
@@ -114,17 +109,14 @@ class MinerCache:
 
     def remove(self, path: str | Path) -> bool:
         """Delete the cache entry for *path*. Returns True if it existed."""
-        cur = self._conn.execute(
-            "DELETE FROM mine_cache WHERE path=?", (str(path),)
-        )
+        cur = self._conn.execute("DELETE FROM mine_cache WHERE path=?", (str(path),))
         self._conn.commit()
         return cur.rowcount > 0
 
     def list_all(self) -> list[dict]:
         """Return all cache entries ordered by most-recently mined first."""
         rows = self._conn.execute(
-            "SELECT path, sha256, mined_at, memory_ids, chunk_hashes "
-            "FROM mine_cache ORDER BY mined_at DESC"
+            "SELECT path, sha256, mined_at, memory_ids, chunk_hashes FROM mine_cache ORDER BY mined_at DESC"
         ).fetchall()
         return [
             {
@@ -139,9 +131,7 @@ class MinerCache:
 
     def stats(self) -> dict:
         """Return summary stats about the cache."""
-        row = self._conn.execute(
-            "SELECT COUNT(*), SUM(json_array_length(memory_ids)) FROM mine_cache"
-        ).fetchone()
+        row = self._conn.execute("SELECT COUNT(*), SUM(json_array_length(memory_ids)) FROM mine_cache").fetchone()
         return {
             "cached_files": row[0] or 0,
             "total_memories": row[1] or 0,
@@ -179,12 +169,14 @@ class MinerCache:
                 except OSError:
                     status = "missing"
 
-            results.append({
-                "path": entry["path"],
-                "status": status,
-                "mined_at": entry["mined_at"],
-                "memory_count": len(entry["memory_ids"]),
-            })
+            results.append(
+                {
+                    "path": entry["path"],
+                    "status": status,
+                    "mined_at": entry["mined_at"],
+                    "memory_count": len(entry["memory_ids"]),
+                }
+            )
 
         # Sort: changed first, then missing, then fresh
         order = {"changed": 0, "missing": 1, "fresh": 2}

@@ -1,4 +1,5 @@
 """Tests for WebSocket event subscriptions."""
+
 import pytest
 
 from memos import MemOS
@@ -144,10 +145,13 @@ class TestMemOSEvents:
         import time
 
         from memos.models import MemoryItem
+
         old_time = time.time() - 100 * 86400
         item = MemoryItem(
-            id="old-low", content="old low importance memory",
-            importance=0.0, created_at=old_time,
+            id="old-low",
+            content="old low importance memory",
+            importance=0.0,
+            created_at=old_time,
         )
         mem._store.upsert(item)
         pruned = mem.prune(threshold=0.1, dry_run=False)

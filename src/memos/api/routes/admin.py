@@ -18,10 +18,14 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     async def api_stats():
         s = memos.stats()
         return {
-            "total_memories": s.total_memories, "total_tags": s.total_tags,
-            "avg_relevance": round(s.avg_relevance, 3), "avg_importance": round(s.avg_importance, 3),
-            "oldest_memory_days": round(s.oldest_memory_days, 1), "newest_memory_days": round(s.newest_memory_days, 1),
-            "decay_candidates": s.decay_candidates, "top_tags": s.top_tags,
+            "total_memories": s.total_memories,
+            "total_tags": s.total_tags,
+            "avg_relevance": round(s.avg_relevance, 3),
+            "avg_importance": round(s.avg_importance, 3),
+            "oldest_memory_days": round(s.oldest_memory_days, 1),
+            "newest_memory_days": round(s.newest_memory_days, 1),
+            "decay_candidates": s.decay_candidates,
+            "top_tags": s.top_tags,
         }
 
     @router.get("/api/v1/analytics/summary")
@@ -61,7 +65,8 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
         if not url:
             return {"status": "error", "message": "url is required"}
         result = memos.ingest_url(
-            url, tags=body.get("tags"),
+            url,
+            tags=body.get("tags"),
             importance=float(body.get("importance", 0.5)),
             max_chunk=int(body.get("max_chunk", 2000)),
             dry_run=bool(body.get("dry_run", False)),
@@ -69,9 +74,12 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
         head_meta = result.chunks[0].get("metadata", {}) if result.chunks else {}
         payload = {
             "status": "ok" if not result.errors else "partial",
-            "url": url, "total_chunks": result.total_chunks,
-            "skipped": result.skipped, "errors": result.errors,
-            "source_type": head_meta.get("source_type"), "title": head_meta.get("title"),
+            "url": url,
+            "total_chunks": result.total_chunks,
+            "skipped": result.skipped,
+            "errors": result.errors,
+            "source_type": head_meta.get("source_type"),
+            "title": head_meta.get("title"),
         }
         if body.get("dry_run"):
             payload["chunks"] = result.chunks
@@ -102,19 +110,34 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                 fd, tmp_path = tempfile.mkstemp(suffix=".txt", prefix="memos_conv_")
                 with os.fdopen(fd, "w", encoding="utf-8") as fh:
                     fh.write(text_body)
-                result = miner.mine_conversation(tmp_path, namespace_prefix=namespace_prefix, per_speaker=per_speaker, tags=extra_tags or None, importance=importance)
+                result = miner.mine_conversation(
+                    tmp_path,
+                    namespace_prefix=namespace_prefix,
+                    per_speaker=per_speaker,
+                    tags=extra_tags or None,
+                    importance=importance,
+                )
             finally:
                 try:
                     os.unlink(tmp_path)
                 except Exception:
                     pass
         else:
-            result = miner.mine_conversation(path_body, namespace_prefix=namespace_prefix, per_speaker=per_speaker, tags=extra_tags or None, importance=importance)
+            result = miner.mine_conversation(
+                path_body,
+                namespace_prefix=namespace_prefix,
+                per_speaker=per_speaker,
+                tags=extra_tags or None,
+                importance=importance,
+            )
 
         return {
             "status": "ok" if not result.errors else "partial",
-            "imported": result.imported, "skipped_duplicates": result.skipped_duplicates,
-            "skipped_empty": result.skipped_empty, "speakers": result.speakers, "errors": result.errors,
+            "imported": result.imported,
+            "skipped_duplicates": result.skipped_duplicates,
+            "skipped_empty": result.skipped_empty,
+            "speakers": result.speakers,
+            "errors": result.errors,
         }
 
     # ── Dashboard ─────────────────────────────────────────────
@@ -129,6 +152,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         import asyncio
+
         await websocket.accept()
         queue = memos.events.add_ws_client()
 
@@ -150,20 +174,39 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                 try:
                     payload = json.loads(data)
                 except Exception:
-                    await websocket.send_json({"type": "error", "message": "send JSON subscribe/unsubscribe commands or ping"})
+                    await websocket.send_json(
+                        {"type": "error", "message": "send JSON subscribe/unsubscribe commands or ping"}
+                    )
                     continue
                 action = payload.get("action")
                 event_types = payload.get("event_types")
                 tags = payload.get("tags")
                 namespace = payload.get("namespace")
                 if action in {"subscribe", "update"}:
-                    memos.events.update_ws_client(queue, event_types=event_types, namespaces=[namespace] if namespace else None, tags=tags, active=True, label=payload.get("label", ""))
-                    await websocket.send_json({"type": "subscribed", "subscription": memos.events.get_ws_client_subscription(queue)})
+                    memos.events.update_ws_client(
+                        queue,
+                        event_types=event_types,
+                        namespaces=[namespace] if namespace else None,
+                        tags=tags,
+                        active=True,
+                        label=payload.get("label", ""),
+                    )
+                    await websocket.send_json(
+                        {"type": "subscribed", "subscription": memos.events.get_ws_client_subscription(queue)}
+                    )
                 elif action == "unsubscribe":
                     memos.events.update_ws_client(queue, active=False)
-                    await websocket.send_json({"type": "unsubscribed", "subscription": memos.events.get_ws_client_subscription(queue)})
+                    await websocket.send_json(
+                        {"type": "unsubscribed", "subscription": memos.events.get_ws_client_subscription(queue)}
+                    )
                 elif action == "list":
-                    await websocket.send_json({"type": "subscriptions", "current": memos.events.get_ws_client_subscription(queue), "all": memos.events.list_subscriptions()})
+                    await websocket.send_json(
+                        {
+                            "type": "subscriptions",
+                            "current": memos.events.get_ws_client_subscription(queue),
+                            "all": memos.events.list_subscriptions(),
+                        }
+                    )
                 else:
                     await websocket.send_json({"type": "error", "message": f"unknown action: {action}"})
         except WebSocketDisconnect:
@@ -191,15 +234,23 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                 while True:
                     event = await queue.get()
                     payload = event.to_dict()
-                    yield SSEEvent(event=event.type, data=json.dumps(payload), id=str(int(event.timestamp * 1000))).encode()
+                    yield SSEEvent(
+                        event=event.type, data=json.dumps(payload), id=str(int(event.timestamp * 1000))
+                    ).encode()
                     await _asyncio.sleep(0)
             finally:
                 memos.events.remove_ws_client(queue)
 
-        return StreamingResponse(_gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"})
+        return StreamingResponse(
+            _gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
 
     @router.get("/api/v1/events")
-    async def event_history(event_type: str | None = None, limit: int = 50, namespace: str | None = None, tags: str | None = None):
+    async def event_history(
+        event_type: str | None = None, limit: int = 50, namespace: str | None = None, tags: str | None = None
+    ):
         tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
         events = memos.events.get_history(event_type=event_type, limit=limit, namespace=namespace, tags=tag_list)
         return {"events": [e.to_dict() for e in events]}
@@ -223,8 +274,10 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.get("/health")
     async def health():
         return {
-            "status": "ok", "version": MEMOS_VERSION,
-            "auth_enabled": key_manager.auth_enabled, "active_keys": key_manager.key_count,
+            "status": "ok",
+            "version": MEMOS_VERSION,
+            "auth_enabled": key_manager.auth_enabled,
+            "active_keys": key_manager.key_count,
             "rate_limiting": True,
         }
 
@@ -240,7 +293,9 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
         if not agent_id or not role:
             return {"status": "error", "message": "agent_id and role are required"}
         try:
-            policy = memos.grant_namespace_access(agent_id, namespace, role, granted_by=body.get("granted_by", ""), expires_at=body.get("expires_at"))
+            policy = memos.grant_namespace_access(
+                agent_id, namespace, role, granted_by=body.get("granted_by", ""), expires_at=body.get("expires_at")
+            )
             return {"status": "ok", "policy": policy}
         except ValueError as e:
             return {"status": "error", "message": str(e)}
@@ -271,13 +326,20 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.post("/api/v1/share/offer")
     async def api_share_offer(body: dict):
         from ...sharing.models import SharePermission, ShareScope
+
         try:
             scope = ShareScope(body.get("scope", "items"))
             permission = SharePermission(body.get("permission", "read"))
         except ValueError as e:
             return {"status": "error", "message": str(e)}
         try:
-            req = memos.share_with(body["target_agent"], scope=scope, scope_key=body.get("scope_key", ""), permission=permission, expires_at=body.get("expires_at"))
+            req = memos.share_with(
+                body["target_agent"],
+                scope=scope,
+                scope_key=body.get("scope_key", ""),
+                permission=permission,
+                expires_at=body.get("expires_at"),
+            )
             return {"status": "ok", "share": req.to_dict()}
         except Exception as e:
             return {"status": "error", "message": str(e)}
@@ -313,6 +375,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.post("/api/v1/share/import")
     async def api_share_import(body: dict):
         from ...sharing.models import MemoryEnvelope
+
         try:
             envelope = MemoryEnvelope.from_dict(body["envelope"])
             learned = memos.import_shared(envelope)
@@ -323,6 +386,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.get("/api/v1/shares")
     async def api_shares_list(agent: str | None = None, status: str | None = None):
         from ...sharing.models import ShareStatus as SS
+
         st = SS(status) if status else None
         shares = memos.list_shares(agent=agent, status=st)
         return {"shares": [s.to_dict() for s in shares], "total": len(shares)}

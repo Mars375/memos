@@ -1,7 +1,5 @@
 """Tests for memos.conflict — Memory Conflict Resolution (P12)."""
 
-
-
 from memos.conflict import (
     Conflict,
     ConflictDetector,
@@ -15,9 +13,11 @@ from memos.sharing.models import MemoryEnvelope
 
 # ── Helpers ──────────────────────────────────────────────
 
+
 def _item(content="test", id=None, tags=None, importance=0.5, metadata=None):
     """Create a test MemoryItem."""
     from memos.models import generate_id
+
     return MemoryItem(
         id=id or generate_id(content),
         content=content,
@@ -39,6 +39,7 @@ def _envelope(memories, source="agent-a", target="agent-b"):
 
 
 # ── ConflictDetector — detect_from_dicts ────────────────
+
 
 class TestDetectFromDicts:
     """Test conflict detection without a live MemOS instance."""
@@ -141,6 +142,7 @@ class TestDetectFromDicts:
 
 # ── Content Similarity ──────────────────────────────────
 
+
 class TestContentSimilarity:
     """Test the content similarity heuristic."""
 
@@ -167,6 +169,7 @@ class TestContentSimilarity:
 
 
 # ── Resolution Strategies ───────────────────────────────
+
 
 class TestResolution:
     """Test conflict resolution strategies."""
@@ -272,6 +275,7 @@ class TestResolution:
 
 # ── Integration with MemOS ──────────────────────────────
 
+
 class TestDetectWithMemOS:
     """Test conflict detection with a live MemOS instance."""
 
@@ -284,12 +288,16 @@ class TestDetectWithMemOS:
         memory_id = item.id
 
         # Create a remote envelope with a conflicting version
-        remote = _envelope([{
-            "id": memory_id,
-            "content": "remote content is different",
-            "tags": ["new"],
-            "importance": 0.8,
-        }])
+        remote = _envelope(
+            [
+                {
+                    "id": memory_id,
+                    "content": "remote content is different",
+                    "tags": ["new"],
+                    "importance": 0.8,
+                }
+            ]
+        )
 
         detector = ConflictDetector()
         report = detector.detect(memos, remote)
@@ -319,14 +327,18 @@ class TestApplyWithMemOS:
         item = memos.learn("original", tags=["local"], importance=0.3)
         memory_id = item.id
 
-        remote = _envelope([{
-            "id": memory_id,
-            "content": "updated content from remote",
-            "tags": ["remote"],
-            "importance": 0.8,
-            "created_at": item.created_at,
-            "accessed_at": item.accessed_at + 1000,
-        }])
+        remote = _envelope(
+            [
+                {
+                    "id": memory_id,
+                    "content": "updated content from remote",
+                    "tags": ["remote"],
+                    "importance": 0.8,
+                    "created_at": item.created_at,
+                    "accessed_at": item.accessed_at + 1000,
+                }
+            ]
+        )
 
         detector = ConflictDetector()
         report = detector.detect(memos, remote)
@@ -344,12 +356,16 @@ class TestApplyWithMemOS:
         """Apply adds new remote memories."""
         memos = MemOS(backend="memory")
 
-        remote = _envelope([{
-            "id": "brand_new",
-            "content": "new memory from remote",
-            "tags": ["remote"],
-            "importance": 0.5,
-        }])
+        remote = _envelope(
+            [
+                {
+                    "id": "brand_new",
+                    "content": "new memory from remote",
+                    "tags": ["remote"],
+                    "importance": 0.5,
+                }
+            ]
+        )
 
         detector = ConflictDetector()
         report = detector.detect(memos, remote)
@@ -366,12 +382,16 @@ class TestApplyWithMemOS:
         item = memos.learn("local content", tags=["local"], importance=0.5)
         memory_id = item.id
 
-        remote = _envelope([{
-            "id": memory_id,
-            "content": "remote content different",
-            "tags": ["remote"],
-            "importance": 0.9,
-        }])
+        remote = _envelope(
+            [
+                {
+                    "id": memory_id,
+                    "content": "remote content different",
+                    "tags": ["remote"],
+                    "importance": 0.9,
+                }
+            ]
+        )
 
         detector = ConflictDetector()
         report = detector.detect(memos, remote)
@@ -386,12 +406,16 @@ class TestApplyWithMemOS:
         item = memos.learn("local content", tags=["local"], importance=0.5)
         memory_id = item.id
 
-        remote = _envelope([{
-            "id": memory_id,
-            "content": "remote content wins",
-            "tags": ["remote"],
-            "importance": 0.9,
-        }])
+        remote = _envelope(
+            [
+                {
+                    "id": memory_id,
+                    "content": "remote content wins",
+                    "tags": ["remote"],
+                    "importance": 0.9,
+                }
+            ]
+        )
 
         detector = ConflictDetector()
         report = detector.detect(memos, remote)
@@ -403,6 +427,7 @@ class TestApplyWithMemOS:
 
 
 # ── SyncReport serialization ────────────────────────────
+
 
 class TestSyncReport:
     """Test SyncReport serialization."""
@@ -437,6 +462,7 @@ class TestSyncReport:
 
 # ── Conflict serialization ──────────────────────────────
 
+
 class TestConflictSerialization:
     """Test Conflict.to_dict."""
 
@@ -460,6 +486,7 @@ class TestConflictSerialization:
 
 
 # ── Envelope validation ─────────────────────────────────
+
 
 class TestEnvelopeIntegration:
     """Test that envelope checksum validation works with conflict detection."""

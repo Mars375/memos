@@ -64,6 +64,7 @@ class TestNamespaceIsolation:
 
     def test_list_namespaces(self):
         from memos.storage.memory_backend import InMemoryBackend
+
         shared = InMemoryBackend()
         a = MemOS(backend="memory")
         a._store = shared

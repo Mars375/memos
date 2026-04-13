@@ -33,6 +33,7 @@ def _tokenize(text: str) -> list[str]:
 # BM25 (in-house, no external dependency)
 # ---------------------------------------------------------------------------
 
+
 class BM25:
     """BM25 Okapi scorer for a fixed corpus of documents.
 
@@ -52,9 +53,7 @@ class BM25:
         self.b = b
         self._tokenized = [_tokenize(doc) for doc in corpus]
         self._N = len(self._tokenized)
-        self._avgdl = (
-            sum(len(d) for d in self._tokenized) / self._N if self._N else 1.0
-        )
+        self._avgdl = sum(len(d) for d in self._tokenized) / self._N if self._N else 1.0
         # Document frequency per term
         self._df: dict[str, int] = {}
         for tokens in self._tokenized:
@@ -81,9 +80,7 @@ class BM25:
                 continue
             tf = tf_map[term]
             idf = self._idf(term)
-            norm = tf * (self.k1 + 1) / (
-                tf + self.k1 * (1 - self.b + self.b * dl / self._avgdl)
-            )
+            norm = tf * (self.k1 + 1) / (tf + self.k1 * (1 - self.b + self.b * dl / self._avgdl))
             score += idf * norm
         return score
 
@@ -97,6 +94,7 @@ class BM25:
 # Keyword-only scorer (for retrieval_mode="keyword")
 # ---------------------------------------------------------------------------
 
+
 def keyword_score(query: str, content: str) -> float:
     """Simple TF-based keyword score (fraction of query terms present)."""
     q_tokens = set(_tokenize(query))
@@ -109,6 +107,7 @@ def keyword_score(query: str, content: str) -> float:
 # ---------------------------------------------------------------------------
 # HybridRetriever
 # ---------------------------------------------------------------------------
+
 
 def _normalize(scores: list[float]) -> list[float]:
     """Min-max normalize a list of floats to [0, 1]."""
@@ -152,10 +151,7 @@ class HybridRetriever:
         norm_semantic = _normalize(semantic_scores)
         norm_bm25 = _normalize(raw_bm25)
 
-        blended = [
-            self.alpha * s + (1 - self.alpha) * b
-            for s, b in zip(norm_semantic, norm_bm25)
-        ]
+        blended = [self.alpha * s + (1 - self.alpha) * b for s, b in zip(norm_semantic, norm_bm25)]
 
         # Attach blended score and sort
         for r, score in zip(candidates, blended):

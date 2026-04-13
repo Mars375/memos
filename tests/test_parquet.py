@@ -1,11 +1,11 @@
 """Tests for Parquet export/import functionality."""
 
-
 import pytest
 
 from memos.core import MemOS
 
 # ── Fixtures ──────────────────────────────────────────────
+
 
 @pytest.fixture
 def mem():
@@ -17,6 +17,7 @@ def mem():
 
 
 # ── Parquet Export Tests ──────────────────────────────────
+
 
 class TestExportParquet:
     def test_export_creates_file(self, mem, tmp_path):
@@ -34,6 +35,7 @@ class TestExportParquet:
 
         # Verify we can read the file and it has metadata column
         import pyarrow.parquet as pq
+
         table = pq.read_table(str(path))
         assert "metadata_json" in table.column_names
 
@@ -43,6 +45,7 @@ class TestExportParquet:
         assert result["total"] == 3
 
         import pyarrow.parquet as pq
+
         table = pq.read_table(str(path))
         assert "metadata_json" not in table.column_names
 
@@ -69,6 +72,7 @@ class TestExportParquet:
         mem.export_parquet(str(path))
 
         import pyarrow.parquet as pq
+
         table = pq.read_table(str(path))
         assert table.num_rows == 3
         cols = table.column_names
@@ -77,6 +81,7 @@ class TestExportParquet:
 
 
 # ── Parquet Import Tests ──────────────────────────────────
+
 
 class TestImportParquet:
     def test_roundtrip_preserves_count(self, mem, tmp_path):
@@ -183,6 +188,7 @@ class TestImportParquet:
 
 # ── Parquet with Metadata Tests ───────────────────────────
 
+
 class TestParquetMetadata:
     def test_metadata_roundtrip(self, tmp_path):
         m = MemOS(backend="memory", sanitize=False)
@@ -214,9 +220,11 @@ class TestParquetMetadata:
 
 # ── CLI Parquet Tests ─────────────────────────────────────
 
+
 class TestCLIParquet:
     def test_cli_export_parquet(self, tmp_path):
         from memos.cli import main
+
         m = MemOS(backend="memory", sanitize=False)
         m.learn("cli test", tags=["cli"])
 
@@ -239,6 +247,7 @@ class TestCLIParquet:
 
 
 # ── Parquet IO Module Unit Tests ──────────────────────────
+
 
 class TestParquetIOUnit:
     def test_export_import_with_special_chars(self, tmp_path):

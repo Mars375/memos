@@ -44,7 +44,6 @@ Replace `$QUERY` with the topic or question you need context for.
 - When you need historical context about a topic
 - Before making an architectural decision
 """,
-
     "memos-wake-up": """\
 # /memos-wake-up
 
@@ -65,7 +64,6 @@ memos wake-up --top 20
 ## Output
 Returns [ID] identity, [MEM] top-N memory snippets, and [STATS] summary.
 """,
-
     "memos-learn": """\
 # /memos-learn
 
@@ -88,7 +86,6 @@ memos learn "Chose PostgreSQL over SQLite for production — needs concurrent wr
 memos learn "Alice is the lead for the authentication service" --tags "team,auth" --importance 0.75
 ```
 """,
-
     "memos-kg-add": """\
 # /memos-kg-add
 
@@ -110,7 +107,6 @@ memos kg-add "ServiceA" "depends-on" "ServiceB"
 memos kg-add "PostgreSQL" "is-a" "database"
 ```
 """,
-
     "memos-kg-lint": """\
 # /memos-kg-lint
 
@@ -131,7 +127,6 @@ memos kg-lint --min-facts 2
 - After bulk-importing conversation history
 - As part of a weekly knowledge hygiene routine
 """,
-
     "memos-mine": """\
 # /memos-mine
 
@@ -159,7 +154,6 @@ memos mine "$DIRECTORY" --tags "notes,project"
 - Markdown / text files
 - Code files (`.py`, `.ts`, `.go`, etc.)
 """,
-
     "memos-stale": """\
 # /memos-stale
 
@@ -184,7 +178,6 @@ memos mine-stale
 memos mine --update "$PATH"
 ```
 """,
-
     "memos-stats": """\
 # /memos-stats
 
@@ -220,10 +213,7 @@ class SkillsExportResult:
     skills: list[str] = field(default_factory=list)
 
     def __str__(self) -> str:
-        return (
-            f"SkillsExportResult(written={self.written}, skipped={self.skipped}, "
-            f"output_dir={self.output_dir!r})"
-        )
+        return f"SkillsExportResult(written={self.written}, skipped={self.skipped}, output_dir={self.output_dir!r})"
 
 
 class SkillsExporter:
@@ -311,8 +301,8 @@ class SkillsExporter:
             # Claude Code slash commands use the H1 as the command name
             # and support $ARGUMENTS placeholder
             content = re.sub(
-                r'\$QUERY\b',
-                '$ARGUMENTS',
+                r"\$QUERY\b",
+                "$ARGUMENTS",
                 content,
             )
 

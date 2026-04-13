@@ -31,17 +31,19 @@ class TestCLIParsing:
 
     def test_recall_args(self):
         p = build_parser()
-        ns = p.parse_args([
-            "recall",
-            "test query",
-            "--top",
-            "3",
-            "--enriched",
-            "--min-importance",
-            "0.4",
-            "--tag-mode",
-            "all",
-        ])
+        ns = p.parse_args(
+            [
+                "recall",
+                "test query",
+                "--top",
+                "3",
+                "--enriched",
+                "--min-importance",
+                "0.4",
+                "--tag-mode",
+                "all",
+            ]
+        )
         assert ns.query == "test query"
         assert ns.top == 3
         assert ns.enriched is True
@@ -173,6 +175,7 @@ class TestCLIFunctional:
         main(["prune", "--dry-run"])
         out = capsys.readouterr().out
         assert "would be pruned" in out
+
     def test_learn_stdin_parsing(self):
         """Test --stdin flag is parsed correctly."""
         p = build_parser()
@@ -203,7 +206,6 @@ class TestCLIFunctional:
         out = capsys.readouterr().out
         assert "Learned" in out
         assert "ttl=1h" in out
-
 
     def test_search_parsing(self):
         """Test search command argument parsing."""

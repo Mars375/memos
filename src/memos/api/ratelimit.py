@@ -57,6 +57,7 @@ class EndpointRule:
         max_requests: Maximum tokens in the bucket
         window_seconds: Time window in seconds for token replenishment
     """
+
     pattern: str
     max_requests: int
     window_seconds: float = 60.0
@@ -168,12 +169,14 @@ class RateLimiter:
         buckets = self._buckets.get(client, {})
         policies = []
         for pattern, bucket in buckets.items():
-            policies.append({
-                "endpoint": pattern,
-                "limit": bucket.max_tokens,
-                "remaining": bucket.remaining,
-                "refill_rate": round(bucket.refill_rate, 2),
-            })
+            policies.append(
+                {
+                    "endpoint": pattern,
+                    "limit": bucket.max_tokens,
+                    "remaining": bucket.remaining,
+                    "refill_rate": round(bucket.refill_rate, 2),
+                }
+            )
         return {
             "client": client,
             "policies": policies,
@@ -210,6 +213,7 @@ def create_rate_limit_middleware(limiter: RateLimiter):
         limiter = RateLimiter(default_max=100)
         app.middleware("http")(create_rate_limit_middleware(limiter))
     """
+
     async def middleware(request, call_next):
         path = str(request.url.path) if hasattr(request, "url") else "/"
 
@@ -221,6 +225,7 @@ def create_rate_limit_middleware(limiter: RateLimiter):
 
         if not allowed:
             from starlette.responses import JSONResponse
+
             headers["Retry-After"] = str(int(rule.window_seconds))
             return JSONResponse(
                 status_code=429,

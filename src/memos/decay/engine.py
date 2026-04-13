@@ -20,19 +20,21 @@ from ..models import MemoryItem
 @dataclass
 class DecayConfig:
     """Configuration for memory decay behavior."""
-    rate: float = 0.01              # Relevance loss per day (exponential decay)
-    access_boost: float = 0.05      # Relevance gain per access
-    importance_floor: float = 0.1   # Minimum importance (memories don't decay below this)
-    max_age_days: float = 365.0     # Hard age limit regardless of score
-    max_memories: int = 10_000      # Evict oldest if over this
+
+    rate: float = 0.01  # Relevance loss per day (exponential decay)
+    access_boost: float = 0.05  # Relevance gain per access
+    importance_floor: float = 0.1  # Minimum importance (memories don't decay below this)
+    max_age_days: float = 365.0  # Hard age limit regardless of score
+    max_memories: int = 10_000  # Evict oldest if over this
     reinforce_strength: float = 0.05  # Importance boost per reinforce call
-    auto_reinforce: bool = True     # Auto-reinforce recalled memories
+    auto_reinforce: bool = True  # Auto-reinforce recalled memories
     decay_min_age_days: float = 7.0  # Don't decay memories younger than this
 
 
 @dataclass
 class DecayReport:
     """Report from a decay run."""
+
     total: int = 0
     decayed: int = 0
     pruned: int = 0
@@ -149,21 +151,19 @@ class DecayEngine:
 
             if new_importance < item.importance:
                 report.decayed += 1
-                report.details.append({
-                    "id": item.id,
-                    "importance_before": round(item.importance, 4),
-                    "importance_after": round(new_importance, 4),
-                    "age_days": round(age_days, 1),
-                })
+                report.details.append(
+                    {
+                        "id": item.id,
+                        "importance_before": round(item.importance, 4),
+                        "importance_after": round(new_importance, 4),
+                        "age_days": round(age_days, 1),
+                    }
+                )
                 if not dry_run:
                     item.importance = new_importance
 
-        report.avg_importance_before = (
-            sum(importance_before) / len(importance_before) if importance_before else 0.0
-        )
-        report.avg_importance_after = (
-            sum(item.importance for item in items) / len(items) if items else 0.0
-        )
+        report.avg_importance_before = sum(importance_before) / len(importance_before) if importance_before else 0.0
+        report.avg_importance_after = sum(item.importance for item in items) / len(items) if items else 0.0
 
         return report
 

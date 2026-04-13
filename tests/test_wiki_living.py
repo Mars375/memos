@@ -1,4 +1,5 @@
 """Tests for living wiki mode (P13)."""
+
 from __future__ import annotations
 
 from pathlib import Path

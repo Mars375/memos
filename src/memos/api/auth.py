@@ -12,6 +12,7 @@ from typing import Optional
 @dataclass
 class RateLimitEntry:
     """Tracks request counts per window."""
+
     count: int = 0
     window_start: float = 0.0
 
@@ -19,6 +20,7 @@ class RateLimitEntry:
 @dataclass
 class RateLimiter:
     """Sliding-window rate limiter per API key."""
+
     max_requests: int = 100
     window_seconds: float = 60.0
     _counters: dict[str, RateLimitEntry] = field(default_factory=dict)
@@ -60,7 +62,7 @@ class APIKeyManager:
 
         if keys:
             for i, key in enumerate(keys):
-                self.add_key(key, name=f"key-{i+1}")
+                self.add_key(key, name=f"key-{i + 1}")
 
     @staticmethod
     def _hash_key(key: str) -> str:
@@ -107,6 +109,7 @@ def create_auth_middleware(key_manager: APIKeyManager):
         app = create_fastapi_app()
         app.middleware("http")(create_auth_middleware(key_mgr))
     """
+
     async def middleware(request, call_next):
         # Skip auth for health and dashboard
         path = request.url.path
@@ -117,12 +120,14 @@ def create_auth_middleware(key_manager: APIKeyManager):
             api_key = request.headers.get("X-API-Key", "")
             if not api_key:
                 from starlette.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=401,
                     content={"status": "error", "message": "Missing X-API-Key header"},
                 )
             if not key_manager.validate(api_key):
                 from starlette.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=403,
                     content={"status": "error", "message": "Invalid API key"},
@@ -135,6 +140,7 @@ def create_auth_middleware(key_manager: APIKeyManager):
                 response.headers[k] = v
             if not allowed:
                 from starlette.responses import JSONResponse
+
                 return JSONResponse(
                     status_code=429,
                     content={"status": "error", "message": "Rate limit exceeded"},

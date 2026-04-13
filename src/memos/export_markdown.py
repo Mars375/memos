@@ -130,7 +130,9 @@ class MarkdownExporter:
         try:
             from .brain import BrainSearch
 
-            detail = BrainSearch(self._memos, kg=self._kg, wiki_dir=str(self._wiki._wiki_dir.parent)).entity_detail(entity)
+            detail = BrainSearch(self._memos, kg=self._kg, wiki_dir=str(self._wiki._wiki_dir.parent)).entity_detail(
+                entity
+            )
         except Exception:
             detail = None
 
@@ -144,12 +146,17 @@ class MarkdownExporter:
             "exported_at": self._iso_now(),
         }
         body = self._strip_frontmatter(raw)
-        return "\n".join([
-            self._frontmatter(metadata),
-            "",
-            body.strip(),
-            "",
-        ]).strip() + "\n"
+        return (
+            "\n".join(
+                [
+                    self._frontmatter(metadata),
+                    "",
+                    body.strip(),
+                    "",
+                ]
+            ).strip()
+            + "\n"
+        )
 
     def _group_memories(self, items: list[Any]) -> dict[str, list[Any]]:
         grouped: dict[str, list[Any]] = defaultdict(list)

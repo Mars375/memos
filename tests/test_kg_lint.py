@@ -1,4 +1,5 @@
 """Tests for KnowledgeGraph.lint() — P2: quality linting."""
+
 import pytest
 
 from memos.knowledge_graph import KnowledgeGraph

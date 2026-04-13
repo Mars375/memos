@@ -20,10 +20,10 @@ def cmd_kg_add(ns: argparse.Namespace) -> None:
             valid_from=ns.valid_from,
             valid_to=ns.valid_to,
             confidence=ns.confidence,
-            confidence_label=getattr(ns, 'confidence_label', 'EXTRACTED'),
+            confidence_label=getattr(ns, "confidence_label", "EXTRACTED"),
             source=ns.source,
         )
-        _label = getattr(ns, 'confidence_label', 'EXTRACTED')
+        _label = getattr(ns, "confidence_label", "EXTRACTED")
         print(f"✓ Fact added [{fact_id}]: {ns.subject} -{ns.predicate}-> {ns.object} [{_label}]")
     finally:
         kg.close()
@@ -44,8 +44,10 @@ def cmd_kg_query(ns: argparse.Namespace) -> None:
                 vf = datetime.fromtimestamp(f["valid_from"]).strftime("%Y-%m-%d") if f["valid_from"] else "?"
                 vt = datetime.fromtimestamp(f["valid_to"]).strftime("%Y-%m-%d") if f["valid_to"] else "?"
                 bounds = f" [{vf} → {vt}]"
-            label = f.get('confidence_label', 'EXTRACTED')
-            print(f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{bounds} (conf={f['confidence']:.2f}, label={label}){inv}")
+            label = f.get("confidence_label", "EXTRACTED")
+            print(
+                f"  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}{bounds} (conf={f['confidence']:.2f}, label={label}){inv}"
+            )
         print(f"\n{len(facts)} fact(s)")
     finally:
         kg.close()
@@ -64,7 +66,7 @@ def cmd_kg_timeline(ns: argparse.Namespace) -> None:
         for f in facts:
             ts = datetime.fromtimestamp(f["created_at"]).strftime("%Y-%m-%d %H:%M")
             inv = " [INVALIDATED]" if f["invalidated_at"] else ""
-            label = f.get('confidence_label', 'EXTRACTED')
+            label = f.get("confidence_label", "EXTRACTED")
             print(f"  {ts}  [{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']} [{label}]{inv}")
         print(f"\n{len(facts)} event(s)")
     finally:
@@ -150,8 +152,10 @@ def cmd_kg_backlinks(ns: argparse.Namespace) -> None:
         for f in facts:
             inv = " [INVALIDATED]" if f["invalidated_at"] else ""
             label = f.get("confidence_label", "EXTRACTED")
-            print(f"  [{f['id']}] {f['subject']} -[{f['predicate']}]-> {f['object']} "
-                  f"(conf={f['confidence']:.2f}, label={label}){inv}")
+            print(
+                f"  [{f['id']}] {f['subject']} -[{f['predicate']}]-> {f['object']} "
+                f"(conf={f['confidence']:.2f}, label={label}){inv}"
+            )
         print(f"\n{len(facts)} backlink(s)")
     finally:
         kg.close()
@@ -198,7 +202,8 @@ def cmd_kg_path(ns: argparse.Namespace) -> None:
     kg = _get_kg(ns)
     try:
         paths = kg.find_paths(
-            ns.entity_a, ns.entity_b,
+            ns.entity_a,
+            ns.entity_b,
             max_hops=getattr(ns, "max_hops", 3),
             max_paths=getattr(ns, "max_paths", 10),
         )
@@ -210,7 +215,7 @@ def cmd_kg_path(ns: argparse.Namespace) -> None:
             hops = len(path)
             print(f"\n  Path {i} ({hops} hop{'s' if hops != 1 else ''}):")
             for triple in path:
-                vf = f" (from {_ts(triple['valid_from'])})" if triple.get('valid_from') else ""
+                vf = f" (from {_ts(triple['valid_from'])})" if triple.get("valid_from") else ""
                 print(f"    {triple['subject']} -[{triple['predicate']}]-> {triple['object']}{vf}")
     finally:
         kg.close()
@@ -240,11 +245,10 @@ def cmd_kg_neighbors(ns: argparse.Namespace) -> None:
         kg.close()
 
 
-
-
 def cmd_wiki_compile(ns: argparse.Namespace) -> None:
     """Compile memories into per-tag wiki pages."""
     from ..wiki import WikiEngine
+
     memos = _get_memos(ns)
     wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
     tags = getattr(ns, "tags", None) or None
@@ -260,6 +264,7 @@ def cmd_wiki_compile(ns: argparse.Namespace) -> None:
 def cmd_wiki_list(ns: argparse.Namespace) -> None:
     """List compiled wiki pages."""
     from ..wiki import WikiEngine
+
     memos = _get_memos(ns)
     wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
     pages = wiki.list_pages()
@@ -276,6 +281,7 @@ def cmd_wiki_list(ns: argparse.Namespace) -> None:
 def cmd_wiki_read(ns: argparse.Namespace) -> None:
     """Read a compiled wiki page by tag."""
     from ..wiki import WikiEngine
+
     memos = _get_memos(ns)
     wiki = WikiEngine(memos, wiki_dir=getattr(ns, "wiki_dir", None))
     content = wiki.read(ns.tag)
@@ -285,12 +291,10 @@ def cmd_wiki_read(ns: argparse.Namespace) -> None:
     print(content)
 
 
-
-
-
 def cmd_wiki_living(ns: argparse.Namespace) -> None:
     """Living wiki commands."""
     from ..wiki_living import LivingWikiEngine
+
     memos = _get_memos(ns)
     wiki_dir = getattr(ns, "wiki_dir", None)
     engine = LivingWikiEngine(memos, wiki_dir=wiki_dir)
@@ -446,7 +450,3 @@ def cmd_brain_search(ns: argparse.Namespace) -> None:
         print(result.context)
     finally:
         kg.close()
-
-
-
-

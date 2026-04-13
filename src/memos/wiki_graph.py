@@ -112,9 +112,7 @@ class GraphWikiEngine:
         bridge_nodes = self._find_bridge_nodes(nodes, adjacency)
         communities = self._detect_communities(nodes, adjacency, bridge_nodes=bridge_nodes)
         entity_to_community = {
-            entity: community.community_id
-            for community in communities
-            for entity in community.entities
+            entity: community.community_id for community in communities for entity in community.entities
         }
         degrees = {node: len(adjacency.get(node, set())) for node in nodes}
 
@@ -147,8 +145,7 @@ class GraphWikiEngine:
                 key=lambda entity: (-degrees.get(entity, 0), entity.lower()),
             )[:5]
             community.god_nodes = sorted(
-                entity for entity, touched in god_nodes.items()
-                if community.community_id in touched
+                entity for entity, touched in god_nodes.items() if community.community_id in touched
             )
 
         current_pages = {path.name for path in self._communities_dir.glob("*.md")}
@@ -197,9 +194,7 @@ class GraphWikiEngine:
 
     def _load_facts(self) -> List[dict]:
         """Load active facts from the underlying KG connection."""
-        cur = self._kg._conn.execute(
-            "SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC"
-        )
+        cur = self._kg._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC")
         return [{key: row[key] for key in row.keys()} for row in cur.fetchall()]
 
     def _detect_communities(
@@ -295,11 +290,7 @@ class GraphWikiEngine:
         god_nodes: dict[str, list[str]] = {}
         for entity in bridge_nodes:
             neighbors = adjacency.get(entity, set())
-            touched = {
-                entity_to_community.get(neighbor)
-                for neighbor in neighbors
-                if entity_to_community.get(neighbor)
-            }
+            touched = {entity_to_community.get(neighbor) for neighbor in neighbors if entity_to_community.get(neighbor)}
             touched.discard(entity_to_community.get(entity))
             if len(touched) >= 3:
                 god_nodes[entity] = sorted(touched)
@@ -317,11 +308,13 @@ class GraphWikiEngine:
             "",
         ]
         if not communities:
-            lines.extend([
-                "No graph communities yet.",
-                "",
-                "Add graph facts with `memos kg-add`, then run `memos wiki-graph`.",
-            ])
+            lines.extend(
+                [
+                    "No graph communities yet.",
+                    "",
+                    "Add graph facts with `memos kg-add`, then run `memos wiki-graph`.",
+                ]
+            )
             return "\n".join(lines) + "\n"
 
         for community in communities:
@@ -331,13 +324,15 @@ class GraphWikiEngine:
                 f"— {len(community.entities)} entities, {len(community.facts)} facts, top: {tops}"
             )
 
-        lines.extend([
-            "",
-            "## Navigation",
-            "",
-            f"- [[god-nodes.md|God Nodes]] — {len(god_nodes)} entities spanning 3+ communities",
-            "- [[log.md|Activity Log]] — build history",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Navigation",
+                "",
+                f"- [[god-nodes.md|God Nodes]] — {len(god_nodes)} entities spanning 3+ communities",
+                "- [[log.md|Activity Log]] — build history",
+            ]
+        )
         return "\n".join(lines) + "\n"
 
     def _render_community_page(self, community: CommunitySummary) -> str:
@@ -351,31 +346,37 @@ class GraphWikiEngine:
         ]
         for entity in community.top_entities:
             lines.append(f'  - "{entity}"')
-        lines.extend([
-            "backlinks:",
-        ])
+        lines.extend(
+            [
+                "backlinks:",
+            ]
+        )
         for backlink in community.backlinks:
             lines.append(f'  - "{backlink}"')
-        lines.extend([
-            "god_nodes:",
-        ])
+        lines.extend(
+            [
+                "god_nodes:",
+            ]
+        )
         for node in community.god_nodes:
             lines.append(f'  - "{node}"')
-        lines.extend([
-            f'generated_at: "{time.strftime("%Y-%m-%d %H:%M:%S")}"',
-            "---",
-            "",
-            f"# Community {community.community_id}",
-            "",
-            "## Overview",
-            "",
-            f"- Entities: {len(community.entities)}",
-            f"- Facts: {len(community.facts)}",
-            f"- Top entities: {top_entities}",
-            "",
-            "## Entities",
-            "",
-        ])
+        lines.extend(
+            [
+                f'generated_at: "{time.strftime("%Y-%m-%d %H:%M:%S")}"',
+                "---",
+                "",
+                f"# Community {community.community_id}",
+                "",
+                "## Overview",
+                "",
+                f"- Entities: {len(community.entities)}",
+                f"- Facts: {len(community.facts)}",
+                f"- Top entities: {top_entities}",
+                "",
+                "## Entities",
+                "",
+            ]
+        )
         for entity in community.entities:
             lines.append(f"- {entity}")
 

@@ -26,6 +26,7 @@ from .core import MemOS
 @dataclass
 class BenchmarkResult:
     """Result of a single benchmark operation."""
+
     operation: str
     count: int
     total_seconds: float
@@ -42,6 +43,7 @@ class BenchmarkResult:
 @dataclass
 class BenchmarkReport:
     """Full benchmark report."""
+
     version: str
     backend: str
     total_memories: int
@@ -81,24 +83,26 @@ class BenchmarkReport:
     def to_text(self) -> str:
         """Human-readable benchmark report."""
         lines = [
-            f"{'='*60}",
+            f"{'=' * 60}",
             "  MemOS Benchmark Report",
-            f"{'='*60}",
+            f"{'=' * 60}",
             f"  Version:  {self.version}",
             f"  Backend:  {self.backend}",
             f"  Memories: {self.total_memories}",
             f"  Duration: {self.total_seconds:.2f}s",
-            f"{'='*60}",
+            f"{'=' * 60}",
             "",
         ]
         for r in self.results:
-            lines.extend([
-                f"  {r.operation.upper()}",
-                f"    {r.count} ops in {r.total_seconds:.3f}s → {r.ops_per_second:.1f} ops/s",
-                f"    Latency: p50={r.latency_p50_ms:.2f}ms  p95={r.latency_p95_ms:.2f}ms  p99={r.latency_p99_ms:.2f}ms",
-                f"    Range:   min={r.latency_min_ms:.2f}ms  max={r.latency_max_ms:.2f}ms  mean={r.latency_mean_ms:.2f}ms",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"  {r.operation.upper()}",
+                    f"    {r.count} ops in {r.total_seconds:.3f}s → {r.ops_per_second:.1f} ops/s",
+                    f"    Latency: p50={r.latency_p50_ms:.2f}ms  p95={r.latency_p95_ms:.2f}ms  p99={r.latency_p99_ms:.2f}ms",
+                    f"    Range:   min={r.latency_min_ms:.2f}ms  max={r.latency_max_ms:.2f}ms  mean={r.latency_mean_ms:.2f}ms",
+                    "",
+                ]
+            )
         return "\n".join(lines)
 
 
@@ -191,8 +195,12 @@ def run_benchmark(
 
     # ── Phase 2: LEARN benchmark ─────────────────────────────
     sample_tags = [
-        ["preference"], ["infra", "config"], ["decision", "project-x"],
-        ["bug", "urgent"], ["research", "ai"], ["meeting", "notes"],
+        ["preference"],
+        ["infra", "config"],
+        ["decision", "project-x"],
+        ["bug", "urgent"],
+        ["research", "ai"],
+        ["meeting", "notes"],
     ]
 
     def learn_op():
@@ -235,8 +243,18 @@ def run_benchmark(
     results.append(recall_result)
 
     # ── Phase 4: SEARCH benchmark ────────────────────────────
-    search_terms = ["benchmark", "accuracy", "training", "model", "config",
-                    "deployment", "strategy", "preference", "urgent", "test"]
+    search_terms = [
+        "benchmark",
+        "accuracy",
+        "training",
+        "model",
+        "config",
+        "deployment",
+        "strategy",
+        "preference",
+        "urgent",
+        "test",
+    ]
 
     search_idx = [0]
 

@@ -26,9 +26,11 @@ def cmd_export(ns: argparse.Namespace) -> None:
         try:
             if fmt == "obsidian":
                 from ..export_obsidian import ObsidianExporter
+
                 exporter = ObsidianExporter(mem, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
             else:
                 from ..export_markdown import MarkdownExporter
+
                 exporter = MarkdownExporter(mem, kg=kg, wiki_dir=getattr(ns, "wiki_dir", None))
             result = exporter.export(out, update=getattr(ns, "update", False))
         finally:
@@ -53,8 +55,7 @@ def cmd_export(ns: argparse.Namespace) -> None:
             include_metadata=not ns.no_metadata,
             compression=getattr(ns, "compression", "zstd") or "zstd",
         )
-        print(f"Exported {result['total']} memories to {out} "
-              f"({result['size_bytes']} bytes, {result['compression']})")
+        print(f"Exported {result['total']} memories to {out} ({result['size_bytes']} bytes, {result['compression']})")
         return
 
     # Default: JSON
@@ -91,8 +92,10 @@ def cmd_import(ns: argparse.Namespace) -> None:
 
     label = " (dry-run)" if ns.dry_run else ""
     fmt = "parquet" if is_parquet else "json"
-    print(f"{label}[{fmt}] Imported: {result['imported']}, Skipped: {result['skipped']}, "
-          f"Overwritten: {result['overwritten']}")
+    print(
+        f"{label}[{fmt}] Imported: {result['imported']}, Skipped: {result['skipped']}, "
+        f"Overwritten: {result['overwritten']}"
+    )
     if result["errors"]:
         for e in result["errors"]:
             print(f"  Error: {e}", file=sys.stderr)
@@ -157,17 +160,22 @@ def cmd_migrate(ns: argparse.Namespace) -> None:
     )
 
     if getattr(ns, "json", False):
-        print(json.dumps({
-            "source_backend": report.source_backend,
-            "dest_backend": report.dest_backend,
-            "total_items": report.total_items,
-            "migrated": report.migrated,
-            "skipped": report.skipped,
-            "errors": report.errors,
-            "namespaces_migrated": report.namespaces_migrated,
-            "duration_seconds": report.duration_seconds,
-            "dry_run": report.dry_run,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "source_backend": report.source_backend,
+                    "dest_backend": report.dest_backend,
+                    "total_items": report.total_items,
+                    "migrated": report.migrated,
+                    "skipped": report.skipped,
+                    "errors": report.errors,
+                    "namespaces_migrated": report.namespaces_migrated,
+                    "duration_seconds": report.duration_seconds,
+                    "dry_run": report.dry_run,
+                },
+                indent=2,
+            )
+        )
     else:
         print(report.summary())
         if report.errors:
@@ -178,12 +186,10 @@ def cmd_migrate(ns: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-
-
-
 def cmd_mine(ns: argparse.Namespace) -> None:
     """Mine files or directories into memories (smart chunker + multi-format)."""
     from ..ingest.miner import Miner
+
     memos = _get_memos(ns)
     fmt = getattr(ns, "format", "auto")
     dry_run = getattr(ns, "dry_run", False)
@@ -199,6 +205,7 @@ def cmd_mine(ns: argparse.Namespace) -> None:
     cache = None
     if not no_cache and not dry_run:
         from ..ingest.cache import MinerCache
+
         cache = MinerCache(cache_db)
 
     miner = Miner(
@@ -212,6 +219,7 @@ def cmd_mine(ns: argparse.Namespace) -> None:
     )
 
     from pathlib import Path as _Path
+
     total = __import__("memos.ingest.miner", fromlist=["MineResult"]).MineResult()
 
     for path_str in ns.paths:
@@ -247,7 +255,9 @@ def cmd_mine(ns: argparse.Namespace) -> None:
 
     status = "would import" if dry_run else "imported"
     cached_msg = f", {total.skipped_cached} cached" if total.skipped_cached else ""
-    print(f"\n✓ {total.imported} chunks {status}, {total.skipped_duplicates} duplicates skipped{cached_msg}, {len(total.errors)} errors")
+    print(
+        f"\n✓ {total.imported} chunks {status}, {total.skipped_duplicates} duplicates skipped{cached_msg}, {len(total.errors)} errors"
+    )
     if dry_run and total.chunks:
         print("\nSample chunks:")
         for c in total.chunks[:5]:
@@ -364,8 +374,6 @@ def cmd_mine_stale(ns: argparse.Namespace) -> None:
         print(f"  {len(fresh)} file(s) up to date")
 
 
-
-
 def cmd_skills_export(ns: argparse.Namespace) -> None:
     """Export MemOS workflows as agent skill files (Claude Code slash commands, etc.)."""
     from ..skills import SkillsExporter
@@ -374,6 +382,7 @@ def cmd_skills_export(ns: argparse.Namespace) -> None:
     if getattr(ns, "with_context", False):
         try:
             from .._common import _get_memos  # noqa: F401
+
             memos = _get_memos(ns)  # type: ignore[name-defined]
         except Exception:
             pass

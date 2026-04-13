@@ -82,14 +82,24 @@ class TestMemoryVersion:
 class TestVersionDiff:
     def test_diff_identical_versions(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="same", tags=["t1"], importance=0.5,
-            metadata={"k": "v"}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="same",
+            tags=["t1"],
+            importance=0.5,
+            metadata={"k": "v"},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="a#2", item_id="a", version_number=2,
-            content="same", tags=["t1"], importance=0.5,
-            metadata={"k": "v"}, created_at=200.0,
+            version_id="a#2",
+            item_id="a",
+            version_number=2,
+            content="same",
+            tags=["t1"],
+            importance=0.5,
+            metadata={"k": "v"},
+            created_at=200.0,
         )
         diff = VersionDiff.between(v1, v2)
         assert diff.item_id == "a"
@@ -100,14 +110,24 @@ class TestVersionDiff:
 
     def test_diff_content_change(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="old content", tags=[], importance=0.5,
-            metadata={}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="old content",
+            tags=[],
+            importance=0.5,
+            metadata={},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="a#2", item_id="a", version_number=2,
-            content="new content", tags=[], importance=0.5,
-            metadata={}, created_at=200.0,
+            version_id="a#2",
+            item_id="a",
+            version_number=2,
+            content="new content",
+            tags=[],
+            importance=0.5,
+            metadata={},
+            created_at=200.0,
         )
         diff = VersionDiff.between(v1, v2)
         assert "content" in diff.changes
@@ -116,14 +136,24 @@ class TestVersionDiff:
 
     def test_diff_tags_change(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="x", tags=["a", "b"], importance=0.5,
-            metadata={}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="x",
+            tags=["a", "b"],
+            importance=0.5,
+            metadata={},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="a#2", item_id="a", version_number=2,
-            content="x", tags=["b", "c"], importance=0.5,
-            metadata={}, created_at=200.0,
+            version_id="a#2",
+            item_id="a",
+            version_number=2,
+            content="x",
+            tags=["b", "c"],
+            importance=0.5,
+            metadata={},
+            created_at=200.0,
         )
         diff = VersionDiff.between(v1, v2)
         assert "tags" in diff.changes
@@ -132,14 +162,24 @@ class TestVersionDiff:
 
     def test_diff_importance_change(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="x", tags=[], importance=0.3,
-            metadata={}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="x",
+            tags=[],
+            importance=0.3,
+            metadata={},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="a#2", item_id="a", version_number=2,
-            content="x", tags=[], importance=0.9,
-            metadata={}, created_at=200.0,
+            version_id="a#2",
+            item_id="a",
+            version_number=2,
+            content="x",
+            tags=[],
+            importance=0.9,
+            metadata={},
+            created_at=200.0,
         )
         diff = VersionDiff.between(v1, v2)
         assert "importance" in diff.changes
@@ -148,14 +188,24 @@ class TestVersionDiff:
 
     def test_diff_metadata_change(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="x", tags=[], importance=0.5,
-            metadata={"key1": "val1"}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="x",
+            tags=[],
+            importance=0.5,
+            metadata={"key1": "val1"},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="a#2", item_id="a", version_number=2,
-            content="x", tags=[], importance=0.5,
-            metadata={"key1": "val1", "key2": "val2"}, created_at=200.0,
+            version_id="a#2",
+            item_id="a",
+            version_number=2,
+            content="x",
+            tags=[],
+            importance=0.5,
+            metadata={"key1": "val1", "key2": "val2"},
+            created_at=200.0,
         )
         diff = VersionDiff.between(v1, v2)
         assert "metadata" in diff.changes
@@ -163,28 +213,48 @@ class TestVersionDiff:
 
     def test_diff_different_items_raises(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="x", tags=[], importance=0.5,
-            metadata={}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="x",
+            tags=[],
+            importance=0.5,
+            metadata={},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="b#1", item_id="b", version_number=1,
-            content="y", tags=[], importance=0.5,
-            metadata={}, created_at=200.0,
+            version_id="b#1",
+            item_id="b",
+            version_number=1,
+            content="y",
+            tags=[],
+            importance=0.5,
+            metadata={},
+            created_at=200.0,
         )
         with pytest.raises(ValueError, match="Cannot diff"):
             VersionDiff.between(v1, v2)
 
     def test_diff_to_dict(self):
         v1 = MemoryVersion(
-            version_id="a#1", item_id="a", version_number=1,
-            content="old", tags=[], importance=0.5,
-            metadata={}, created_at=100.0,
+            version_id="a#1",
+            item_id="a",
+            version_number=1,
+            content="old",
+            tags=[],
+            importance=0.5,
+            metadata={},
+            created_at=100.0,
         )
         v2 = MemoryVersion(
-            version_id="a#2", item_id="a", version_number=2,
-            content="new", tags=[], importance=0.5,
-            metadata={}, created_at=200.0,
+            version_id="a#2",
+            item_id="a",
+            version_number=2,
+            content="new",
+            tags=[],
+            importance=0.5,
+            metadata={},
+            created_at=200.0,
         )
         diff = VersionDiff.between(v1, v2)
         d = diff.to_dict()
@@ -683,11 +753,13 @@ class TestMemOSVersioning:
 
     def test_batch_learn_creates_versions(self):
         mem = MemOS()
-        result = mem.batch_learn([
-            {"content": "batch item 1 unique", "tags": ["batch"]},
-            {"content": "batch item 2 unique", "tags": ["batch"]},
-            {"content": "batch item 3 unique", "tags": ["batch"]},
-        ])
+        result = mem.batch_learn(
+            [
+                {"content": "batch item 1 unique", "tags": ["batch"]},
+                {"content": "batch item 2 unique", "tags": ["batch"]},
+                {"content": "batch item 3 unique", "tags": ["batch"]},
+            ]
+        )
 
         assert result["learned"] == 3
         stats = mem.versioning_stats()

@@ -31,6 +31,7 @@ from .storage.qdrant_backend import QdrantBackend
 @dataclass
 class MigrationReport:
     """Result of a backend migration."""
+
     source_backend: str
     dest_backend: str
     total_items: int = 0
@@ -171,9 +172,7 @@ class MigrationEngine:
                     items_done += 1
                     continue
                 if existing and merge == "error":
-                    report.errors.append(
-                        f"Item {item.id} already exists in dest (namespace={ns!r})"
-                    )
+                    report.errors.append(f"Item {item.id} already exists in dest (namespace={ns!r})")
                     report.skipped += 1
                     items_done += 1
                     continue
@@ -185,9 +184,7 @@ class MigrationEngine:
                             dest.delete(item.id, namespace=ns)
                         dest.upsert(item, namespace=ns)
                     except Exception as e:
-                        report.errors.append(
-                            f"Failed to migrate {item.id} (ns={ns!r}): {e}"
-                        )
+                        report.errors.append(f"Failed to migrate {item.id} (ns={ns!r}): {e}")
                         report.skipped += 1
                         items_done += 1
                         continue

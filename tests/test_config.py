@@ -157,6 +157,7 @@ class TestCLIConfig:
 
     def test_config_set_invalid_key(self):
         from memos.cli import main
+
         with pytest.raises(SystemExit):
             main(["config", "set", "nonsense=value"])
 
@@ -193,8 +194,10 @@ class TestCLIConfig:
 
         cfg_file = tmp_path / ".memos.toml"
         cfg_file.write_text("[memos]\n")
-        with patch("memos.cli.commands_system.config_path", return_value=cfg_file), \
-             patch("memos.config.config_path", return_value=cfg_file):
+        with (
+            patch("memos.cli.commands_system.config_path", return_value=cfg_file),
+            patch("memos.config.config_path", return_value=cfg_file),
+        ):
             with pytest.raises(SystemExit):
                 main(["config", "init"])
 
@@ -206,8 +209,10 @@ class TestCLIConfig:
 
         cfg_file = tmp_path / ".memos.toml"
         cfg_file.write_text("old content")
-        with patch("memos.cli.commands_system.config_path", return_value=cfg_file), \
-             patch("memos.config.config_path", return_value=cfg_file):
+        with (
+            patch("memos.cli.commands_system.config_path", return_value=cfg_file),
+            patch("memos.config.config_path", return_value=cfg_file),
+        ):
             f = io.StringIO()
             with redirect_stdout(f):
                 main(["config", "init", "--force"])

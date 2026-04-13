@@ -351,6 +351,7 @@ def test_palace_recall_unknown_wing_fallback(palace: PalaceIndex, memos_mem: Mem
 def _make_app():
     """Create a fresh FastAPI app backed by an in-memory MemOS."""
     from memos.api import create_fastapi_app
+
     return create_fastapi_app(backend="memory", kg_db_path=":memory:")
 
 
@@ -358,6 +359,7 @@ def _make_app():
 async def test_rest_create_wing() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/palace/wings", json={"name": "rest-wing-a"})
@@ -371,6 +373,7 @@ async def test_rest_create_wing() -> None:
 async def test_rest_list_wings() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-wing-list-test"})
@@ -385,6 +388,7 @@ async def test_rest_list_wings() -> None:
 async def test_rest_create_room() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-wing-room-test"})
@@ -402,6 +406,7 @@ async def test_rest_create_room() -> None:
 async def test_rest_list_rooms() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-room-list-wing"})
@@ -419,6 +424,7 @@ async def test_rest_list_rooms() -> None:
 async def test_rest_assign_and_unassign() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-assign-wing"})
@@ -437,6 +443,7 @@ async def test_rest_assign_and_unassign() -> None:
 async def test_rest_palace_stats() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/api/v1/palace/stats")
@@ -450,6 +457,7 @@ async def test_rest_palace_stats() -> None:
 async def test_rest_palace_recall() -> None:
     pytest.importorskip("httpx")
     from httpx import ASGITransport, AsyncClient
+
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/learn", json={"content": "rest palace recall test memory"})
@@ -467,12 +475,14 @@ async def test_rest_palace_recall() -> None:
 
 def test_cli_palace_init(tmp_path) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])  # should not raise
 
 
 def test_cli_palace_wing_create(tmp_path, capsys) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])
     main(["palace-wing-create", "cli-wing", "--db", db])
@@ -482,6 +492,7 @@ def test_cli_palace_wing_create(tmp_path, capsys) -> None:
 
 def test_cli_palace_wing_list(tmp_path, capsys) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])
     main(["palace-wing-create", "listed-wing", "--db", db])
@@ -492,6 +503,7 @@ def test_cli_palace_wing_list(tmp_path, capsys) -> None:
 
 def test_cli_palace_room_create(tmp_path, capsys) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])
     main(["palace-wing-create", "wing-r", "--db", db])
@@ -502,6 +514,7 @@ def test_cli_palace_room_create(tmp_path, capsys) -> None:
 
 def test_cli_palace_room_list(tmp_path, capsys) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])
     main(["palace-wing-create", "wing-rl", "--db", db])
@@ -513,6 +526,7 @@ def test_cli_palace_room_list(tmp_path, capsys) -> None:
 
 def test_cli_palace_assign(tmp_path, capsys) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])
     main(["palace-wing-create", "assign-wing", "--db", db])
@@ -523,12 +537,12 @@ def test_cli_palace_assign(tmp_path, capsys) -> None:
 
 def test_cli_palace_stats(tmp_path, capsys) -> None:
     from memos.cli import main
+
     db = str(tmp_path / "palace.db")
     main(["palace-init", "--db", db])
     main(["palace-stats", "--db", db])
     out = capsys.readouterr().out
     assert "wings" in out.lower() or "Total" in out
-
 
 
 # ---------------------------------------------------------------------------
@@ -563,9 +577,7 @@ def test_palace_db_colocated_with_kg_db(tmp_path) -> None:
         # Can't conclusively check without stat — just confirm colocated one exists
         pass
     else:
-        assert not home_palace_db.exists(), (
-            "palace.db was created in ~/.memos/ instead of alongside kg.db"
-        )
+        assert not home_palace_db.exists(), "palace.db was created in ~/.memos/ instead of alongside kg.db"
 
 
 def test_palace_db_memory_when_kg_is_memory() -> None:
@@ -582,6 +594,5 @@ def test_palace_db_memory_when_kg_is_memory() -> None:
 
     if not existed_before:
         assert not home_palace_db.exists(), (
-            "palace.db was created in ~/.memos/ when kg_db_path=':memory:' — "
-            "palace should have used ':memory:' too."
+            "palace.db was created in ~/.memos/ when kg_db_path=':memory:' — palace should have used ':memory:' too."
         )

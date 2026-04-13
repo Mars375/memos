@@ -90,12 +90,14 @@ def cmd_palace_assign(ns: argparse.Namespace) -> None:
 def cmd_palace_recall(ns: argparse.Namespace) -> None:
     """Scoped recall using Palace wing/room filter."""
     from ..palace import PalaceRecall
+
     palace = _get_palace(ns)
     memos = _get_memos(ns)
     try:
         pr = PalaceRecall(palace)
         results = pr.palace_recall(
-            memos, ns.query,
+            memos,
+            ns.query,
             wing_name=ns.wing,
             room_name=ns.room,
             top=ns.top,
@@ -121,5 +123,3 @@ def cmd_palace_stats(ns: argparse.Namespace) -> None:
         print(f"  Assigned memories: {s['assigned_memories']}")
     finally:
         palace.close()
-
-

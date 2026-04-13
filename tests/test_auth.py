@@ -93,44 +93,52 @@ class TestFastAPIAuth:
     @pytest.fixture
     def app_no_auth(self):
         from memos.api import create_fastapi_app
+
         return create_fastapi_app(api_keys=None)
 
     @pytest.fixture
     def app_with_auth(self):
         from memos.api import create_fastapi_app
+
         return create_fastapi_app(api_keys=["sk-test-123"])
 
     @pytest.fixture
     def app_rate_limited(self):
         from memos.api import create_fastapi_app
+
         return create_fastapi_app(api_keys=["sk-test"], rate_limit=2)
 
     def test_no_auth_allows_requests(self, app_no_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_no_auth)
         resp = client.get("/api/v1/stats")
         assert resp.status_code == 200
 
     def test_auth_blocks_no_key(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.get("/api/v1/stats")
         assert resp.status_code == 401
 
     def test_auth_blocks_wrong_key(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.get("/api/v1/stats", headers={"X-API-Key": "wrong"})
         assert resp.status_code == 403
 
     def test_auth_allows_valid_key(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.get("/api/v1/stats", headers={"X-API-Key": "sk-test-123"})
         assert resp.status_code == 200
 
     def test_health_no_auth_required(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.get("/health")
         assert resp.status_code == 200
@@ -140,12 +148,14 @@ class TestFastAPIAuth:
 
     def test_dashboard_no_auth_required(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.get("/")
         assert resp.status_code == 200
 
     def test_rate_limit_enforced(self, app_rate_limited):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_rate_limited)
         headers = {"X-API-Key": "sk-test"}
         resp1 = client.get("/api/v1/stats", headers=headers)
@@ -157,6 +167,7 @@ class TestFastAPIAuth:
 
     def test_learn_with_auth(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.post(
             "/api/v1/learn",
@@ -168,6 +179,7 @@ class TestFastAPIAuth:
 
     def test_learn_blocked_without_auth(self, app_with_auth):
         from fastapi.testclient import TestClient
+
         client = TestClient(app_with_auth)
         resp = client.post(
             "/api/v1/learn",

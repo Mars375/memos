@@ -129,7 +129,9 @@ def test_ingest_pdf_file_url(tmp_path):
 
 def test_memos_ingest_url_stores_memories(tmp_path):
     page = tmp_path / "article.html"
-    page.write_text("<html><head><title>Stored page</title></head><body><p>Saved into MemOS.</p></body></html>", encoding="utf-8")
+    page.write_text(
+        "<html><head><title>Stored page</title></head><body><p>Saved into MemOS.</p></body></html>", encoding="utf-8"
+    )
 
     memos = MemOS(backend="memory", sanitize=False)
     result = memos.ingest_url(_as_uri(page), tags=["imported"], dry_run=False)
@@ -145,7 +147,9 @@ def test_api_ingest_url_dry_run(tmp_path):
     from fastapi.testclient import TestClient
 
     page = tmp_path / "api-page.html"
-    page.write_text("<html><head><title>API page</title></head><body><p>Dry-run URL ingest.</p></body></html>", encoding="utf-8")
+    page.write_text(
+        "<html><head><title>API page</title></head><body><p>Dry-run URL ingest.</p></body></html>", encoding="utf-8"
+    )
 
     app = create_fastapi_app(backend="memory", kg_db_path=":memory:")
     client = TestClient(app)

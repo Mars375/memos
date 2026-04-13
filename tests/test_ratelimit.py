@@ -22,8 +22,7 @@ class MockClient:
 
 
 class MockRequest:
-    def __init__(self, path: str = "/api/v1/learn", client_host: str = "127.0.0.1",
-                 headers: dict | None = None):
+    def __init__(self, path: str = "/api/v1/learn", client_host: str = "127.0.0.1", headers: dict | None = None):
         self.url = MockURL(path)
         self.client = MockClient(client_host)
         self.headers = headers or {}
@@ -108,9 +107,11 @@ class TestRateLimiter:
         assert len(limiter.rules) == 1
 
     def test_check_allows_initial_request(self):
-        limiter = RateLimiter(rules=[
-            EndpointRule(pattern="/api/v1/learn", max_requests=5, window_seconds=60.0),
-        ])
+        limiter = RateLimiter(
+            rules=[
+                EndpointRule(pattern="/api/v1/learn", max_requests=5, window_seconds=60.0),
+            ]
+        )
         req = MockRequest("/api/v1/learn")
         allowed, headers, rule = limiter.check(req)
         assert allowed is True
@@ -119,9 +120,11 @@ class TestRateLimiter:
         assert rule.pattern == "/api/v1/learn"
 
     def test_check_blocks_after_exhausting_tokens(self):
-        limiter = RateLimiter(rules=[
-            EndpointRule(pattern="/api/v1/learn", max_requests=3, window_seconds=60.0),
-        ])
+        limiter = RateLimiter(
+            rules=[
+                EndpointRule(pattern="/api/v1/learn", max_requests=3, window_seconds=60.0),
+            ]
+        )
         req = MockRequest("/api/v1/learn")
         for _ in range(3):
             allowed, _, _ = limiter.check(req)
@@ -132,10 +135,12 @@ class TestRateLimiter:
         assert headers["X-RateLimit-Remaining"] == "0"
 
     def test_different_endpoints_independent(self):
-        limiter = RateLimiter(rules=[
-            EndpointRule(pattern="/api/v1/learn", max_requests=2, window_seconds=60.0),
-            EndpointRule(pattern="/api/v1/recall", max_requests=10, window_seconds=60.0),
-        ])
+        limiter = RateLimiter(
+            rules=[
+                EndpointRule(pattern="/api/v1/learn", max_requests=2, window_seconds=60.0),
+                EndpointRule(pattern="/api/v1/recall", max_requests=10, window_seconds=60.0),
+            ]
+        )
         # Exhaust learn
         req_learn = MockRequest("/api/v1/learn")
         limiter.check(req_learn)
@@ -148,9 +153,11 @@ class TestRateLimiter:
         assert allowed is True
 
     def test_different_clients_independent(self):
-        limiter = RateLimiter(rules=[
-            EndpointRule(pattern="/api/v1/learn", max_requests=2, window_seconds=60.0),
-        ])
+        limiter = RateLimiter(
+            rules=[
+                EndpointRule(pattern="/api/v1/learn", max_requests=2, window_seconds=60.0),
+            ]
+        )
         req1 = MockRequest("/api/v1/learn", "192.168.1.1")
         req2 = MockRequest("/api/v1/learn", "192.168.1.2")
         limiter.check(req1)
@@ -190,9 +197,12 @@ class TestRateLimiter:
         assert allowed is True
 
     def test_get_status(self):
-        limiter = RateLimiter(default_max=100, rules=[
-            EndpointRule(pattern="/api/v1/learn", max_requests=10, window_seconds=60.0),
-        ])
+        limiter = RateLimiter(
+            default_max=100,
+            rules=[
+                EndpointRule(pattern="/api/v1/learn", max_requests=10, window_seconds=60.0),
+            ],
+        )
         req = MockRequest("/api/v1/learn")
         limiter.check(req)
         status = limiter.get_status(req)
@@ -220,9 +230,11 @@ class TestRateLimiter:
         assert count >= 2
 
     def test_headers_format(self):
-        limiter = RateLimiter(rules=[
-            EndpointRule(pattern="/api/v1/learn", max_requests=30, window_seconds=60.0),
-        ])
+        limiter = RateLimiter(
+            rules=[
+                EndpointRule(pattern="/api/v1/learn", max_requests=30, window_seconds=60.0),
+            ]
+        )
         req = MockRequest("/api/v1/learn")
         allowed, headers, rule = limiter.check(req)
         assert "X-RateLimit-Limit" in headers

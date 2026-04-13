@@ -60,8 +60,7 @@ class PineconeBackend(StorageBackend):
             from pinecone import Pinecone
         except ImportError:
             raise ImportError(
-                "pinecone-client is required for PineconeBackend. "
-                "Install with: pip install memos[pinecone]"
+                "pinecone-client is required for PineconeBackend. Install with: pip install memos[pinecone]"
             )
         self._pc = Pinecone(api_key=self._api_key)
 
@@ -83,9 +82,7 @@ class PineconeBackend(StorageBackend):
             spec = ServerlessSpec(cloud=self._cloud, region=self._region)
         else:
             if not self._environment:
-                raise ValueError(
-                    "environment is required for pod-based Pinecone indexes"
-                )
+                raise ValueError("environment is required for pod-based Pinecone indexes")
             spec = PodSpec(environment=self._environment)
 
         self._pc.create_index(
@@ -100,6 +97,7 @@ class PineconeBackend(StorageBackend):
             return self._embed_cache[text]
         try:
             import httpx
+
             resp = httpx.post(
                 f"{self._embed_host}/api/embed",
                 json={"model": self._embed_model, "input": text},
@@ -188,11 +186,13 @@ class PineconeBackend(StorageBackend):
         ns = self._pinecone_namespace(namespace)
 
         self._index.upsert(
-            vectors=[{
-                "id": pinecone_id,
-                "values": vec or [0.0] * self._vector_size,
-                "metadata": metadata,
-            }],
+            vectors=[
+                {
+                    "id": pinecone_id,
+                    "values": vec or [0.0] * self._vector_size,
+                    "metadata": metadata,
+                }
+            ],
             namespace=ns,
         )
 
@@ -204,17 +204,19 @@ class PineconeBackend(StorageBackend):
         count = 0
 
         for i in range(0, len(items), batch_size):
-            batch = items[i:i + batch_size]
+            batch = items[i : i + batch_size]
             vectors = []
             for item in batch:
                 vec = self._get_embedding(item.content)
                 metadata = self._item_to_metadata(item)
                 pinecone_id = self._id_to_valid_id(item.id)
-                vectors.append({
-                    "id": pinecone_id,
-                    "values": vec or [0.0] * self._vector_size,
-                    "metadata": metadata,
-                })
+                vectors.append(
+                    {
+                        "id": pinecone_id,
+                        "values": vec or [0.0] * self._vector_size,
+                        "metadata": metadata,
+                    }
+                )
             self._index.upsert(vectors=vectors, namespace=ns)
             count += len(batch)
 
@@ -265,12 +267,14 @@ class PineconeBackend(StorageBackend):
                     continue
 
                 for j in range(0, len(page_ids), 100):
-                    sub = page_ids[j:j + 100]
+                    sub = page_ids[j : j + 100]
                     result = self._index.fetch(ids=sub, namespace=ns)
                     vectors = result.get("vectors", result.vectors if hasattr(result, "vectors") else {})
                     if isinstance(vectors, dict):
                         for vec_data in vectors.values():
-                            metadata = vec_data.metadata if hasattr(vec_data, "metadata") else vec_data.get("metadata", {})
+                            metadata = (
+                                vec_data.metadata if hasattr(vec_data, "metadata") else vec_data.get("metadata", {})
+                            )
                             items.append(self._metadata_to_item(metadata))
         except Exception:
             pass
@@ -340,17 +344,11 @@ class PineconeBackend(StorageBackend):
         prefix = f"{self.INDEX_PREFIX}{self._namespace_separator}"
         try:
             namespaces = self._index.list_namespaces()
-            return sorted(
-                ns[len(prefix):]
-                for ns in namespaces
-                if ns.startswith(prefix)
-            )
+            return sorted(ns[len(prefix) :] for ns in namespaces if ns.startswith(prefix))
         except Exception:
             return []
 
-    def _keyword_search(
-        self, query: str, limit: int, namespace: str
-    ) -> list[MemoryItem]:
+    def _keyword_search(self, query: str, limit: int, namespace: str) -> list[MemoryItem]:
         all_items = self.list_all(namespace=namespace)
         q = query.lower()
         results = []

@@ -1,4 +1,5 @@
 """Tests for ObsidianExporter — P6 Obsidian-compatible export."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -8,6 +9,7 @@ from memos.export_obsidian import ObsidianExporter, ObsidianExportResult
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_memos(items=None):
     """Return a minimal memos mock."""
@@ -20,12 +22,14 @@ def _make_memos(items=None):
 
 def _make_kg():
     from memos.knowledge_graph import KnowledgeGraph
+
     return KnowledgeGraph(db_path=":memory:")
 
 
 # ---------------------------------------------------------------------------
 # Unit tests for helpers
 # ---------------------------------------------------------------------------
+
 
 class TestWikilinkInjection:
     def setup_method(self):
@@ -122,6 +126,7 @@ class TestPlainLinksToWikilinks:
 # Integration test — full export pipeline
 # ---------------------------------------------------------------------------
 
+
 class TestObsidianExport:
     def test_export_returns_obsidian_result(self, tmp_path):
         """Full export produces ObsidianExportResult (even with empty store)."""
@@ -129,11 +134,16 @@ class TestObsidianExport:
         kg = _make_kg()
 
         # Patch out the heavy LivingWikiEngine calls
-        with patch("memos.export_markdown.LivingWikiEngine") as MockWiki, \
-             patch("memos.export_markdown.GraphWikiEngine"):
+        with (
+            patch("memos.export_markdown.LivingWikiEngine") as MockWiki,
+            patch("memos.export_markdown.GraphWikiEngine"),
+        ):
             MockWiki.return_value.update.return_value = MagicMock(
-                pages_created=0, pages_updated=0, entities_found=0,
-                memories_indexed=0, backlinks_added=0,
+                pages_created=0,
+                pages_updated=0,
+                entities_found=0,
+                memories_indexed=0,
+                backlinks_added=0,
             )
             MockWiki.return_value.list_pages.return_value = []
             MockWiki.return_value._wiki_dir = tmp_path / "wiki"
@@ -150,11 +160,16 @@ class TestObsidianExport:
         memos = _make_memos()
         kg = _make_kg()
 
-        with patch("memos.export_markdown.LivingWikiEngine") as MockWiki, \
-             patch("memos.export_markdown.GraphWikiEngine"):
+        with (
+            patch("memos.export_markdown.LivingWikiEngine") as MockWiki,
+            patch("memos.export_markdown.GraphWikiEngine"),
+        ):
             MockWiki.return_value.update.return_value = MagicMock(
-                pages_created=0, pages_updated=0, entities_found=0,
-                memories_indexed=0, backlinks_added=0,
+                pages_created=0,
+                pages_updated=0,
+                entities_found=0,
+                memories_indexed=0,
+                backlinks_added=0,
             )
             MockWiki.return_value.list_pages.return_value = []
             MockWiki.return_value._wiki_dir = tmp_path / "wiki"
@@ -186,11 +201,16 @@ class TestObsidianExport:
             encoding="utf-8",
         )
 
-        with patch("memos.export_markdown.LivingWikiEngine") as MockWiki, \
-             patch("memos.export_markdown.GraphWikiEngine"):
+        with (
+            patch("memos.export_markdown.LivingWikiEngine") as MockWiki,
+            patch("memos.export_markdown.GraphWikiEngine"),
+        ):
             MockWiki.return_value.update.return_value = MagicMock(
-                pages_created=0, pages_updated=0, entities_found=0,
-                memories_indexed=0, backlinks_added=0,
+                pages_created=0,
+                pages_updated=0,
+                entities_found=0,
+                memories_indexed=0,
+                backlinks_added=0,
             )
             MockWiki.return_value.list_pages.return_value = []
             MockWiki.return_value._wiki_dir = tmp_path / "wiki"

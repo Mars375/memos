@@ -37,6 +37,7 @@ from .parsers import (
 # Result types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MineResult:
     imported: int = 0
@@ -71,15 +72,38 @@ class MineResult:
 # ---------------------------------------------------------------------------
 
 _DEFAULT_IGNORE = {
-    ".git", "__pycache__", ".venv", "venv", "env", "node_modules",
-    ".pytest_cache", "dist", "build", ".mypy_cache", ".ruff_cache",
-    "*.pyc", "*.pyo", "*.egg-info",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    ".pytest_cache",
+    "dist",
+    "build",
+    ".mypy_cache",
+    ".ruff_cache",
+    "*.pyc",
+    "*.pyo",
+    "*.egg-info",
 }
 
 _MINEABLE_EXTENSIONS = {
-    ".md", ".markdown", ".txt", ".rst",
-    ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".toml",
-    ".sql", ".sh", ".bash", ".zsh",
+    ".md",
+    ".markdown",
+    ".txt",
+    ".rst",
+    ".py",
+    ".js",
+    ".ts",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".sql",
+    ".sh",
+    ".bash",
+    ".zsh",
 }
 
 
@@ -99,8 +123,7 @@ def iter_files(
         if not path.is_file():
             continue
         # Skip ignored dirs
-        if any(part.startswith(".") or part in _DEFAULT_IGNORE
-               for part in path.parts):
+        if any(part.startswith(".") or part in _DEFAULT_IGNORE for part in path.parts):
             continue
         if path.suffix.lower() not in extensions:
             continue
@@ -111,6 +134,7 @@ def iter_files(
 # ---------------------------------------------------------------------------
 # Main Miner class
 # ---------------------------------------------------------------------------
+
 
 class Miner:
     """Smart memory miner — import conversations and projects into MemOS.
@@ -290,7 +314,10 @@ class Miner:
         base_tags += detect_room(path, text)
 
         chunk_result = self._mine_chunks(
-            text, base_tags, source_path=path, importance=importance,
+            text,
+            base_tags,
+            source_path=path,
+            importance=importance,
             known_hashes=known_hashes,
         )
         result.merge(chunk_result)
@@ -308,7 +335,7 @@ class Miner:
                 all_chunk_hashes = list(merged)
 
             existing = self._cache.get(str(path))
-            existing_ids: List[str] = (existing["memory_ids"] if existing else [])
+            existing_ids: List[str] = existing["memory_ids"] if existing else []
             if self._update:
                 existing_ids = []
             all_ids = existing_ids + result.memory_ids
@@ -369,9 +396,7 @@ class Miner:
                 slug = re.sub(r"[^a-z0-9_]", "_", convo["source"].lower())[:30]
                 if slug:
                     convo_tags.append(slug)
-            result.merge(self._mine_chunks(
-                convo["text"], convo_tags, importance=importance
-            ))
+            result.merge(self._mine_chunks(convo["text"], convo_tags, importance=importance))
 
         return result
 
@@ -399,9 +424,7 @@ class Miner:
                 slug = re.sub(r"[^a-z0-9_]", "_", convo["source"].lower())[:30]
                 if slug:
                     convo_tags.append(slug)
-            result.merge(self._mine_chunks(
-                convo["text"], convo_tags, importance=importance
-            ))
+            result.merge(self._mine_chunks(convo["text"], convo_tags, importance=importance))
 
         return result
 
@@ -427,9 +450,7 @@ class Miner:
             base_tags.append(channel)
 
         for convo in _parse_slack_jsonl(lines):
-            result.merge(self._mine_chunks(
-                convo["text"], base_tags, importance=importance
-            ))
+            result.merge(self._mine_chunks(convo["text"], base_tags, importance=importance))
 
         return result
 
@@ -458,9 +479,7 @@ class Miner:
                 slug = re.sub(r"[^a-z0-9_#]", "_", source.lower())[:40]
                 if slug:
                     convo_tags.append(slug)
-            result.merge(self._mine_chunks(
-                convo["text"], convo_tags, importance=importance
-            ))
+            result.merge(self._mine_chunks(convo["text"], convo_tags, importance=importance))
 
         return result
 
@@ -493,9 +512,7 @@ class Miner:
             chat_type = convo.get("chat_type", "")
             if chat_type and chat_type not in convo_tags:
                 convo_tags.append(chat_type.replace("_", "-"))
-            result.merge(self._mine_chunks(
-                convo["text"], convo_tags, importance=importance
-            ))
+            result.merge(self._mine_chunks(convo["text"], convo_tags, importance=importance))
 
         return result
 

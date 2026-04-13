@@ -153,9 +153,9 @@ class TestEmbeddingCacheStats:
     def test_hit_miss_tracking(self, cache):
         cache.put("x", [1.0])
 
-        cache.get("x")   # hit
-        cache.get("x")   # hit
-        cache.get("y")   # miss
+        cache.get("x")  # hit
+        cache.get("x")  # hit
+        cache.get("y")  # miss
 
         stats = cache.stats()
         assert stats.hits == 2

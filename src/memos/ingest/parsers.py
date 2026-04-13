@@ -107,6 +107,7 @@ def _parse_chatgpt_export(data: Any) -> Iterator[dict]:
             created = ""
             if create_time:
                 import datetime
+
                 created = datetime.datetime.fromtimestamp(create_time).isoformat()
             yield {
                 "text": "\n\n".join(turns),
@@ -145,10 +146,7 @@ def _parse_slack_jsonl(lines: List[str]) -> Iterator[dict]:
     for msg in messages:
         ts = float(msg.get("ts", 0))
         if ts - group_start > window and group:
-            text = "\n".join(
-                f"[{m.get('user', 'user')}] {m['text']}"
-                for m in group if m.get("text", "").strip()
-            )
+            text = "\n".join(f"[{m.get('user', 'user')}] {m['text']}" for m in group if m.get("text", "").strip())
             if text.strip():
                 yield {
                     "text": text,
@@ -161,10 +159,7 @@ def _parse_slack_jsonl(lines: List[str]) -> Iterator[dict]:
         group.append(msg)
 
     if group:
-        text = "\n".join(
-            f"[{m.get('user', 'user')}] {m['text']}"
-            for m in group if m.get("text", "").strip()
-        )
+        text = "\n".join(f"[{m.get('user', 'user')}] {m['text']}" for m in group if m.get("text", "").strip())
         if text.strip():
             yield {
                 "text": text,
@@ -226,6 +221,7 @@ def _parse_discord_export(data: Any) -> Iterator[dict]:
         if ts_str:
             try:
                 import datetime
+
                 dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
                 ts = dt.timestamp()
             except Exception:
@@ -245,6 +241,7 @@ def _parse_discord_export(data: Any) -> Iterator[dict]:
         created = ""
         if g[0]["ts"]:
             import datetime
+
             created = datetime.datetime.fromtimestamp(g[0]["ts"]).isoformat()
         return {
             "text": "\n".join(lines),
@@ -318,6 +315,7 @@ def _parse_telegram_export(data: Any) -> Iterator[dict]:
         if date_str:
             try:
                 import datetime
+
                 dt = datetime.datetime.fromisoformat(date_str)
                 ts = dt.timestamp()
             except Exception:
@@ -337,6 +335,7 @@ def _parse_telegram_export(data: Any) -> Iterator[dict]:
         created = ""
         if g[0]["ts"]:
             import datetime
+
             created = datetime.datetime.fromtimestamp(g[0]["ts"]).isoformat()
         return {
             "text": "\n".join(lines),
@@ -396,6 +395,7 @@ def _parse_openclaw_session(data: Any) -> Iterator[dict]:
             if ts:
                 try:
                     import datetime
+
                     if isinstance(ts, (int, float)):
                         created = datetime.datetime.fromtimestamp(ts).isoformat()
                     else:

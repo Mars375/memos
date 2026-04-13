@@ -7,13 +7,23 @@ from typing import Any
 
 from .knowledge_graph import KnowledgeGraph
 
-_ENTITY_PATTERN = re.compile(
-    r"\b(?:[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)+|[A-Z]{2,})\b"
-)
+_ENTITY_PATTERN = re.compile(r"\b(?:[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)+|[A-Z]{2,})\b")
 
 _FACT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("is", re.compile(r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+is\s+(?P<object>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*|[\w.-]+)", re.I)),
-    ("works_at", re.compile(r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+works\s+at\s+(?P<object>[A-Z][\w.&-]*(?:\s+[A-Z][\w.&-]*)*)", re.I)),
+    (
+        "is",
+        re.compile(
+            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+is\s+(?P<object>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*|[\w.-]+)",
+            re.I,
+        ),
+    ),
+    (
+        "works_at",
+        re.compile(
+            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+works\s+at\s+(?P<object>[A-Z][\w.&-]*(?:\s+[A-Z][\w.&-]*)*)",
+            re.I,
+        ),
+    ),
     ("arrow", re.compile(r"(?P<subject>[^→\n]{1,80}?)\s*→\s*(?P<object>[^.\n;]{1,120})")),
     ("from_to", re.compile(r"from:\s*(?P<subject>[^\n;]{1,80}?)\s+to:\s*(?P<object>[^.\n;]{1,120})", re.I)),
 ]
@@ -43,14 +53,16 @@ class KGBridge:
         filter_before: float | None = None,
     ) -> dict[str, Any]:
         """Recall memories and augment them with KG facts linked to detected entities."""
-        results = list(self._memos.recall(
-            query,
-            top=top,
-            filter_tags=filter_tags,
-            min_score=min_score,
-            filter_after=filter_after,
-            filter_before=filter_before,
-        ))
+        results = list(
+            self._memos.recall(
+                query,
+                top=top,
+                filter_tags=filter_tags,
+                min_score=min_score,
+                filter_after=filter_after,
+                filter_before=filter_before,
+            )
+        )
         entities = self._detect_entities(query, results)
         facts = self._collect_facts(entities)
         return {
@@ -85,14 +97,16 @@ class KGBridge:
                 confidence_label="AMBIGUOUS",
                 source=f"memos:{item.id}",
             )
-            facts.append({
-                "id": fact_id,
-                "subject": subject,
-                "predicate": predicate,
-                "object": obj,
-                "confidence_label": "AMBIGUOUS",
-                "source": f"memos:{item.id}",
-            })
+            facts.append(
+                {
+                    "id": fact_id,
+                    "subject": subject,
+                    "predicate": predicate,
+                    "object": obj,
+                    "confidence_label": "AMBIGUOUS",
+                    "source": f"memos:{item.id}",
+                }
+            )
         return {
             "memory": self._serialize_memory(item),
             "facts": facts,

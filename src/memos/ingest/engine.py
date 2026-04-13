@@ -12,6 +12,7 @@ from typing import Any, Optional
 @dataclass
 class IngestResult:
     """Result of a file ingestion."""
+
     total_chunks: int = 0
     skipped: int = 0
     errors: list[str] = field(default_factory=list)
@@ -30,7 +31,7 @@ def _chunk_markdown(
     chunks: list[dict[str, Any]] = []
 
     # Split by headers (## or ###)
-    sections = re.split(r'\n(?=#{1,3}\s)', text)
+    sections = re.split(r"\n(?=#{1,3}\s)", text)
 
     for section in sections:
         section = section.strip()
@@ -38,48 +39,56 @@ def _chunk_markdown(
             continue
 
         # Extract header as tag
-        header_match = re.match(r'^#{1,3}\s+(.+)', section)
+        header_match = re.match(r"^#{1,3}\s+(.+)", section)
         tags: list[str] = []
         if header_match:
             tag = header_match.group(1).strip().lower()[:50]
-            tags = [re.sub(r'[^\w\s-]', '', tag).replace(' ', '-')]
+            tags = [re.sub(r"[^\w\s-]", "", tag).replace(" ", "-")]
 
         # If section fits in one chunk
         if len(section) <= max_chunk:
-            chunks.append({
-                "content": section,
-                "tags": tags,
-                "metadata": {"source": source, "type": "markdown"},
-            })
+            chunks.append(
+                {
+                    "content": section,
+                    "tags": tags,
+                    "metadata": {"source": source, "type": "markdown"},
+                }
+            )
         else:
             # Split by paragraphs
-            paragraphs = re.split(r'\n{2,}', section)
+            paragraphs = re.split(r"\n{2,}", section)
             buf = ""
             for para in paragraphs:
                 candidate = f"{buf}\n\n{para}".strip() if buf else para
                 if len(candidate) > max_chunk and buf:
-                    chunks.append({
-                        "content": buf,
-                        "tags": tags,
-                        "metadata": {"source": source, "type": "markdown"},
-                    })
+                    chunks.append(
+                        {
+                            "content": buf,
+                            "tags": tags,
+                            "metadata": {"source": source, "type": "markdown"},
+                        }
+                    )
                     buf = para
                 else:
                     buf = candidate
             if buf:
-                chunks.append({
-                    "content": buf,
-                    "tags": tags,
-                    "metadata": {"source": source, "type": "markdown"},
-                })
+                chunks.append(
+                    {
+                        "content": buf,
+                        "tags": tags,
+                        "metadata": {"source": source, "type": "markdown"},
+                    }
+                )
 
     # If no headers found, treat whole doc as one chunk
     if not chunks and text.strip():
-        chunks.append({
-            "content": text.strip(),
-            "tags": [],
-            "metadata": {"source": source, "type": "markdown"},
-        })
+        chunks.append(
+            {
+                "content": text.strip(),
+                "tags": [],
+                "metadata": {"source": source, "type": "markdown"},
+            }
+        )
 
     return chunks
 
@@ -103,39 +112,55 @@ def _chunk_json(
                 tags = item.get("tags", [])
                 if isinstance(tags, str):
                     tags = [t.strip() for t in tags.split(",")]
-                chunks.append({
-                    "content": str(item["content"]).strip(),
-                    "tags": tags,
-                    "importance": item.get("importance", 0.5),
-                    "metadata": {**{k: v for k, v in item.items() if k not in ("content", "tags", "importance")}, "source": source, "type": "json"},
-                })
+                chunks.append(
+                    {
+                        "content": str(item["content"]).strip(),
+                        "tags": tags,
+                        "importance": item.get("importance", 0.5),
+                        "metadata": {
+                            **{k: v for k, v in item.items() if k not in ("content", "tags", "importance")},
+                            "source": source,
+                            "type": "json",
+                        },
+                    }
+                )
             elif isinstance(item, str) and item.strip():
-                chunks.append({
-                    "content": item.strip(),
-                    "tags": [],
-                    "metadata": {"source": source, "type": "json", "index": i},
-                })
+                chunks.append(
+                    {
+                        "content": item.strip(),
+                        "tags": [],
+                        "metadata": {"source": source, "type": "json", "index": i},
+                    }
+                )
     elif isinstance(data, dict):
         if "content" in data:
             tags = data.get("tags", [])
             if isinstance(tags, str):
                 tags = [t.strip() for t in tags.split(",")]
-            chunks.append({
-                "content": str(data["content"]).strip(),
-                "tags": tags,
-                "importance": data.get("importance", 0.5),
-                "metadata": {**{k: v for k, v in data.items() if k not in ("content", "tags", "importance")}, "source": source, "type": "json"},
-            })
+            chunks.append(
+                {
+                    "content": str(data["content"]).strip(),
+                    "tags": tags,
+                    "importance": data.get("importance", 0.5),
+                    "metadata": {
+                        **{k: v for k, v in data.items() if k not in ("content", "tags", "importance")},
+                        "source": source,
+                        "type": "json",
+                    },
+                }
+            )
         else:
             # Key-value → one chunk per entry
             for key, value in data.items():
                 content = f"{key}: {value}"
                 if len(content) <= max_chunk:
-                    chunks.append({
-                        "content": content,
-                        "tags": [key.lower()[:30]],
-                        "metadata": {"source": source, "type": "json", "key": key},
-                    })
+                    chunks.append(
+                        {
+                            "content": content,
+                            "tags": [key.lower()[:30]],
+                            "metadata": {"source": source, "type": "json", "key": key},
+                        }
+                    )
     return chunks
 
 

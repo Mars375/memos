@@ -106,9 +106,7 @@ class TestMemoryEnvelope:
             MemoryItem(id="1", content="hello", tags=["test"]),
             MemoryItem(id="2", content="world", tags=["demo"]),
         ]
-        env = MemoryEnvelope.from_items(
-            items, source_agent="a", target_agent="b", share_id="sh1"
-        )
+        env = MemoryEnvelope.from_items(items, source_agent="a", target_agent="b", share_id="sh1")
         assert len(env.memories) == 2
         assert env.checksum
         assert env.validate()

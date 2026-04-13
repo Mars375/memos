@@ -9,8 +9,9 @@ from memos.models import MemoryItem, generate_id
 from memos.storage.memory_backend import InMemoryBackend
 
 
-def _make_item(content: str, *, importance: float = 0.5, tags: list = None,
-               age_days: float = 0, access_count: int = 0) -> MemoryItem:
+def _make_item(
+    content: str, *, importance: float = 0.5, tags: list = None, age_days: float = 0, access_count: int = 0
+) -> MemoryItem:
     """Create a test memory item."""
     now = time.time()
     return MemoryItem(
@@ -133,12 +134,20 @@ class TestCompactionPipeline:
         """Exact duplicates are removed (manually inserted with different IDs)."""
         # InMemoryBackend deduplicates by ID, so we insert same content with different IDs
         item1 = MemoryItem(
-            id="dup-a", content="duplicate content here for testing dedup phase",
-            tags=[], importance=0.5, created_at=time.time(), accessed_at=time.time(),
+            id="dup-a",
+            content="duplicate content here for testing dedup phase",
+            tags=[],
+            importance=0.5,
+            created_at=time.time(),
+            accessed_at=time.time(),
         )
         item2 = MemoryItem(
-            id="dup-b", content="duplicate content here for testing dedup phase",
-            tags=[], importance=0.5, created_at=time.time(), accessed_at=time.time(),
+            id="dup-b",
+            content="duplicate content here for testing dedup phase",
+            tags=[],
+            importance=0.5,
+            created_at=time.time(),
+            accessed_at=time.time(),
         )
         store.upsert(item1)
         store.upsert(item2)
@@ -151,10 +160,13 @@ class TestCompactionPipeline:
     def test_archive_phase(self, engine, store):
         """Old low-importance memories get archived."""
         for i in range(5):
-            store.upsert(_make_item(
-                f"archivable memory number {i} with unique content",
-                importance=0.1, age_days=100 + i,
-            ))
+            store.upsert(
+                _make_item(
+                    f"archivable memory number {i} with unique content",
+                    importance=0.1,
+                    age_days=100 + i,
+                )
+            )
         # Add a fresh one that shouldn't be archived
         store.upsert(_make_item("fresh memory active project", importance=0.5, age_days=1))
 
@@ -198,10 +210,13 @@ class TestCompactionPipeline:
         engine = CompactionEngine(config=config)
 
         for i in range(20):
-            store.upsert(_make_item(
-                f"very old memory number {i} with unique content here",
-                importance=0.1, age_days=200 + i,
-            ))
+            store.upsert(
+                _make_item(
+                    f"very old memory number {i} with unique content here",
+                    importance=0.1,
+                    age_days=200 + i,
+                )
+            )
 
         report = engine.compact(store)
         # Budget applies per-phase; total may exceed slightly but each phase respects it
@@ -209,9 +224,13 @@ class TestCompactionPipeline:
 
     def test_high_importance_never_archived(self, engine, store):
         """Important memories are never archived regardless of age."""
-        store.upsert(_make_item(
-            "critical config", importance=0.9, age_days=500,
-        ))
+        store.upsert(
+            _make_item(
+                "critical config",
+                importance=0.9,
+                age_days=500,
+            )
+        )
         report = engine.compact(store)
         assert report.archived == 0
 
@@ -230,10 +249,14 @@ class TestCompactionIntegration:
 
         # Fresh important
         for i in range(5):
-            store.upsert(_make_item(
-                f"fresh important {i}", importance=0.8, age_days=1,
-                tags=["active"],
-            ))
+            store.upsert(
+                _make_item(
+                    f"fresh important {i}",
+                    importance=0.8,
+                    age_days=1,
+                    tags=["active"],
+                )
+            )
 
         # Old duplicates
         store.upsert(_make_item("same old content", importance=0.2, age_days=90))
@@ -241,16 +264,23 @@ class TestCompactionIntegration:
 
         # Old low-importance, similar
         for i in range(5):
-            store.upsert(_make_item(
-                f"user preference dark mode variant {i}",
-                importance=0.1, age_days=120 + i,
-                tags=["preference"],
-            ))
+            store.upsert(
+                _make_item(
+                    f"user preference dark mode variant {i}",
+                    importance=0.1,
+                    age_days=120 + i,
+                    tags=["preference"],
+                )
+            )
 
         # Old important — should survive
-        store.upsert(_make_item(
-            "critical API key location", importance=0.9, age_days=200,
-        ))
+        store.upsert(
+            _make_item(
+                "critical API key location",
+                importance=0.9,
+                age_days=200,
+            )
+        )
 
         report = engine.compact(store)
 
@@ -297,10 +327,7 @@ class TestClusterSummary:
     """Cluster summary creation."""
 
     def test_creates_summary_with_tag(self, engine):
-        items = [
-            _make_item(f"preference note {i}", tags=["preference"])
-            for i in range(5)
-        ]
+        items = [_make_item(f"preference note {i}", tags=["preference"]) for i in range(5)]
         summary = engine._create_cluster_summary("preference", items)
         assert "preference" in summary.tags
         assert "compacted" in summary.tags
@@ -309,19 +336,13 @@ class TestClusterSummary:
         assert summary.metadata["compaction_type"] == "cluster_summary"
 
     def test_summary_importance_capped(self, engine):
-        items = [
-            _make_item(f"item {i}", importance=0.9, tags=["test"])
-            for i in range(4)
-        ]
+        items = [_make_item(f"item {i}", importance=0.9, tags=["test"]) for i in range(4)]
         summary = engine._create_cluster_summary("test", items)
         # 0.9 * 0.7 = 0.63, which is >= 0.3
         assert 0.3 <= summary.importance <= 1.0
 
     def test_long_content_truncated(self, engine):
-        items = [
-            _make_item("x " * 200, tags=["long"])
-            for i in range(5)
-        ]
+        items = [_make_item("x " * 200, tags=["long"]) for i in range(5)]
         summary = engine._create_cluster_summary("long", items)
         # Summary should be manageable size
         assert len(summary.content) < 5000

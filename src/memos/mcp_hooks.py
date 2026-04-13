@@ -37,6 +37,7 @@ from typing import Any, Callable
 # Registry
 # ---------------------------------------------------------------------------
 
+
 class MCPHookRegistry:
     """Registry of pre/post hooks keyed by tool name.
 
@@ -100,6 +101,7 @@ class MCPHookRegistry:
 # Built-in hooks
 # ---------------------------------------------------------------------------
 
+
 def hook_inject_wake_up(tool: str, args: dict, memos: Any) -> None:
     """PRE-hook: inject compact wake-up context before memory_search.
 
@@ -118,6 +120,7 @@ def hook_prepend_context(tool: str, args: dict, result: dict, memos: Any) -> dic
     """
     try:
         from .context import ContextStack
+
         cs = ContextStack(memos)
         context = cs.wake_up(compact=True)
         if not context.strip():
@@ -170,19 +173,19 @@ def hook_auto_capture_kg(tool: str, args: dict, result: dict, memos: Any) -> dic
 # Simple verb patterns: (subject) VERB (object)
 _EXTRACTION_PATTERNS: list[tuple[str, str]] = [
     # "Alice is a developer"
-    (r'\b([A-Z][a-zA-Z]+)\s+is(?:\s+a|\s+an)?\s+([A-Z][a-zA-Z]+)\b', "is-a"),
+    (r"\b([A-Z][a-zA-Z]+)\s+is(?:\s+a|\s+an)?\s+([A-Z][a-zA-Z]+)\b", "is-a"),
     # "Alice works at CompanyX" / "Alice works_at CompanyX"
-    (r'\b([A-Z][a-zA-Z]+)\s+works[\s_]at\s+([A-Z][a-zA-Z]+)\b', "works-at"),
+    (r"\b([A-Z][a-zA-Z]+)\s+works[\s_]at\s+([A-Z][a-zA-Z]+)\b", "works-at"),
     # "Alice leads TeamA"
-    (r'\b([A-Z][a-zA-Z]+)\s+leads\s+([A-Z][a-zA-Z]+)\b', "leads"),
+    (r"\b([A-Z][a-zA-Z]+)\s+leads\s+([A-Z][a-zA-Z]+)\b", "leads"),
     # "Alice manages Bob"
-    (r'\b([A-Z][a-zA-Z]+)\s+manages\s+([A-Z][a-zA-Z]+)\b', "manages"),
+    (r"\b([A-Z][a-zA-Z]+)\s+manages\s+([A-Z][a-zA-Z]+)\b", "manages"),
     # "Alice owns ProjectX"
-    (r'\b([A-Z][a-zA-Z]+)\s+owns\s+([A-Z][a-zA-Z]+)\b', "owns"),
+    (r"\b([A-Z][a-zA-Z]+)\s+owns\s+([A-Z][a-zA-Z]+)\b", "owns"),
     # "ProjectX depends on ProjectY"
-    (r'\b([A-Z][a-zA-Z]+)\s+depends\s+on\s+([A-Z][a-zA-Z]+)\b', "depends-on"),
+    (r"\b([A-Z][a-zA-Z]+)\s+depends\s+on\s+([A-Z][a-zA-Z]+)\b", "depends-on"),
     # "Alice uses Tool"
-    (r'\b([A-Z][a-zA-Z]+)\s+uses\s+([A-Z][a-zA-Z]+)\b', "uses"),
+    (r"\b([A-Z][a-zA-Z]+)\s+uses\s+([A-Z][a-zA-Z]+)\b", "uses"),
 ]
 
 
@@ -199,7 +202,9 @@ def _extract_and_store_facts(content: str, kg: Any) -> list[str]:
                 continue
             try:
                 fid = kg.add_fact(
-                    subject, predicate, obj,
+                    subject,
+                    predicate,
+                    obj,
                     confidence=0.7,
                     confidence_label="EXTRACTED",
                     source="mcp-hook:auto-capture",
@@ -213,6 +218,7 @@ def _extract_and_store_facts(content: str, kg: Any) -> list[str]:
 # ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
+
 
 def create_default_registry(
     auto_context: bool = False,

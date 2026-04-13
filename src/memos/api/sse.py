@@ -68,12 +68,14 @@ def format_done_event(count: int, query: str, elapsed_ms: float) -> SSEEvent:
     """Format a completion event."""
     return SSEEvent(
         event="done",
-        data=json.dumps({
-            "type": "done",
-            "count": count,
-            "query": query,
-            "elapsed_ms": round(elapsed_ms, 1),
-        }),
+        data=json.dumps(
+            {
+                "type": "done",
+                "count": count,
+                "query": query,
+                "elapsed_ms": round(elapsed_ms, 1),
+            }
+        ),
     )
 
 

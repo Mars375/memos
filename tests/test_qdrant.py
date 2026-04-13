@@ -27,6 +27,7 @@ def _make_item(**overrides):
 
 class FakePoint:
     """Fake Qdrant point for testing."""
+
     def __init__(self, point_id, payload, score=None, vector=None):
         self.id = point_id
         self.payload = payload
@@ -155,13 +156,27 @@ class TestQdrantBackend:
         points = [
             FakePoint(
                 "id1-0000-0000-0000-000000000000",
-                {"content": "content1", "tags": "[]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+                {
+                    "content": "content1",
+                    "tags": "[]",
+                    "importance": 0.5,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 0,
+                    "metadata": "{}",
+                },
             ),
             FakePoint(
                 "id2-0000-0000-0000-000000000000",
-                {"content": "content2", "tags": "[\"x\"]", "importance": 0.8,
-                 "created_at": 0, "accessed_at": 0, "access_count": 1, "metadata": "{}"},
+                {
+                    "content": "content2",
+                    "tags": '["x"]',
+                    "importance": 0.8,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 1,
+                    "metadata": "{}",
+                },
             ),
         ]
         self.mock_client.scroll.return_value = (points, None)
@@ -180,8 +195,15 @@ class TestQdrantBackend:
         self.backend._get_embedding = MagicMock(return_value=fake_vector)
         mock_point = FakePoint(
             "srch-0000-0000-0000-000000000000",
-            {"content": "docker nginx", "tags": "[]", "importance": 0.5,
-             "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+            {
+                "content": "docker nginx",
+                "tags": "[]",
+                "importance": 0.5,
+                "created_at": 0,
+                "accessed_at": 0,
+                "access_count": 0,
+                "metadata": "{}",
+            },
             score=0.92,
         )
         self.mock_client.search.return_value = [mock_point]
@@ -195,8 +217,15 @@ class TestQdrantBackend:
         points = [
             FakePoint(
                 "key1-0000-0000-0000-000000000000",
-                {"content": "docker nginx config", "tags": "[]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+                {
+                    "content": "docker nginx config",
+                    "tags": "[]",
+                    "importance": 0.5,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 0,
+                    "metadata": "{}",
+                },
             ),
         ]
         self.mock_client.scroll.return_value = (points, None)
@@ -215,8 +244,15 @@ class TestQdrantBackend:
         self.backend._get_embedding = MagicMock(return_value=fake_vector)
         mock_point = FakePoint(
             "v1-000-0000-0000-000000000000",
-            {"content": "test content", "tags": "[]", "importance": 0.5,
-             "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+            {
+                "content": "test content",
+                "tags": "[]",
+                "importance": 0.5,
+                "created_at": 0,
+                "accessed_at": 0,
+                "access_count": 0,
+                "metadata": "{}",
+            },
             score=0.88,
         )
         self.mock_client.search.return_value = [mock_point]
@@ -238,19 +274,35 @@ class TestQdrantBackend:
         # Vector search result
         mock_point = FakePoint(
             "h1-00-0000-0000-000000000000",
-            {"content": "docker compose setup", "tags": "[]", "importance": 0.5,
-             "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+            {
+                "content": "docker compose setup",
+                "tags": "[]",
+                "importance": 0.5,
+                "created_at": 0,
+                "accessed_at": 0,
+                "access_count": 0,
+                "metadata": "{}",
+            },
             score=0.9,
         )
         self.mock_client.search.return_value = [mock_point]
 
         # list_all for keyword scoring
         self.mock_client.scroll.return_value = (
-            [FakePoint(
-                "h1-00-0000-0000-000000000000",
-                {"content": "docker compose setup", "tags": "[]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
-            )],
+            [
+                FakePoint(
+                    "h1-00-0000-0000-000000000000",
+                    {
+                        "content": "docker compose setup",
+                        "tags": "[]",
+                        "importance": 0.5,
+                        "created_at": 0,
+                        "accessed_at": 0,
+                        "access_count": 0,
+                        "metadata": "{}",
+                    },
+                )
+            ],
             None,
         )
 
@@ -264,11 +316,20 @@ class TestQdrantBackend:
     def test_hybrid_search_keyword_only(self):
         self.backend._get_embedding = MagicMock(return_value=None)
         self.mock_client.scroll.return_value = (
-            [FakePoint(
-                "kw1-000-0000-0000-000000000000",
-                {"content": "python web server", "tags": "[\"dev\"]", "importance": 0.6,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
-            )],
+            [
+                FakePoint(
+                    "kw1-000-0000-0000-000000000000",
+                    {
+                        "content": "python web server",
+                        "tags": '["dev"]',
+                        "importance": 0.6,
+                        "created_at": 0,
+                        "accessed_at": 0,
+                        "access_count": 0,
+                        "metadata": "{}",
+                    },
+                )
+            ],
             None,
         )
         results = self.backend.hybrid_search("python", limit=5)
@@ -281,9 +342,7 @@ class TestQdrantBackend:
     def test_list_namespaces(self):
         mock_col = MagicMock()
         mock_col.name = "memos__agent1"
-        self.mock_client.get_collections.return_value = MagicMock(
-            collections=[mock_col]
-        )
+        self.mock_client.get_collections.return_value = MagicMock(collections=[mock_col])
         ns = self.backend.list_namespaces()
         assert ns == ["agent1"]
 
@@ -295,9 +354,15 @@ class TestQdrantBackend:
     def test_point_to_item_handles_dict_tags(self):
         point = FakePoint(
             "abcd-1234-5678-ef01-234567890abc",
-            {"content": "test", "tags": ["a", "b"], "importance": 0.5,
-             "created_at": 1000, "accessed_at": 2000, "access_count": 3,
-             "metadata": {"custom": "val"}},
+            {
+                "content": "test",
+                "tags": ["a", "b"],
+                "importance": 0.5,
+                "created_at": 1000,
+                "accessed_at": 2000,
+                "access_count": 3,
+                "metadata": {"custom": "val"},
+            },
         )
         item = QdrantBackend._point_to_item(point)
         assert item.tags == ["a", "b"]
@@ -307,9 +372,15 @@ class TestQdrantBackend:
     def test_point_to_item_handles_bad_metadata(self):
         point = FakePoint(
             "abcd-0000-0000-0000-000000000000",
-            {"content": "test", "tags": "invalid-json{{{", "importance": 0.5,
-             "created_at": 0, "accessed_at": 0, "access_count": 0,
-             "metadata": "also-bad{{{}}"},
+            {
+                "content": "test",
+                "tags": "invalid-json{{{",
+                "importance": 0.5,
+                "created_at": 0,
+                "accessed_at": 0,
+                "access_count": 0,
+                "metadata": "also-bad{{{}}",
+            },
         )
         item = QdrantBackend._point_to_item(point)
         assert item.tags == []
@@ -351,7 +422,9 @@ class TestQdrantBackend:
     # --- roundtrip ---
     def test_upsert_then_get_roundtrip(self):
         item = _make_item(
-            tags=["roundtrip"], importance=0.88, access_count=3,
+            tags=["roundtrip"],
+            importance=0.88,
+            access_count=3,
             metadata={"env": "production"},
         )
         self.backend._get_embedding = MagicMock(return_value=None)
@@ -426,13 +499,27 @@ class TestQdrantKeywordSearch:
         items = [
             FakePoint(
                 "k1-00-0000-0000-000000000000",
-                {"content": "docker nginx config", "tags": "[]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+                {
+                    "content": "docker nginx config",
+                    "tags": "[]",
+                    "importance": 0.5,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 0,
+                    "metadata": "{}",
+                },
             ),
             FakePoint(
                 "k2-00-0000-0000-000000000000",
-                {"content": "python flask app", "tags": "[]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+                {
+                    "content": "python flask app",
+                    "tags": "[]",
+                    "importance": 0.5,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 0,
+                    "metadata": "{}",
+                },
             ),
         ]
         self.mock_client.scroll.return_value = (items, None)
@@ -444,8 +531,15 @@ class TestQdrantKeywordSearch:
         items = [
             FakePoint(
                 "t1-00-0000-0000-000000000000",
-                {"content": "some content", "tags": "[\"docker\"]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+                {
+                    "content": "some content",
+                    "tags": '["docker"]',
+                    "importance": 0.5,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 0,
+                    "metadata": "{}",
+                },
             ),
         ]
         self.mock_client.scroll.return_value = (items, None)
@@ -456,8 +550,15 @@ class TestQdrantKeywordSearch:
         items = [
             FakePoint(
                 f"l{i}-00-0000-0000-000000000000",
-                {"content": f"docker item {i}", "tags": "[]", "importance": 0.5,
-                 "created_at": 0, "accessed_at": 0, "access_count": 0, "metadata": "{}"},
+                {
+                    "content": f"docker item {i}",
+                    "tags": "[]",
+                    "importance": 0.5,
+                    "created_at": 0,
+                    "accessed_at": 0,
+                    "access_count": 0,
+                    "metadata": "{}",
+                },
             )
             for i in range(10)
         ]

@@ -99,13 +99,15 @@ class WikiEngine:
             path = self._wiki_dir / f"{self._safe_filename(tag)}.md"
             path.write_text(content, encoding="utf-8")
 
-            pages.append(WikiPage(
-                tag=tag,
-                path=path,
-                memory_count=len(items),
-                compiled_at=time.time(),
-                size_bytes=len(content.encode()),
-            ))
+            pages.append(
+                WikiPage(
+                    tag=tag,
+                    path=path,
+                    memory_count=len(items),
+                    compiled_at=time.time(),
+                    size_bytes=len(content.encode()),
+                )
+            )
 
         return pages
 
@@ -123,13 +125,15 @@ class WikiEngine:
                 if line.startswith("# "):
                     tag = line[2:].strip()
                     break
-            pages.append(WikiPage(
-                tag=tag,
-                path=md_file,
-                memory_count=mem_count,
-                compiled_at=stat.st_mtime,
-                size_bytes=stat.st_size,
-            ))
+            pages.append(
+                WikiPage(
+                    tag=tag,
+                    path=md_file,
+                    memory_count=mem_count,
+                    compiled_at=stat.st_mtime,
+                    size_bytes=stat.st_size,
+                )
+            )
         return pages
 
     def read(self, tag: str) -> Optional[str]:

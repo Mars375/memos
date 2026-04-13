@@ -19,8 +19,13 @@ class TestScoreBreakdownModel:
 
     def test_to_dict(self):
         bd = ScoreBreakdown(
-            semantic=0.3, keyword=0.2, importance=0.05,
-            recency=0.02, tag_bonus=0.1, total=0.67, backend="hybrid",
+            semantic=0.3,
+            keyword=0.2,
+            importance=0.05,
+            recency=0.02,
+            tag_bonus=0.1,
+            total=0.67,
+            backend="hybrid",
         )
         d = bd.to_dict()
         assert d["semantic"] == 0.3
@@ -76,9 +81,7 @@ class TestRecallExplainIntegration:
             bd = r.score_breakdown
             # Components should add up to approximately the total
             component_sum = bd.semantic + bd.keyword + bd.importance + bd.recency + bd.tag_bonus
-            assert abs(component_sum - bd.total) < 0.01, (
-                f"Components {component_sum} != total {bd.total}"
-            )
+            assert abs(component_sum - bd.total) < 0.01, f"Components {component_sum} != total {bd.total}"
 
     def test_breakdown_semantic_dominant(self):
         # When using keyword match, keyword score should be > 0
@@ -106,6 +109,7 @@ class TestRecallExplainCLI:
     def test_explain_flag_in_parser(self):
         """Parser accepts --explain."""
         from memos.cli import build_parser
+
         parser = build_parser()
         # Should not raise
         args = parser.parse_args(["recall", "test", "--explain"])
@@ -113,6 +117,7 @@ class TestRecallExplainCLI:
 
     def test_no_explain_default(self):
         from memos.cli import build_parser
+
         parser = build_parser()
         args = parser.parse_args(["recall", "test"])
         assert args.explain is False
@@ -132,11 +137,14 @@ class TestRecallExplainAPI:
         mem.learn("Test memory for explain", tags=["test"], importance=0.7)
 
         client = TestClient(create_fastapi_app(memos=mem))
-        resp = client.post("/api/v1/recall", json={
-            "query": "test",
-            "top_k": 5,
-            "explain": True,
-        })
+        resp = client.post(
+            "/api/v1/recall",
+            json={
+                "query": "test",
+                "top_k": 5,
+                "explain": True,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
@@ -163,10 +171,13 @@ class TestRecallExplainAPI:
         mem.learn("Another test memory", tags=["test"])
 
         client = TestClient(create_fastapi_app(memos=mem))
-        resp = client.post("/api/v1/recall", json={
-            "query": "test",
-            "top_k": 5,
-        })
+        resp = client.post(
+            "/api/v1/recall",
+            json={
+                "query": "test",
+                "top_k": 5,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         for r in data["results"]:

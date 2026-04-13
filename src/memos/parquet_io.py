@@ -19,10 +19,7 @@ def _check_pyarrow() -> None:
     try:
         import pyarrow  # noqa: F401
     except ImportError:
-        raise ImportError(
-            "pyarrow is required for Parquet export/import. "
-            "Install with: pip install memos[parquet]"
-        )
+        raise ImportError("pyarrow is required for Parquet export/import. Install with: pip install memos[parquet]")
 
 
 def _items_to_rows(items: list[MemoryItem], *, include_metadata: bool = True) -> list[dict[str, Any]]:
@@ -106,15 +103,17 @@ def export_parquet(
     rows = _items_to_rows(items, include_metadata=include_metadata)
 
     if not rows:
-        schema = pa.schema([
-            pa.field("id", pa.string()),
-            pa.field("content", pa.string()),
-            pa.field("tags", pa.string()),
-            pa.field("importance", pa.float64()),
-            pa.field("created_at", pa.float64()),
-            pa.field("accessed_at", pa.float64()),
-            pa.field("access_count", pa.int64()),
-        ])
+        schema = pa.schema(
+            [
+                pa.field("id", pa.string()),
+                pa.field("content", pa.string()),
+                pa.field("tags", pa.string()),
+                pa.field("importance", pa.float64()),
+                pa.field("created_at", pa.float64()),
+                pa.field("accessed_at", pa.float64()),
+                pa.field("access_count", pa.int64()),
+            ]
+        )
         if include_metadata:
             schema = schema.append(pa.field("metadata_json", pa.string()))
         table = pa.table(

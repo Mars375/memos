@@ -38,7 +38,9 @@ class AsyncConsolidationHandle:
                 "groups_found": self.result.groups_found,
                 "memories_merged": self.result.memories_merged,
                 "space_freed": self.result.space_freed,
-            } if self.result else None,
+            }
+            if self.result
+            else None,
             "error": self.error,
         }
 
@@ -94,16 +96,17 @@ class AsyncConsolidationEngine:
         merge = merge_content if merge_content is not None else self._merge_content
         dry = dry_run if dry_run is not None else self._dry_run
 
-        self._emit("consolidation_started", {
-            "task_id": task_id,
-            "threshold": threshold,
-            "merge_content": merge,
-            "dry_run": dry,
-        })
-
-        asyncio.create_task(
-            self._run(handle, store, threshold, merge, dry)
+        self._emit(
+            "consolidation_started",
+            {
+                "task_id": task_id,
+                "threshold": threshold,
+                "merge_content": merge,
+                "dry_run": dry,
+            },
         )
+
+        asyncio.create_task(self._run(handle, store, threshold, merge, dry))
 
         return handle
 
@@ -129,23 +132,29 @@ class AsyncConsolidationEngine:
             handle.status = "completed"
             handle.finished_at = time.time()
 
-            self._emit("consolidation_completed", {
-                "task_id": handle.task_id,
-                "groups_found": result.groups_found,
-                "memories_merged": result.memories_merged,
-                "space_freed": result.space_freed,
-                "duration_s": round(handle.finished_at - handle.started_at, 2),
-            })
+            self._emit(
+                "consolidation_completed",
+                {
+                    "task_id": handle.task_id,
+                    "groups_found": result.groups_found,
+                    "memories_merged": result.memories_merged,
+                    "space_freed": result.space_freed,
+                    "duration_s": round(handle.finished_at - handle.started_at, 2),
+                },
+            )
 
         except Exception as e:
             handle.status = "failed"
             handle.error = str(e)
             handle.finished_at = time.time()
 
-            self._emit("consolidation_failed", {
-                "task_id": handle.task_id,
-                "error": str(e),
-            })
+            self._emit(
+                "consolidation_failed",
+                {
+                    "task_id": handle.task_id,
+                    "error": str(e),
+                },
+            )
 
     def get_status(self, task_id: str) -> AsyncConsolidationHandle | None:
         """Get the status of a consolidation task."""

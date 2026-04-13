@@ -151,9 +151,7 @@ class SqliteVersionStore(PersistentVersionStore):
             source=row["source"],
         )
 
-    def _item_to_row_values(
-        self, item: MemoryItem, version_number: int, source: str, now: float
-    ) -> tuple:
+    def _item_to_row_values(self, item: MemoryItem, version_number: int, source: str, now: float) -> tuple:
         """Convert an item + version info to row values for INSERT."""
         return (
             item.id,

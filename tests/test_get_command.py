@@ -1,4 +1,5 @@
 """Tests for memos get command — retrieve single memory by ID."""
+
 import json
 
 from memos.core import MemOS
@@ -71,6 +72,7 @@ class TestJsonBackendTTL:
 
     def test_ttl_round_trip(self, tmp_path):
         from memos.storage.json_backend import JsonFileBackend
+
         path = str(tmp_path / "test.json")
         backend = JsonFileBackend(path=path)
         item = MemoryItem(id="test-ttl", content="ttl test", tags=[], ttl=7200)
@@ -81,6 +83,7 @@ class TestJsonBackendTTL:
 
     def test_no_ttl_round_trip(self, tmp_path):
         from memos.storage.json_backend import JsonFileBackend
+
         path = str(tmp_path / "test.json")
         backend = JsonFileBackend(path=path)
         item = MemoryItem(id="test-no-ttl", content="no ttl", tags=[])
@@ -91,6 +94,7 @@ class TestJsonBackendTTL:
 
     def test_ttl_survives_multiple_writes(self, tmp_path):
         from memos.storage.json_backend import JsonFileBackend
+
         path = str(tmp_path / "test.json")
         backend = JsonFileBackend(path=path)
         item = MemoryItem(id="multi", content="multi write", tags=[], ttl=1800, importance=0.9)

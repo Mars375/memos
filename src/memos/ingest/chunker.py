@@ -34,7 +34,7 @@ def chunk_text(
         return []
 
     # Split into paragraphs (preserve single-newline within paragraphs)
-    paragraphs = [p.strip() for p in re.split(r'\n{2,}', text) if p.strip()]
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
 
     if not paragraphs:
         return []
@@ -55,7 +55,7 @@ def chunk_text(
                 current_len = 0
 
             # Split oversized paragraph by sentences
-            sentences = re.split(r'(?<=[.!?])\s+', para)
+            sentences = re.split(r"(?<=[.!?])\s+", para)
             buf = ""
             for sent in sentences:
                 if len(buf) + len(sent) + 1 <= size:
@@ -99,7 +99,7 @@ def chunk_text(
 
 def content_hash(text: str) -> str:
     """SHA-256 hash of normalized content (lowercase, collapsed whitespace)."""
-    normalized = re.sub(r'\s+', ' ', text.lower().strip())
+    normalized = re.sub(r"\s+", " ", text.lower().strip())
     return hashlib.sha256(normalized.encode()).hexdigest()[:16]
 
 

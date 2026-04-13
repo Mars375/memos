@@ -1,4 +1,5 @@
 """Tests for KnowledgeGraph.backlinks() — P7: backlinks as first-class queries."""
+
 import pytest
 
 from memos.knowledge_graph import KnowledgeGraph

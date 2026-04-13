@@ -52,17 +52,19 @@ class TestMigrationEngine:
 class TestMigrationCLI:
     def test_parser_accepts_migrate(self):
         p = build_parser()
-        ns = p.parse_args([
-            "migrate",
-            "--dest",
-            "json",
-            "--dest-option",
-            "path=/tmp/memos.json",
-            "--namespaces",
-            "agents,ops",
-            "--merge",
-            "overwrite",
-        ])
+        ns = p.parse_args(
+            [
+                "migrate",
+                "--dest",
+                "json",
+                "--dest-option",
+                "path=/tmp/memos.json",
+                "--namespaces",
+                "agents,ops",
+                "--merge",
+                "overwrite",
+            ]
+        )
         assert ns.command == "migrate"
         assert ns.dest == "json"
         assert ns.dest_option == ["path=/tmp/memos.json"]

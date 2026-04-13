@@ -126,6 +126,7 @@ class TestCLIExportImport:
     def test_cli_export_stdout(self, capsys):
         # CLI creates its own instance — test on empty store is valid
         from memos.cli import main
+
         main(["export", "--backend", "memory"])
         out = capsys.readouterr().out
         data = json.loads(out)
@@ -133,6 +134,7 @@ class TestCLIExportImport:
 
     def test_cli_export_file(self, tmp_path):
         from memos.cli import main
+
         f = tmp_path / "export.json"
         main(["export", "--backend", "memory", "-o", str(f)])
         data = json.loads(f.read_text())
@@ -140,6 +142,7 @@ class TestCLIExportImport:
 
     def test_cli_import(self, tmp_path):
         from memos.cli import main
+
         f = tmp_path / "export.json"
         main(["export", "--backend", "memory", "-o", str(f)])
         main(["import", str(f), "--backend", "memory", "--merge", "duplicate"])

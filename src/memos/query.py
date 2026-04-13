@@ -78,7 +78,12 @@ class QueryEngine:
 
         allowed_ids = {item.id for item in filtered_items}
         results = [
-            RecallResult(item=result.item, score=result.score, match_reason=result.match_reason, score_breakdown=result.score_breakdown)
+            RecallResult(
+                item=result.item,
+                score=result.score,
+                match_reason=result.match_reason,
+                score_breakdown=result.score_breakdown,
+            )
             for result in engine_results
             if result.item.id in allowed_ids
         ]
@@ -115,11 +120,7 @@ class QueryEngine:
         return items[: normalized.top_k]
 
     def _filtered_items(self, query: MemoryQuery, store: StorageBackend) -> list[MemoryItem]:
-        return [
-            item
-            for item in store.list_all(namespace=self._namespace)
-            if self._matches(item, query)
-        ]
+        return [item for item in store.list_all(namespace=self._namespace) if self._matches(item, query)]
 
     def _apply_decay(self, results: list[RecallResult], min_score: float) -> list[RecallResult]:
         if self._decay is None:

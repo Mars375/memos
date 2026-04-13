@@ -62,33 +62,37 @@ class TestDedupEngine:
     # --- Near dedup (trigram Jaccard) ---
 
     def test_near_duplicate_high_similarity(self):
-        store = self._make_store([
-            self._make_item(
-                "The user prefers dark mode in the interface configuration settings",
-                "a1",
-            ),
-        ])
-        engine = DedupEngine(store, threshold=0.85)
-        result = engine.check(
-            "The user prefers dark mode in the interface configuration"
+        store = self._make_store(
+            [
+                self._make_item(
+                    "The user prefers dark mode in the interface configuration settings",
+                    "a1",
+                ),
+            ]
         )
+        engine = DedupEngine(store, threshold=0.85)
+        result = engine.check("The user prefers dark mode in the interface configuration")
         # Should detect as near-duplicate due to high trigram overlap
         assert result.is_duplicate is True
         assert result.reason == "near"
         assert result.similarity >= 0.85
 
     def test_near_duplicate_below_threshold(self):
-        store = self._make_store([
-            self._make_item("The quick brown fox jumps over the lazy dog", "a1"),
-        ])
+        store = self._make_store(
+            [
+                self._make_item("The quick brown fox jumps over the lazy dog", "a1"),
+            ]
+        )
         engine = DedupEngine(store, threshold=0.95)
         result = engine.check("A completely unrelated sentence about Python programming")
         assert result.is_duplicate is False
 
     def test_custom_threshold_override(self):
-        store = self._make_store([
-            self._make_item("User likes Python programming language", "a1"),
-        ])
+        store = self._make_store(
+            [
+                self._make_item("User likes Python programming language", "a1"),
+            ]
+        )
         engine = DedupEngine(store, threshold=0.95)
         # With default threshold, not a dup
         result_default = engine.check("User likes Python language")
@@ -146,11 +150,13 @@ class TestDedupScan:
         return store
 
     def test_scan_exact_duplicates(self):
-        store = self._make_store([
-            MemoryItem(id="a", content="Duplicate content"),
-            MemoryItem(id="b", content="Duplicate content"),
-            MemoryItem(id="c", content="Unique content here"),
-        ])
+        store = self._make_store(
+            [
+                MemoryItem(id="a", content="Duplicate content"),
+                MemoryItem(id="b", content="Duplicate content"),
+                MemoryItem(id="c", content="Unique content here"),
+            ]
+        )
         engine = DedupEngine(store)
         result = engine.scan()
         assert result.total_scanned == 3
@@ -158,21 +164,25 @@ class TestDedupScan:
         assert result.total_duplicates == 1
 
     def test_scan_no_duplicates(self):
-        store = self._make_store([
-            MemoryItem(id="a", content="First memory"),
-            MemoryItem(id="b", content="Second memory"),
-            MemoryItem(id="c", content="Third memory"),
-        ])
+        store = self._make_store(
+            [
+                MemoryItem(id="a", content="First memory"),
+                MemoryItem(id="b", content="Second memory"),
+                MemoryItem(id="c", content="Third memory"),
+            ]
+        )
         engine = DedupEngine(store)
         result = engine.scan()
         assert result.total_duplicates == 0
 
     def test_scan_with_fix(self):
-        store = self._make_store([
-            MemoryItem(id="a", content="Duplicate content"),
-            MemoryItem(id="b", content="Duplicate content"),
-            MemoryItem(id="c", content="Unique content"),
-        ])
+        store = self._make_store(
+            [
+                MemoryItem(id="a", content="Duplicate content"),
+                MemoryItem(id="b", content="Duplicate content"),
+                MemoryItem(id="c", content="Unique content"),
+            ]
+        )
         engine = DedupEngine(store)
         result = engine.scan(fix=True)
         assert result.fixed == 1
@@ -261,32 +271,43 @@ class TestDedupAPI:
 
     def _get_app(self):
         from memos.api import create_fastapi_app
+
         return create_fastapi_app()
 
     @pytest.fixture
     def client(self):
         from fastapi.testclient import TestClient
+
         app = self._get_app()
         return TestClient(app)
 
     def test_dedup_check_api(self, client):
         # Learn a memory first
-        client.post("/api/v1/learn", json={
-            "content": "API test memory for dedup",
-        })
+        client.post(
+            "/api/v1/learn",
+            json={
+                "content": "API test memory for dedup",
+            },
+        )
         # Check for duplicate
-        resp = client.post("/api/v1/dedup/check", json={
-            "content": "API test memory for dedup",
-        })
+        resp = client.post(
+            "/api/v1/dedup/check",
+            json={
+                "content": "API test memory for dedup",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["is_duplicate"] is True
         assert data["reason"] == "exact"
 
     def test_dedup_check_no_duplicate(self, client):
-        resp = client.post("/api/v1/dedup/check", json={
-            "content": "Something completely unique xyz123",
-        })
+        resp = client.post(
+            "/api/v1/dedup/check",
+            json={
+                "content": "Something completely unique xyz123",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["is_duplicate"] is False

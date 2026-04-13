@@ -1,4 +1,5 @@
 """Tests for MinerCache and incremental mining (P19)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +33,7 @@ def _file_sha256(path: Path) -> str:
 
 class _FakeMemos:
     """Minimal MemOS stub that tracks learns and supports forget."""
+
     def __init__(self) -> None:
         self._store: dict[str, object] = {}
         self._counter = 0
@@ -42,6 +44,7 @@ class _FakeMemos:
 
         class _Item:
             id = item_id
+
         self._store[item_id] = content
         return _Item()
 

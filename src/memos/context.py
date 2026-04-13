@@ -178,9 +178,7 @@ class ContextStack:
         # L0 — first non-empty line of identity
         identity = self.get_identity().strip()
         if identity:
-            first_line = next(
-                (ln.strip() for ln in identity.splitlines() if ln.strip()), ""
-            )
+            first_line = next((ln.strip() for ln in identity.splitlines() if ln.strip()), "")
             if first_line:
                 lines.append(f"[ID] {first_line[:200]}")
 
@@ -291,10 +289,7 @@ class ContextStack:
             for r in results:
                 tags_str = f" (tags: {', '.join(r.item.tags)})" if r.item.tags else ""
                 lines.append(f"[{r.score:.2f}] {r.item.content}{tags_str}")
-            parts.append(
-                f"=== RELEVANT MEMORIES ({len(results)} results for: {query!r}) ===\n"
-                + "\n".join(lines)
-            )
+            parts.append(f"=== RELEVANT MEMORIES ({len(results)} results for: {query!r}) ===\n" + "\n".join(lines))
 
         output = "\n\n".join(parts)
 

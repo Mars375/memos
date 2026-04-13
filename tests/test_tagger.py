@@ -6,12 +6,14 @@ from memos.tagger import TYPE_TAGS, AutoTagger
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def tagger():
     return AutoTagger()
 
 
 # ── Decision patterns ─────────────────────────────────────────────────
+
 
 class TestDecision:
     def test_en_we_decided(self, tagger):
@@ -50,6 +52,7 @@ class TestDecision:
 
 # ── Preference patterns ───────────────────────────────────────────────
 
+
 class TestPreference:
     def test_en_i_prefer(self, tagger):
         assert "preference" in tagger.tag("I prefer dark mode over light mode")
@@ -74,6 +77,7 @@ class TestPreference:
 
 
 # ── Milestone patterns ────────────────────────────────────────────────
+
 
 class TestMilestone:
     def test_en_deployed(self, tagger):
@@ -103,6 +107,7 @@ class TestMilestone:
 
 # ── Problem patterns ──────────────────────────────────────────────────
 
+
 class TestProblem:
     def test_en_bug(self, tagger):
         assert "problem" in tagger.tag("There's a bug in the auth module")
@@ -131,6 +136,7 @@ class TestProblem:
 
 # ── Emotional patterns ────────────────────────────────────────────────
 
+
 class TestEmotional:
     def test_en_frustrated(self, tagger):
         assert "emotional" in tagger.tag("I'm frustrated with the slow CI")
@@ -153,6 +159,7 @@ class TestEmotional:
 
 # ── Fact patterns ─────────────────────────────────────────────────────
 
+
 class TestFact:
     def test_en_there_are_number(self, tagger):
         assert "fact" in tagger.tag("There are 42 instances running")
@@ -165,6 +172,7 @@ class TestFact:
 
 
 # ── Action patterns ───────────────────────────────────────────────────
+
 
 class TestAction:
     def test_en_need_to(self, tagger):
@@ -185,6 +193,7 @@ class TestAction:
 
 # ── Question patterns ─────────────────────────────────────────────────
 
+
 class TestQuestion:
     def test_question_mark(self, tagger):
         assert "question" in tagger.tag("What time is the meeting?")
@@ -200,6 +209,7 @@ class TestQuestion:
 
 
 # ── Multi-tag classification ──────────────────────────────────────────
+
 
 class TestMultiTag:
     def test_problem_emotional(self, tagger):
@@ -220,6 +230,7 @@ class TestMultiTag:
 
 
 # ── Edge cases ────────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     def test_empty_string(self, tagger):
@@ -247,6 +258,7 @@ class TestEdgeCases:
 
 
 # ── has_type_tags / auto_tag ──────────────────────────────────────────
+
 
 class TestAutoTag:
     def test_has_type_tags_positive(self, tagger):
@@ -278,6 +290,7 @@ class TestAutoTag:
 
 # ── tag_detailed ──────────────────────────────────────────────────────
 
+
 class TestTagDetailed:
     def test_detailed_returns_matches(self, tagger):
         result = tagger.tag_detailed("The build is broken and I'm frustrated")
@@ -292,6 +305,7 @@ class TestTagDetailed:
 
 # ── Custom patterns ───────────────────────────────────────────────────
 
+
 class TestCustomPatterns:
     def test_custom_tag(self):
         t = AutoTagger(custom_patterns={"custom": [r"\bSUPER_SPECIAL\b"]})
@@ -305,19 +319,21 @@ class TestCustomPatterns:
 
 # ── TYPE_TAGS constant ────────────────────────────────────────────────
 
+
 class TestTypeTagsConstant:
     def test_all_categories_present(self):
-        expected = {"decision", "preference", "milestone", "problem",
-                    "emotional", "fact", "action", "question"}
+        expected = {"decision", "preference", "milestone", "problem", "emotional", "fact", "action", "question"}
         assert TYPE_TAGS == expected
 
 
 # ── Integration: learn() auto-tags ────────────────────────────────────
 
+
 class TestLearnAutoTag:
     def test_learn_auto_tags_decision(self):
         """MemOS.learn() should auto-append type tags."""
         from memos import MemOS
+
         mem = MemOS(backend="memory")
         item = mem.learn("We decided to use Kubernetes for orchestration", tags=["infra"])
         assert "decision" in item.tags
@@ -326,6 +342,7 @@ class TestLearnAutoTag:
     def test_learn_preserves_existing_type_tag(self):
         """If user passes a type tag, auto-tagger should not add more."""
         from memos import MemOS
+
         mem = MemOS(backend="memory")
         item = mem.learn("The deployment is done", tags=["milestone", "release"])
         assert "milestone" in item.tags
@@ -335,6 +352,7 @@ class TestLearnAutoTag:
     def test_learn_no_type_tag_for_generic(self):
         """Generic content should not get auto-tags."""
         from memos import MemOS
+
         mem = MemOS(backend="memory")
         item = mem.learn("The weather is nice today", tags=["daily"])
         assert item.tags == ["daily"]

@@ -51,6 +51,4 @@ class AsyncWrapper(AsyncStorageBackend):
         )
 
     async def list_namespaces(self) -> list[str]:
-        return await asyncio.get_running_loop().run_in_executor(
-            self._executor, self._backend.list_namespaces
-        )
+        return await asyncio.get_running_loop().run_in_executor(self._executor, self._backend.list_namespaces)

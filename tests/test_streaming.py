@@ -90,8 +90,13 @@ class TestFormatHelpers:
 
     def test_format_recall_event_with_total(self):
         ev = format_recall_event(
-            index=3, item_id="x", content="c", score=0.5,
-            tags=[], match_reason="keyword", age_days=0.0,
+            index=3,
+            item_id="x",
+            content="c",
+            score=0.5,
+            tags=[],
+            match_reason="keyword",
+            age_days=0.0,
             total=10,
         )
         payload = json.loads(ev.data)

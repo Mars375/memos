@@ -13,18 +13,20 @@ from ..storage.base import StorageBackend
 @dataclass
 class DuplicateGroup:
     """A group of similar memories that can be merged."""
-    keep: MemoryItem          # Best memory to keep (highest importance * recency)
+
+    keep: MemoryItem  # Best memory to keep (highest importance * recency)
     duplicates: list[MemoryItem]  # Memories to merge/remove
-    similarity: float         # Average pairwise similarity (0-1)
-    reason: str = ""          # "semantic" or "exact"
+    similarity: float  # Average pairwise similarity (0-1)
+    reason: str = ""  # "semantic" or "exact"
 
 
 @dataclass
 class ConsolidationResult:
     """Result of a consolidation run."""
+
     groups_found: int = 0
     memories_merged: int = 0
-    space_freed: int = 0      # Number of memories removed
+    space_freed: int = 0  # Number of memories removed
     details: list[DuplicateGroup] = field(default_factory=list)
 
 
@@ -148,12 +150,14 @@ class ConsolidationEngine:
                 continue
             keep = self._pick_best(group_items)
             dups = [i for i in group_items if i.id != keep.id]
-            groups.append(DuplicateGroup(
-                keep=keep,
-                duplicates=dups,
-                similarity=1.0,
-                reason="exact",
-            ))
+            groups.append(
+                DuplicateGroup(
+                    keep=keep,
+                    duplicates=dups,
+                    similarity=1.0,
+                    reason="exact",
+                )
+            )
         return groups
 
     # --- Phase 2: Semantic dedup ---
@@ -162,21 +166,106 @@ class ConsolidationEngine:
         """Tokenize text into a set of words."""
         words = re.findall(r"\w+", text.lower())
         # Remove very short tokens and common stopwords
-        stopwords = {"the", "a", "an", "is", "are", "was", "were", "be",
-                      "been", "being", "have", "has", "had", "do", "does",
-                      "did", "will", "would", "could", "should", "may",
-                      "might", "can", "shall", "to", "of", "in", "for",
-                      "on", "with", "at", "by", "from", "as", "into",
-                      "through", "during", "before", "after", "and", "but",
-                      "or", "not", "no", "nor", "so", "yet", "both",
-                      "either", "neither", "each", "every", "all", "any",
-                      "few", "more", "most", "other", "some", "such",
-                      "than", "too", "very", "just", "that", "this",
-                      "these", "those", "it", "its", "i", "me", "my",
-                      "we", "our", "you", "your", "he", "him", "his",
-                      "she", "her", "they", "them", "their", "what",
-                      "which", "who", "whom", "if", "then", "else",
-                      "when", "where", "how", "about", "up", "out"}
+        stopwords = {
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "and",
+            "but",
+            "or",
+            "not",
+            "no",
+            "nor",
+            "so",
+            "yet",
+            "both",
+            "either",
+            "neither",
+            "each",
+            "every",
+            "all",
+            "any",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "than",
+            "too",
+            "very",
+            "just",
+            "that",
+            "this",
+            "these",
+            "those",
+            "it",
+            "its",
+            "i",
+            "me",
+            "my",
+            "we",
+            "our",
+            "you",
+            "your",
+            "he",
+            "him",
+            "his",
+            "she",
+            "her",
+            "they",
+            "them",
+            "their",
+            "what",
+            "which",
+            "who",
+            "whom",
+            "if",
+            "then",
+            "else",
+            "when",
+            "where",
+            "how",
+            "about",
+            "up",
+            "out",
+        }
         return {w for w in words if len(w) > 2 and w not in stopwords}
 
     def _jaccard(self, a: set[str], b: set[str]) -> float:
@@ -211,12 +300,14 @@ class ConsolidationEngine:
                 keep = self._pick_best(group_items)
                 dups = [i for i in group_items if i.id != keep.id]
                 avg_sim = sum(s for _, s in similar) / len(similar)
-                groups.append(DuplicateGroup(
-                    keep=keep,
-                    duplicates=dups,
-                    similarity=round(avg_sim, 3),
-                    reason="semantic",
-                ))
+                groups.append(
+                    DuplicateGroup(
+                        keep=keep,
+                        duplicates=dups,
+                        similarity=round(avg_sim, 3),
+                        reason="semantic",
+                    )
+                )
                 used.add(item_a.id)
                 for s_item, _ in similar:
                     used.add(s_item.id)
@@ -227,10 +318,12 @@ class ConsolidationEngine:
 
     def _pick_best(self, items: list[MemoryItem]) -> MemoryItem:
         """Pick the best item to keep: highest importance * recency."""
+
         def score(item: MemoryItem) -> float:
             age_days = (time.time() - item.created_at) / 86400
             recency = max(0.1, 1.0 - age_days / 90)  # Fade over 90 days
             return item.importance * 0.7 + recency * 0.3 + item.access_count * 0.01
+
         return max(items, key=score)
 
     def _merge(

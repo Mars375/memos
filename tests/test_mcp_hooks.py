@@ -1,4 +1,5 @@
 """Tests for MCP pre/post hooks — P4."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -13,6 +14,7 @@ from memos.mcp_hooks import (
 # ---------------------------------------------------------------------------
 # MCPHookRegistry unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestMCPHookRegistry:
     def test_register_and_run_post(self):
@@ -94,9 +96,11 @@ class TestMCPHookRegistry:
 # KG extraction helper
 # ---------------------------------------------------------------------------
 
+
 class TestExtractFacts:
     def test_works_at_pattern(self):
         from memos.knowledge_graph import KnowledgeGraph
+
         kg = KnowledgeGraph(":memory:")
         content = "Alice works at CompanyX and loves her job."
         ids = _extract_and_store_facts(content, kg)
@@ -108,6 +112,7 @@ class TestExtractFacts:
 
     def test_depends_on_pattern(self):
         from memos.knowledge_graph import KnowledgeGraph
+
         kg = KnowledgeGraph(":memory:")
         content = "ServiceA depends on ServiceB for authentication."
         _extract_and_store_facts(content, kg)
@@ -118,6 +123,7 @@ class TestExtractFacts:
 
     def test_no_self_reference(self):
         from memos.knowledge_graph import KnowledgeGraph
+
         kg = KnowledgeGraph(":memory:")
         content = "Alice leads Alice."  # invalid self-reference
         _extract_and_store_facts(content, kg)
@@ -128,6 +134,7 @@ class TestExtractFacts:
 
     def test_confidence_label_extracted(self):
         from memos.knowledge_graph import KnowledgeGraph
+
         kg = KnowledgeGraph(":memory:")
         content = "Bob manages Carol effectively."
         _extract_and_store_facts(content, kg)
@@ -140,9 +147,11 @@ class TestExtractFacts:
 # hook_auto_capture_kg
 # ---------------------------------------------------------------------------
 
+
 class TestAutoCapture:
     def test_stores_facts_from_memory_save(self):
         from memos.knowledge_graph import KnowledgeGraph
+
         kg = KnowledgeGraph(":memory:")
         memos = MagicMock()
         memos._kg = kg
@@ -173,6 +182,7 @@ class TestAutoCapture:
 # create_default_registry
 # ---------------------------------------------------------------------------
 
+
 class TestDefaultRegistry:
     def test_empty_registry_no_hooks(self):
         registry = create_default_registry()
@@ -191,9 +201,11 @@ class TestDefaultRegistry:
 # Integration: _dispatch with hooks
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchWithHooks:
     def test_pre_hook_short_circuits(self):
         from memos.mcp_server import _dispatch
+
         registry = MCPHookRegistry()
         registry.register_pre("memory_save", lambda tool, args, memos: {"short": "circuit"})
         result = _dispatch(None, "memory_save", {}, hooks=registry)
@@ -202,6 +214,7 @@ class TestDispatchWithHooks:
     def test_post_hook_augments_result(self):
         from memos.core import MemOS
         from memos.mcp_server import _dispatch
+
         memos = MemOS(backend="memory")
 
         registry = MCPHookRegistry()
@@ -217,6 +230,7 @@ class TestDispatchWithHooks:
     def test_no_hooks_normal_dispatch(self):
         from memos.core import MemOS
         from memos.mcp_server import _dispatch
+
         memos = MemOS(backend="memory")
         result = _dispatch(memos, "memory_save", {"content": "no hooks"})
         assert result is not None

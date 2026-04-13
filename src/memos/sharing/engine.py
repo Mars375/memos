@@ -79,13 +79,9 @@ class SharingEngine:
         with self._lock:
             req = self._get_valid(share_id)
             if req.target_agent != acceptor:
-                raise ValueError(
-                    f"Only target agent '{req.target_agent}' can accept this share"
-                )
+                raise ValueError(f"Only target agent '{req.target_agent}' can accept this share")
             if req.status != ShareStatus.PENDING:
-                raise ValueError(
-                    f"Share is {req.status.value}, not pending"
-                )
+                raise ValueError(f"Share is {req.status.value}, not pending")
             req.status = ShareStatus.ACCEPTED
             req.accepted_at = time.time()
             return req
@@ -98,13 +94,9 @@ class SharingEngine:
         with self._lock:
             req = self._get_valid(share_id)
             if req.target_agent != rejector:
-                raise ValueError(
-                    f"Only target agent '{req.target_agent}' can reject this share"
-                )
+                raise ValueError(f"Only target agent '{req.target_agent}' can reject this share")
             if req.status != ShareStatus.PENDING:
-                raise ValueError(
-                    f"Share is {req.status.value}, not pending"
-                )
+                raise ValueError(f"Share is {req.status.value}, not pending")
             req.status = ShareStatus.REJECTED
             return req
 
@@ -116,13 +108,9 @@ class SharingEngine:
         with self._lock:
             req = self._get_valid(share_id)
             if req.source_agent != revoker:
-                raise ValueError(
-                    f"Only source agent '{req.source_agent}' can revoke this share"
-                )
+                raise ValueError(f"Only source agent '{req.source_agent}' can revoke this share")
             if req.status not in (ShareStatus.PENDING, ShareStatus.ACCEPTED):
-                raise ValueError(
-                    f"Cannot revoke share in {req.status.value} state"
-                )
+                raise ValueError(f"Cannot revoke share in {req.status.value} state")
             req.status = ShareStatus.REVOKED
             return req
 
@@ -147,10 +135,7 @@ class SharingEngine:
             self._gc_expired()
             results = list(self._shares.values())
             if agent:
-                results = [
-                    s for s in results
-                    if s.source_agent == agent or s.target_agent == agent
-                ]
+                results = [s for s in results if s.source_agent == agent or s.target_agent == agent]
             if status:
                 results = [s for s in results if s.status == status]
             return sorted(results, key=lambda s: s.created_at, reverse=True)
@@ -159,23 +144,15 @@ class SharingEngine:
         """List active shares where agent is the recipient."""
         with self._lock:
             self._gc_expired()
-            return [
-                s for s in self._shares.values()
-                if s.target_agent == agent and s.status == ShareStatus.ACCEPTED
-            ]
+            return [s for s in self._shares.values() if s.target_agent == agent and s.status == ShareStatus.ACCEPTED]
 
     def list_shared_by(self, agent: str) -> list[ShareRequest]:
         """List active shares where agent is the source."""
         with self._lock:
             self._gc_expired()
-            return [
-                s for s in self._shares.values()
-                if s.source_agent == agent and s.status == ShareStatus.ACCEPTED
-            ]
+            return [s for s in self._shares.values() if s.source_agent == agent and s.status == ShareStatus.ACCEPTED]
 
-    def get_accepted_permissions(
-        self, source_agent: str, target_agent: str
-    ) -> Optional[SharePermission]:
+    def get_accepted_permissions(self, source_agent: str, target_agent: str) -> Optional[SharePermission]:
         """Get the permission level for an accepted share."""
         with self._lock:
             for req in self._shares.values():

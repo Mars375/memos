@@ -52,21 +52,23 @@ def test_markdown_export_cli(tmp_path: Path, capsys):
     kg_path = tmp_path / "kg.db"
     kg.close()
 
-    main([
-        "export",
-        "--format",
-        "markdown",
-        "--output",
-        str(out_dir),
-        "--backend",
-        "json",
-        "--persist-path",
-        str(tmp_path / "store.json"),
-        "--wiki-dir",
-        str(wiki_root),
-        "--db",
-        str(kg_path),
-    ])
+    main(
+        [
+            "export",
+            "--format",
+            "markdown",
+            "--output",
+            str(out_dir),
+            "--backend",
+            "json",
+            "--persist-path",
+            str(tmp_path / "store.json"),
+            "--wiki-dir",
+            str(wiki_root),
+            "--db",
+            str(kg_path),
+        ]
+    )
 
     out = capsys.readouterr().out
     assert "Exported markdown knowledge" in out
@@ -83,7 +85,9 @@ def test_markdown_export_api_returns_zip(tmp_path: Path):
     app = create_fastapi_app(memos=memos, kg_db_path=str(tmp_path / "kg.db"))
     client = TestClient(app)
 
-    response = client.get("/api/v1/export/markdown", params={"output_dir": str(tmp_path / "knowledge-api"), "wiki_dir": str(wiki_root)})
+    response = client.get(
+        "/api/v1/export/markdown", params={"output_dir": str(tmp_path / "knowledge-api"), "wiki_dir": str(wiki_root)}
+    )
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/zip")

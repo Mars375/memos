@@ -55,7 +55,9 @@ class MemoryCompressor:
 
             group = sorted(group, key=lambda item: (item.importance, item.created_at))
             summary = self._build_summary(group, key, now)
-            freed_bytes = sum(len(item.content.encode("utf-8")) for item in group) - len(summary.content.encode("utf-8"))
+            freed_bytes = sum(len(item.content.encode("utf-8")) for item in group) - len(
+                summary.content.encode("utf-8")
+            )
 
             result.compressed_count += len(group)
             result.summary_count += 1

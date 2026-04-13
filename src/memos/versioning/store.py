@@ -51,7 +51,7 @@ class VersionStore:
 
             # Garbage collect if too many versions
             if len(versions) > self._max_versions:
-                self._versions[item.id] = versions[-self._max_versions:]
+                self._versions[item.id] = versions[-self._max_versions :]
 
             return version
 

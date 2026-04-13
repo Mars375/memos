@@ -125,27 +125,33 @@ class TestSqliteVersionStore:
         item = self._make_item("old memory")
         # Record a version with old timestamp by manipulating directly
         with self.store._connect() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO versions
                 (item_id, version_number, version_id, content, tags_json,
                  importance, metadata_json, created_at, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (item.id, 1, f"{item.id}#1", "old", "[]", 0.5, "{}",
-                   time.time() - 200 * 86400, "learn"))
-            conn.execute("""
+            """,
+                (item.id, 1, f"{item.id}#1", "old", "[]", 0.5, "{}", time.time() - 200 * 86400, "learn"),
+            )
+            conn.execute(
+                """
                 INSERT INTO versions
                 (item_id, version_number, version_id, content, tags_json,
                  importance, metadata_json, created_at, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (item.id, 2, f"{item.id}#2", "recent", "[]", 0.5, "{}",
-                   time.time() - 1, "learn"))
-            conn.execute("""
+            """,
+                (item.id, 2, f"{item.id}#2", "recent", "[]", 0.5, "{}", time.time() - 1, "learn"),
+            )
+            conn.execute(
+                """
                 INSERT INTO versions
                 (item_id, version_number, version_id, content, tags_json,
                  importance, metadata_json, created_at, source)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (item.id, 3, f"{item.id}#3", "latest", "[]", 0.5, "{}",
-                   time.time(), "learn"))
+            """,
+                (item.id, 3, f"{item.id}#3", "latest", "[]", 0.5, "{}", time.time(), "learn"),
+            )
             conn.commit()
 
         # GC: remove older than 90 days, keep latest 2
@@ -190,6 +196,7 @@ class TestSqliteVersionStore:
 
     def test_thread_safety(self):
         import threading
+
         errors = []
 
         def writer(content):
@@ -229,7 +236,10 @@ class TestVersioningEnginePersistent:
         engine = VersioningEngine(persistent_path=self.db_path)
 
         item = MemoryItem(
-            id="test-123", content="hello", tags=["test"], importance=0.7,
+            id="test-123",
+            content="hello",
+            tags=["test"],
+            importance=0.7,
         )
         engine.record_version(item, source="learn")
         item.content = "world"
@@ -244,7 +254,10 @@ class TestVersioningEnginePersistent:
         engine = VersioningEngine(persistent_path=self.db_path)
 
         item = MemoryItem(
-            id="diff-test", content="v1", tags=["a"], importance=0.5,
+            id="diff-test",
+            content="v1",
+            tags=["a"],
+            importance=0.5,
         )
         engine.record_version(item)
         item.content = "v2"

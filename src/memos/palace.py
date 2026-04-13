@@ -141,9 +141,7 @@ class PalaceIndex:
     # Rooms
     # ------------------------------------------------------------------
 
-    def create_room(
-        self, wing_name: str, room_name: str, description: str = ""
-    ) -> str:
+    def create_room(self, wing_name: str, room_name: str, description: str = "") -> str:
         """Create a room inside *wing_name* and return the room ID."""
         room_name = room_name.strip()
         if not room_name:
@@ -205,9 +203,7 @@ class PalaceIndex:
     # Assignments
     # ------------------------------------------------------------------
 
-    def assign(
-        self, memory_id: str, wing_name: str, room_name: Optional[str] = None
-    ) -> None:
+    def assign(self, memory_id: str, wing_name: str, room_name: Optional[str] = None) -> None:
         """Assign *memory_id* to a wing (and optionally a room)."""
         wing = self.get_wing(wing_name)
         if wing is None:
@@ -219,9 +215,7 @@ class PalaceIndex:
                 (wing["id"], room_name),
             ).fetchone()
             if row is None:
-                raise KeyError(
-                    f"Room {room_name!r} not found in wing {wing_name!r}"
-                )
+                raise KeyError(f"Room {room_name!r} not found in wing {wing_name!r}")
             room_id = row["id"]
         self._conn.execute(
             """
@@ -238,9 +232,7 @@ class PalaceIndex:
 
     def unassign(self, memory_id: str) -> None:
         """Remove the palace assignment for *memory_id*."""
-        self._conn.execute(
-            "DELETE FROM assignments WHERE memory_id = ?", (memory_id,)
-        )
+        self._conn.execute("DELETE FROM assignments WHERE memory_id = ?", (memory_id,))
         self._conn.commit()
 
     def get_assignment(self, memory_id: str) -> Optional[dict]:
@@ -274,9 +266,7 @@ class PalaceIndex:
         - Wing + room: memories in that specific room.
         """
         if wing_name is None and room_name is None:
-            rows = self._conn.execute(
-                "SELECT memory_id FROM assignments ORDER BY assigned_at"
-            ).fetchall()
+            rows = self._conn.execute("SELECT memory_id FROM assignments ORDER BY assigned_at").fetchall()
             return [r["memory_id"] for r in rows]
 
         wing = self.get_wing(wing_name) if wing_name else None
@@ -308,15 +298,9 @@ class PalaceIndex:
 
     def stats(self) -> dict:
         """Return aggregate statistics."""
-        total_wings = self._conn.execute(
-            "SELECT COUNT(*) FROM wings"
-        ).fetchone()[0]
-        total_rooms = self._conn.execute(
-            "SELECT COUNT(*) FROM rooms"
-        ).fetchone()[0]
-        assigned_memories = self._conn.execute(
-            "SELECT COUNT(*) FROM assignments"
-        ).fetchone()[0]
+        total_wings = self._conn.execute("SELECT COUNT(*) FROM wings").fetchone()[0]
+        total_rooms = self._conn.execute("SELECT COUNT(*) FROM rooms").fetchone()[0]
+        assigned_memories = self._conn.execute("SELECT COUNT(*) FROM assignments").fetchone()[0]
         return {
             "total_wings": total_wings,
             "total_rooms": total_rooms,
@@ -327,9 +311,7 @@ class PalaceIndex:
     # Auto-assign (heuristic)
     # ------------------------------------------------------------------
 
-    def auto_assign(
-        self, memory_id: str, content: str, tags: List[str]
-    ) -> Optional[str]:
+    def auto_assign(self, memory_id: str, content: str, tags: List[str]) -> Optional[str]:
         """Heuristically assign *memory_id* to the best-matching wing/room.
 
         Algorithm:
@@ -367,9 +349,7 @@ class PalaceIndex:
             return None
 
         # Find the best room within this wing
-        rooms = self._conn.execute(
-            "SELECT id, name FROM rooms WHERE wing_id = ?", (best_wing["id"],)
-        ).fetchall()
+        rooms = self._conn.execute("SELECT id, name FROM rooms WHERE wing_id = ?", (best_wing["id"],)).fetchall()
         best_room_name: Optional[str] = None
         best_room_score = 0
         for r in rooms:
@@ -382,9 +362,7 @@ class PalaceIndex:
         return best_wing["name"]
 
     def _get_room_names_for_wing(self, wing_id: str) -> List[str]:
-        rows = self._conn.execute(
-            "SELECT name FROM rooms WHERE wing_id = ?", (wing_id,)
-        ).fetchall()
+        rows = self._conn.execute("SELECT name FROM rooms WHERE wing_id = ?", (wing_id,)).fetchall()
         return [r["name"] for r in rows]
 
     # ------------------------------------------------------------------
@@ -440,9 +418,7 @@ class PalaceRecall:
 
         if wing_name is not None:
             try:
-                ids = self._palace.list_memories(
-                    wing_name=wing_name, room_name=room_name
-                )
+                ids = self._palace.list_memories(wing_name=wing_name, room_name=room_name)
                 scoped_ids = set(ids)
             except KeyError:
                 # Unknown wing/room — treat as no scope

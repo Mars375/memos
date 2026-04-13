@@ -1,4 +1,5 @@
 """Tests for KG Path Queries — multi-hop graph traversal."""
+
 import pytest
 
 from memos.knowledge_graph import KnowledgeGraph
@@ -143,8 +144,7 @@ class TestFindPaths:
                 # They must share at least one entity
                 current_entities = {current_triple["subject"], current_triple["object"]}
                 next_entities = {next_triple["subject"], next_triple["object"]}
-                assert current_entities & next_entities, \
-                    f"Path chain broken: {current_triple} -> {next_triple}"
+                assert current_entities & next_entities, f"Path chain broken: {current_triple} -> {next_triple}"
 
 
 class TestShortestPath:
@@ -190,6 +190,7 @@ class TestCLI:
         )
         # Override _get_kg to use our test instance
         import memos.cli as cli_mod
+
         original_get_kg = cli_mod._get_kg
         cli_mod._get_kg = lambda ns: kg
         try:
@@ -211,6 +212,7 @@ class TestCLI:
             kg_db=None,
         )
         from unittest.mock import patch
+
         with patch("memos.cli.commands_knowledge._get_kg", return_value=kg):
             cmd_kg_neighbors(ns)
         captured = capsys.readouterr()
@@ -230,6 +232,7 @@ class TestCLI:
             kg_db=None,
         )
         import memos.cli as cli_mod
+
         original_get_kg = cli_mod._get_kg
         cli_mod._get_kg = lambda ns: kg
         try:

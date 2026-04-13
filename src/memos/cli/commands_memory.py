@@ -31,22 +31,20 @@ def cmd_init(ns: argparse.Namespace) -> None:
     print(f"✓ Initialized MemOS in {path}/")
 
 
-
-
 def cmd_learn(ns: argparse.Namespace) -> None:
     """Learn (store) a new memory."""
     memos = _get_memos(ns)
     content = ns.content
     if ns.file:
         content = Path(ns.file).read_text().strip()
-    elif getattr(ns, 'stdin', False):
+    elif getattr(ns, "stdin", False):
         content = sys.stdin.read().strip()
     if not content:
         print("Error: no content provided (use positional arg, --file, or --stdin)", file=sys.stderr)
         sys.exit(1)
     tags = ns.tags.split(",") if ns.tags else []
     ttl = None
-    if hasattr(ns, 'ttl') and ns.ttl:
+    if hasattr(ns, "ttl") and ns.ttl:
         ttl = parse_ttl(ns.ttl)
     item = memos.learn(content, tags=tags, importance=ns.importance, ttl=ttl)
     ttl_str = f", ttl={ns.ttl}" if ns.ttl else ""
@@ -68,7 +66,9 @@ def cmd_batch_learn(ns: argparse.Namespace) -> None:
         continue_on_error=not ns.strict,
     )
     label = " (dry-run)" if ns.dry_run else ""
-    print(f"{label}Batch learn: {result['learned']} learned, {result['skipped']} skipped, {len(result['errors'])} errors")
+    print(
+        f"{label}Batch learn: {result['learned']} learned, {result['skipped']} skipped, {len(result['errors'])} errors"
+    )
     if ns.verbose and result["items"]:
         for item in result["items"][:10]:
             print(f"  ✓ [{item['id'][:8]}] {item['content'][:80]}")
@@ -77,8 +77,6 @@ def cmd_batch_learn(ns: argparse.Namespace) -> None:
     if result["errors"]:
         for err in result["errors"][:5]:
             print(f"  ⚠ {err.get('reason', err)}", file=sys.stderr)
-
-
 
 
 def cmd_recall(ns: argparse.Namespace) -> None:
@@ -137,7 +135,7 @@ def cmd_recall(ns: argparse.Namespace) -> None:
         if memories:
             print("Memories:")
             for r in memories:
-                tags_str = f" [{', '.join(r['tags'])}]" if r['tags'] else ""
+                tags_str = f" [{', '.join(r['tags'])}]" if r["tags"] else ""
                 print(f"  {r['score']:.3f} {r['content'][:120]}{tags_str}")
             print(f"\n{len(memories)} memory result(s)")
         if facts:
@@ -187,11 +185,10 @@ def cmd_recall(ns: argparse.Namespace) -> None:
         print(f"  {r.score:.3f} {r.item.content[:120]}{tags_str}")
         if getattr(ns, "explain", False) and r.score_breakdown:
             bd = r.score_breakdown
-            print(f"    breakdown: semantic={bd.semantic:.3f} keyword={bd.keyword:.3f} importance={bd.importance:.3f} recency={bd.recency:.3f} tag_bonus={bd.tag_bonus:.3f} backend={bd.backend}")
+            print(
+                f"    breakdown: semantic={bd.semantic:.3f} keyword={bd.keyword:.3f} importance={bd.importance:.3f} recency={bd.recency:.3f} tag_bonus={bd.tag_bonus:.3f} backend={bd.backend}"
+            )
     print(f"\n{len(results)} result(s)")
-
-
-
 
 
 def cmd_search(ns: argparse.Namespace) -> None:
@@ -206,43 +203,54 @@ def cmd_search(ns: argparse.Namespace) -> None:
             print("No memories found.")
         return
     if fmt == "json":
-        print(json.dumps({
-            "results": [
+        print(
+            json.dumps(
                 {
-                    "id": item.id,
-                    "content": item.content[:200],
-                    "tags": item.tags,
-                    "importance": item.importance,
-                }
-                for item in items
-            ],
-            "total": len(items),
-        }, indent=2))
+                    "results": [
+                        {
+                            "id": item.id,
+                            "content": item.content[:200],
+                            "tags": item.tags,
+                            "importance": item.importance,
+                        }
+                        for item in items
+                    ],
+                    "total": len(items),
+                },
+                indent=2,
+            )
+        )
         return
     for item in items:
         tags_str = f" [{', '.join(item.tags)}]" if item.tags else ""
         print(f"  [{item.id[:8]}] {item.content[:120]}{tags_str}")
     print(f"\n{len(items)} result(s)")
 
+
 def cmd_stats(ns: argparse.Namespace) -> None:
     """Show memory store statistics."""
     memos = _get_memos(ns)
     s = memos.stats()
     if ns.json:
-        print(json.dumps({
-            "total_memories": s.total_memories,
-            "total_tags": s.total_tags,
-            "avg_relevance": round(s.avg_relevance, 3),
-            "avg_importance": round(s.avg_importance, 3),
-            "decay_candidates": s.decay_candidates,
-            "top_tags": s.top_tags,
-            "token_stats": {
-                "total_chars": s.total_chars,
-                "total_tokens": s.total_tokens,
-                "prunable_tokens": s.prunable_tokens,
-                "expired_tokens": s.expired_tokens,
-            },
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "total_memories": s.total_memories,
+                    "total_tags": s.total_tags,
+                    "avg_relevance": round(s.avg_relevance, 3),
+                    "avg_importance": round(s.avg_importance, 3),
+                    "decay_candidates": s.decay_candidates,
+                    "top_tags": s.top_tags,
+                    "token_stats": {
+                        "total_chars": s.total_chars,
+                        "total_tokens": s.total_tokens,
+                        "prunable_tokens": s.prunable_tokens,
+                        "expired_tokens": s.expired_tokens,
+                    },
+                },
+                indent=2,
+            )
+        )
         return
     print(f"  Total memories:  {s.total_memories}")
     print(f"  Total tags:      {s.total_tags}")
@@ -259,8 +267,6 @@ def cmd_stats(ns: argparse.Namespace) -> None:
             print(f"  Prunable tokens: ~{s.prunable_tokens:,} ({pct}% of total, run: memos decay)")
         if s.expired_tokens > 0:
             print(f"  Expired tokens:  ~{s.expired_tokens:,} (run: memos prune --expired)")
-
-
 
 
 def cmd_analytics(ns: argparse.Namespace) -> None:
@@ -340,7 +346,9 @@ def cmd_analytics(ns: argparse.Namespace) -> None:
             print(json.dumps(summary, indent=2))
             return
         success = summary["success"]
-        print(f"  Success rate: {success['success_rate']:.1f}% ({success['successful_recalls']}/{success['total_recalls']})")
+        print(
+            f"  Success rate: {success['success_rate']:.1f}% ({success['successful_recalls']}/{success['total_recalls']})"
+        )
         latency = summary["latency"]
         print(f"  Latency p95:  {latency['p95']:.2f} ms")
         print(f"  Top queries:  {len(summary['top_queries'])}")
@@ -350,8 +358,6 @@ def cmd_analytics(ns: argparse.Namespace) -> None:
 
     print(f"Error: unknown analytics action: {action}", file=sys.stderr)
     sys.exit(1)
-
-
 
 
 def cmd_forget(ns: argparse.Namespace) -> None:
@@ -415,8 +421,6 @@ def cmd_get(ns: argparse.Namespace) -> None:
         print(f"  Metadata:     {json.dumps(public_meta)}")
 
 
-
-
 def cmd_prune(ns: argparse.Namespace) -> None:
     """Prune decayed memories."""
     memos = _get_memos(ns)
@@ -465,8 +469,6 @@ def cmd_consolidate(ns: argparse.Namespace) -> None:
             print(f"  [{g.reason}] sim={g.similarity:.2f} keep=[{g.keep.id[:8]}] {g.keep.content[:60]}")
             for d in g.duplicates:
                 print(f"    dup=[{d.id[:8]}] {d.content[:60]}")
-
-
 
 
 def cmd_watch(ns: argparse.Namespace) -> None:
@@ -531,8 +533,6 @@ def cmd_subscribe(ns: argparse.Namespace) -> None:
     cmd_watch(ns)
 
 
-
-
 def cmd_feedback(ns: argparse.Namespace) -> None:
     """Record relevance feedback for a recalled memory."""
     memos = _get_memos(ns)
@@ -540,11 +540,11 @@ def cmd_feedback(ns: argparse.Namespace) -> None:
         entry = memos.record_feedback(
             item_id=ns.item_id,
             feedback=ns.rating,
-            query=getattr(ns, 'query', '') or '',
-            score_at_recall=getattr(ns, 'score', 0.0),
-            agent_id=getattr(ns, 'agent', '') or '',
+            query=getattr(ns, "query", "") or "",
+            score_at_recall=getattr(ns, "score", 0.0),
+            agent_id=getattr(ns, "agent", "") or "",
         )
-        if getattr(ns, 'json', False):
+        if getattr(ns, "json", False):
             print(json.dumps(entry.to_dict(), indent=2))
         else:
             print(f"✓ Feedback recorded: {ns.item_id[:12]}... → {ns.rating}")
@@ -556,8 +556,8 @@ def cmd_feedback(ns: argparse.Namespace) -> None:
 def cmd_feedback_list(ns: argparse.Namespace) -> None:
     """List feedback entries."""
     memos = _get_memos(ns)
-    entries = memos.get_feedback(item_id=getattr(ns, 'item_id', None), limit=ns.limit)
-    if getattr(ns, 'json', False):
+    entries = memos.get_feedback(item_id=getattr(ns, "item_id", None), limit=ns.limit)
+    if getattr(ns, "json", False):
         print(json.dumps([e.to_dict() for e in entries], indent=2))
         return
     if not entries:
@@ -573,7 +573,7 @@ def cmd_feedback_stats(ns: argparse.Namespace) -> None:
     """Show feedback statistics."""
     memos = _get_memos(ns)
     stats = memos.feedback_stats()
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(stats.to_dict(), indent=2))
         return
     print(f"  Total feedback:      {stats.total_feedback}")
@@ -581,8 +581,6 @@ def cmd_feedback_stats(ns: argparse.Namespace) -> None:
     print(f"  Not relevant:        {stats.not_relevant_count}")
     print(f"  Items with feedback: {stats.items_with_feedback}")
     print(f"  Avg feedback score:  {stats.avg_feedback_score:.3f}")
-
-
 
 
 def cmd_compact(ns: argparse.Namespace) -> None:
@@ -595,7 +593,7 @@ def cmd_compact(ns: argparse.Namespace) -> None:
         max_compact_per_run=ns.max_per_run,
         dry_run=ns.dry_run,
     )
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(report, indent=2))
         return
     prefix = "[DRY RUN] " if ns.dry_run else ""
@@ -620,11 +618,10 @@ def cmd_benchmark(ns: argparse.Namespace) -> None:
         search_queries=ns.search_queries,
         warmup=ns.warmup,
     )
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(report.to_dict(), indent=2))
     else:
         print(report.to_text())
-
 
 
 def cmd_benchmark_quality(ns: argparse.Namespace) -> None:
@@ -641,7 +638,7 @@ def cmd_benchmark_quality(ns: argparse.Namespace) -> None:
         scalability_sizes=[50, 200, 500, 1000] if ns.scalability else None,
         backend=ns.backend,
     )
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(report.to_dict(), indent=2))
     else:
         print(report.to_text())
@@ -650,7 +647,7 @@ def cmd_benchmark_quality(ns: argparse.Namespace) -> None:
 def cmd_cache_stats(ns: argparse.Namespace) -> None:
     """Show embedding cache statistics."""
     memos = _get_memos(ns)
-    if getattr(ns, 'clear', False):
+    if getattr(ns, "clear", False):
         cleared = memos.cache_clear()
         if cleared < 0:
             print("Cache is not enabled")
@@ -661,7 +658,7 @@ def cmd_cache_stats(ns: argparse.Namespace) -> None:
     if stats is None:
         print("Cache is not enabled. Use cache_enabled=True to enable.")
         return
-    if getattr(ns, 'json', False):
+    if getattr(ns, "json", False):
         print(json.dumps(stats, indent=2))
         return
     print(f"  Cache entries:   {stats['size']}/{stats['max_size']}")
@@ -671,44 +668,42 @@ def cmd_cache_stats(ns: argparse.Namespace) -> None:
     print(f"  Evictions:       {stats['evictions']}")
 
 
-
-
 def cmd_tags(ns: argparse.Namespace) -> None:
     """Tag management commands."""
-    action = getattr(ns, 'tags_action', 'list') or 'list'
+    action = getattr(ns, "tags_action", "list") or "list"
     memos = _get_memos(ns)
 
-    if action == 'delete':
+    if action == "delete":
         count = memos.delete_tag(ns.tag)
         print(f"✓ Deleted tag '{ns.tag}' ({count} memory(s) updated)")
         return
 
-    if action == 'rename':
+    if action == "rename":
         count = memos.rename_tag(ns.old_tag, ns.new_tag)
         print(f"✓ Renamed tag '{ns.old_tag}' → '{ns.new_tag}' ({count} memory(s) updated)")
         return
 
     # Default: list
-    sort_by = getattr(ns, 'tags_sort', 'count') or 'count'
-    limit = getattr(ns, 'tags_limit', 0) or 0
+    sort_by = getattr(ns, "tags_sort", "count") or "count"
+    limit = getattr(ns, "tags_limit", 0) or 0
     tags = memos.list_tags(sort=sort_by, limit=limit)
 
-    if getattr(ns, 'json', False):
-        out = [{'tag': t, 'count': c} for t, c in tags]
+    if getattr(ns, "json", False):
+        out = [{"tag": t, "count": c} for t, c in tags]
         print(json.dumps(out, ensure_ascii=False))
     else:
         if not tags:
-            print('No tags found.')
+            print("No tags found.")
             return
         max_tag_len = max(len(t) for t, _ in tags)
         for tag, count in tags:
-            print(f'  {tag:<{max_tag_len}}  {count}')
-
+            print(f"  {tag:<{max_tag_len}}  {count}")
 
 
 def cmd_wake_up(ns: argparse.Namespace) -> None:
     """Print L0 (identity) + L1 (top memories) context for session priming."""
     from ..context import ContextStack
+
     memos = _get_memos(ns)
     cs = ContextStack(memos)
     output = cs.wake_up(
@@ -723,6 +718,7 @@ def cmd_wake_up(ns: argparse.Namespace) -> None:
 def cmd_identity(ns: argparse.Namespace) -> None:
     """Manage agent identity (L0 context)."""
     from ..context import ContextStack
+
     action = getattr(ns, "identity_action", None) or "show"
     # identity uses its own path, not a memos backend
     # We instantiate ContextStack with a dummy memos only if needed
@@ -730,7 +726,9 @@ def cmd_identity(ns: argparse.Namespace) -> None:
 
     class _Stub:
         """Minimal stub so ContextStack can be constructed without a full backend."""
+
         namespace = ""
+
         def _store(self):  # pragma: no cover
             pass
 
@@ -753,6 +751,7 @@ def cmd_identity(ns: argparse.Namespace) -> None:
 def cmd_context_for(ns: argparse.Namespace) -> None:
     """Print context optimised for a specific query (L0 + L3)."""
     from ..context import ContextStack
+
     memos = _get_memos(ns)
     cs = ContextStack(memos)
     output = cs.context_for(
@@ -766,6 +765,7 @@ def cmd_context_for(ns: argparse.Namespace) -> None:
 def cmd_classify(ns: argparse.Namespace) -> None:
     """Classify text into memory type tags."""
     from ..tagger import AutoTagger
+
     tagger = AutoTagger()
     text = ns.text
 
@@ -807,7 +807,9 @@ def cmd_decay(ns: argparse.Namespace) -> None:
         print("")
         print("Top decayed:")
         for d in report.details[:10]:
-            print(f"  [{d['id'][:8]}] {d['importance_before']:.3f} → {d['importance_after']:.3f} (age {d['age_days']}d)")
+            print(
+                f"  [{d['id'][:8]}] {d['importance_before']:.3f} → {d['importance_after']:.3f} (age {d['age_days']}d)"
+            )
 
 
 def cmd_reinforce(ns: argparse.Namespace) -> None:
@@ -835,14 +837,13 @@ def cmd_compress(ns: argparse.Namespace) -> None:
     if getattr(ns, "verbose", False) and result.details:
         for detail in result.details[:10]:
             tags = ", ".join(detail["tags"])
-            print(
-                f"  - [{tags}] {detail['source_count']} → {detail['summary_id'][:8]} "
-                f"({detail['freed_bytes']} bytes)"
-            )
+            print(f"  - [{tags}] {detail['source_count']} → {detail['summary_id'][:8]} ({detail['freed_bytes']} bytes)")
+
 
 def cmd_wiki_living(ns: argparse.Namespace) -> None:
     """Living wiki commands."""
     from ..wiki_living import LivingWikiEngine
+
     memos = _get_memos(ns)
     wiki_dir = getattr(ns, "wiki_dir", None)
     engine = LivingWikiEngine(memos, wiki_dir=wiki_dir)
@@ -1000,8 +1001,6 @@ def cmd_brain_search(ns: argparse.Namespace) -> None:
         kg.close()
 
 
-
-
 def cmd_dedup_check(ns: argparse.Namespace) -> None:
     """Check if a text would be a duplicate of existing memories."""
     m = _get_memos(ns)
@@ -1014,6 +1013,7 @@ def cmd_dedup_check(ns: argparse.Namespace) -> None:
             print(f"  Content:  {result.match.content[:200]}")
     else:
         print("NO DUPLICATE FOUND")
+
 
 def cmd_dedup_scan(ns: argparse.Namespace) -> None:
     """Scan all memories for duplicates."""
@@ -1034,4 +1034,3 @@ def cmd_dedup_scan(ns: argparse.Namespace) -> None:
         for g in result.groups[:20]:
             print(f"  [{g['reason']}] {g['duplicate_id'][:8]} → {g['original_id'][:8]} (sim={g['similarity']:.3f})")
             print(f"    {g['content_preview'][:80]}")
-

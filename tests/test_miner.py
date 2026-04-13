@@ -1,4 +1,5 @@
 """Tests for smart memory miner (P8)."""
+
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ from memos.ingest.miner import (
 # ---------------------------------------------------------------------------
 # chunk_text
 # ---------------------------------------------------------------------------
+
 
 def test_chunk_empty():
     assert chunk_text("") == []
@@ -84,6 +86,7 @@ def test_chunk_preserves_content():
 # content_hash deduplication
 # ---------------------------------------------------------------------------
 
+
 def test_hash_same_content():
     assert content_hash("hello world") == content_hash("hello world")
 
@@ -104,26 +107,31 @@ def test_hash_different_content():
 # detect_room
 # ---------------------------------------------------------------------------
 
+
 def test_detect_room_from_path():
     from pathlib import Path
+
     tags = detect_room(Path("src/auth/login.py"))
     assert "auth" in tags
 
 
 def test_detect_room_from_filename():
     from pathlib import Path
+
     tags = detect_room(Path("deploy_config.md"))
     assert "deployment" in tags
 
 
 def test_detect_room_from_content():
     from pathlib import Path
+
     tags = detect_room(Path("notes.md"), text="We need to fix the SQL migration and postgres schema.")
     assert "database" in tags
 
 
 def test_detect_room_max_tags():
     from pathlib import Path
+
     tags = detect_room(Path("auth_api_deploy.md"), top_n=2)
     assert len(tags) <= 2
 
@@ -132,13 +140,14 @@ def test_detect_room_max_tags():
 # Format parsers
 # ---------------------------------------------------------------------------
 
+
 def test_parse_claude_single():
     data = {
         "name": "Test Convo",
         "messages": [
             {"role": "human", "content": "Hello, how are you?"},
             {"role": "assistant", "content": "I'm doing great, thanks!"},
-        ]
+        ],
     }
     result = list(_parse_claude_export(data))
     assert len(result) == 1
@@ -158,36 +167,33 @@ def test_parse_claude_list():
 
 
 def test_parse_claude_content_blocks():
-    data = {
-        "messages": [{
-            "role": "human",
-            "content": [{"type": "text", "text": "Block content here"}]
-        }]
-    }
+    data = {"messages": [{"role": "human", "content": [{"type": "text", "text": "Block content here"}]}]}
     result = list(_parse_claude_export(data))
     assert len(result) == 1
     assert "Block content here" in result[0]["text"]
 
 
 def test_parse_chatgpt():
-    data = [{
-        "title": "GPT Convo",
-        "create_time": 1700000000,
-        "mapping": {
-            "node1": {
-                "message": {
-                    "author": {"role": "user"},
-                    "content": {"content_type": "text", "parts": ["What is Python?"]}
-                }
+    data = [
+        {
+            "title": "GPT Convo",
+            "create_time": 1700000000,
+            "mapping": {
+                "node1": {
+                    "message": {
+                        "author": {"role": "user"},
+                        "content": {"content_type": "text", "parts": ["What is Python?"]},
+                    }
+                },
+                "node2": {
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "content": {"content_type": "text", "parts": ["Python is a language."]},
+                    }
+                },
             },
-            "node2": {
-                "message": {
-                    "author": {"role": "assistant"},
-                    "content": {"content_type": "text", "parts": ["Python is a language."]}
-                }
-            }
         }
-    }]
+    ]
     result = list(_parse_chatgpt_export(data))
     assert len(result) == 1
     assert "Python" in result[0]["text"]
@@ -210,6 +216,7 @@ def test_parse_slack_jsonl():
 # ---------------------------------------------------------------------------
 # Miner class
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mem():
@@ -266,13 +273,15 @@ def test_miner_extra_tags(tmp_path, mem):
 
 def test_miner_claude_export(tmp_path, mem):
     export = tmp_path / "claude.json"
-    data = [{
-        "name": "coding-session",
-        "messages": [
-            {"role": "human", "content": "How do I use async in Python?"},
-            {"role": "assistant", "content": "Use async def and await keywords."},
-        ]
-    }]
+    data = [
+        {
+            "name": "coding-session",
+            "messages": [
+                {"role": "human", "content": "How do I use async in Python?"},
+                {"role": "assistant", "content": "Use async def and await keywords."},
+            ],
+        }
+    ]
     export.write_text(json.dumps(data))
     miner = Miner(mem)
     result = miner.mine_claude_export(export)
@@ -284,20 +293,26 @@ def test_miner_claude_export(tmp_path, mem):
 
 def test_miner_chatgpt_export(tmp_path, mem):
     export = tmp_path / "chatgpt.json"
-    data = [{
-        "title": "Python session",
-        "create_time": 1700000000,
-        "mapping": {
-            "n1": {"message": {
-                "author": {"role": "user"},
-                "content": {"content_type": "text", "parts": ["What is FastAPI?"]}
-            }},
-            "n2": {"message": {
-                "author": {"role": "assistant"},
-                "content": {"content_type": "text", "parts": ["FastAPI is a high-performance web framework."]}
-            }},
+    data = [
+        {
+            "title": "Python session",
+            "create_time": 1700000000,
+            "mapping": {
+                "n1": {
+                    "message": {
+                        "author": {"role": "user"},
+                        "content": {"content_type": "text", "parts": ["What is FastAPI?"]},
+                    }
+                },
+                "n2": {
+                    "message": {
+                        "author": {"role": "assistant"},
+                        "content": {"content_type": "text", "parts": ["FastAPI is a high-performance web framework."]},
+                    }
+                },
+            },
         }
-    }]
+    ]
     export.write_text(json.dumps(data))
     miner = Miner(mem)
     result = miner.mine_chatgpt_export(export)
@@ -323,6 +338,7 @@ def test_miner_auto_directory(tmp_path, mem):
 
 def test_miner_missing_file(mem):
     from pathlib import Path
+
     miner = Miner(mem)
     result = miner.mine_file(Path("/nonexistent/file.md"))
     assert len(result.errors) == 1
@@ -342,16 +358,20 @@ def test_mine_result_merge():
 # Discord
 # ---------------------------------------------------------------------------
 
+
 def test_parse_discord_basic():
     data = {
         "guild": {"name": "MyServer"},
         "channel": {"name": "general", "type": "GuildTextChat"},
         "messages": [
-            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
-             "author": {"name": "alice"}, "content": "Hello everyone!"},
-            {"id": "2", "timestamp": "2024-01-01T10:01:00+00:00",
-             "author": {"name": "bob"}, "content": "Hey Alice!"},
-        ]
+            {
+                "id": "1",
+                "timestamp": "2024-01-01T10:00:00+00:00",
+                "author": {"name": "alice"},
+                "content": "Hello everyone!",
+            },
+            {"id": "2", "timestamp": "2024-01-01T10:01:00+00:00", "author": {"name": "bob"}, "content": "Hey Alice!"},
+        ],
     }
     result = list(_parse_discord_export(data))
     assert len(result) == 1
@@ -363,13 +383,17 @@ def test_parse_discord_basic():
 
 def test_parse_discord_window_split():
     data = {
-        "guild": {"name": "S"}, "channel": {"name": "c"},
+        "guild": {"name": "S"},
+        "channel": {"name": "c"},
         "messages": [
-            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
-             "author": {"name": "a"}, "content": "First message"},
-            {"id": "2", "timestamp": "2024-01-01T11:00:00+00:00",  # 1h later
-             "author": {"name": "b"}, "content": "Different window"},
-        ]
+            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00", "author": {"name": "a"}, "content": "First message"},
+            {
+                "id": "2",
+                "timestamp": "2024-01-01T11:00:00+00:00",  # 1h later
+                "author": {"name": "b"},
+                "content": "Different window",
+            },
+        ],
     }
     result = list(_parse_discord_export(data))
     assert len(result) == 2  # different 10-min windows
@@ -377,12 +401,20 @@ def test_parse_discord_window_split():
 
 def test_parse_discord_list():
     data = [
-        {"guild": {"name": "S"}, "channel": {"name": "c1"},
-         "messages": [{"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
-                       "author": {"name": "a"}, "content": "Hi"}]},
-        {"guild": {"name": "S"}, "channel": {"name": "c2"},
-         "messages": [{"id": "2", "timestamp": "2024-01-01T10:00:00+00:00",
-                       "author": {"name": "b"}, "content": "Hello"}]},
+        {
+            "guild": {"name": "S"},
+            "channel": {"name": "c1"},
+            "messages": [
+                {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00", "author": {"name": "a"}, "content": "Hi"}
+            ],
+        },
+        {
+            "guild": {"name": "S"},
+            "channel": {"name": "c2"},
+            "messages": [
+                {"id": "2", "timestamp": "2024-01-01T10:00:00+00:00", "author": {"name": "b"}, "content": "Hello"}
+            ],
+        },
     ]
     result = list(_parse_discord_export(data))
     assert len(result) == 2
@@ -394,11 +426,19 @@ def test_miner_discord_export(tmp_path, mem):
         "guild": {"name": "DevServer"},
         "channel": {"name": "python", "type": "GuildTextChat"},
         "messages": [
-            {"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
-             "author": {"name": "dev1"}, "content": "FastAPI is great for building REST APIs."},
-            {"id": "2", "timestamp": "2024-01-01T10:02:00+00:00",
-             "author": {"name": "dev2"}, "content": "Agreed, async support is excellent."},
-        ]
+            {
+                "id": "1",
+                "timestamp": "2024-01-01T10:00:00+00:00",
+                "author": {"name": "dev1"},
+                "content": "FastAPI is great for building REST APIs.",
+            },
+            {
+                "id": "2",
+                "timestamp": "2024-01-01T10:02:00+00:00",
+                "author": {"name": "dev2"},
+                "content": "Agreed, async support is excellent.",
+            },
+        ],
     }
     export.write_text(json.dumps(data))
     miner = Miner(mem)
@@ -410,9 +450,16 @@ def test_miner_discord_export(tmp_path, mem):
 def test_miner_auto_discord(tmp_path, mem):
     export = tmp_path / "discord_export.json"
     data = {
-        "guild": {"name": "S"}, "channel": {"name": "c"},
-        "messages": [{"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
-                      "author": {"name": "a"}, "content": "Testing auto-detection of discord format."}]
+        "guild": {"name": "S"},
+        "channel": {"name": "c"},
+        "messages": [
+            {
+                "id": "1",
+                "timestamp": "2024-01-01T10:00:00+00:00",
+                "author": {"name": "a"},
+                "content": "Testing auto-detection of discord format.",
+            }
+        ],
     }
     export.write_text(json.dumps(data))
     miner = Miner(mem)
@@ -424,16 +471,29 @@ def test_miner_auto_discord(tmp_path, mem):
 # Telegram
 # ---------------------------------------------------------------------------
 
+
 def test_parse_telegram_basic():
     data = {
         "name": "My Chat",
         "type": "personal_chat",
         "messages": [
-            {"id": 1, "type": "message", "date": "2024-01-01T10:00:00",
-             "from": "alice", "from_id": "user123", "text": "Hello!"},
-            {"id": 2, "type": "message", "date": "2024-01-01T10:01:00",
-             "from": "bob", "from_id": "user456", "text": "Hey there!"},
-        ]
+            {
+                "id": 1,
+                "type": "message",
+                "date": "2024-01-01T10:00:00",
+                "from": "alice",
+                "from_id": "user123",
+                "text": "Hello!",
+            },
+            {
+                "id": 2,
+                "type": "message",
+                "date": "2024-01-01T10:01:00",
+                "from": "bob",
+                "from_id": "user456",
+                "text": "Hey there!",
+            },
+        ],
     }
     result = list(_parse_telegram_export(data))
     assert len(result) >= 1
@@ -444,16 +504,22 @@ def test_parse_telegram_basic():
 def test_parse_telegram_formatted_text():
     """Telegram text can be a list of entity objects."""
     data = {
-        "name": "Chat", "type": "personal_chat",
-        "messages": [{
-            "id": 1, "type": "message", "date": "2024-01-01T10:00:00",
-            "from": "user", "from_id": "u1",
-            "text": [
-                {"type": "plain", "text": "Check out "},
-                {"type": "link", "text": "this link"},
-                " for more info.",
-            ]
-        }]
+        "name": "Chat",
+        "type": "personal_chat",
+        "messages": [
+            {
+                "id": 1,
+                "type": "message",
+                "date": "2024-01-01T10:00:00",
+                "from": "user",
+                "from_id": "u1",
+                "text": [
+                    {"type": "plain", "text": "Check out "},
+                    {"type": "link", "text": "this link"},
+                    " for more info.",
+                ],
+            }
+        ],
     }
     result = list(_parse_telegram_export(data))
     assert len(result) == 1
@@ -463,13 +529,19 @@ def test_parse_telegram_formatted_text():
 
 def test_parse_telegram_skips_non_messages():
     data = {
-        "name": "Chat", "type": "personal_chat",
+        "name": "Chat",
+        "type": "personal_chat",
         "messages": [
-            {"id": 1, "type": "service", "date": "2024-01-01T10:00:00",
-             "from": "system", "action": "pin_message"},
-            {"id": 2, "type": "message", "date": "2024-01-01T10:01:00",
-             "from": "alice", "from_id": "u1", "text": "Valid message content here."},
-        ]
+            {"id": 1, "type": "service", "date": "2024-01-01T10:00:00", "from": "system", "action": "pin_message"},
+            {
+                "id": 2,
+                "type": "message",
+                "date": "2024-01-01T10:01:00",
+                "from": "alice",
+                "from_id": "u1",
+                "text": "Valid message content here.",
+            },
+        ],
     }
     result = list(_parse_telegram_export(data))
     assert len(result) == 1
@@ -479,14 +551,26 @@ def test_parse_telegram_skips_non_messages():
 def test_miner_telegram_export(tmp_path, mem):
     export = tmp_path / "result.json"
     data = {
-        "name": "Dev Chat", "type": "private_supergroup",
+        "name": "Dev Chat",
+        "type": "private_supergroup",
         "messages": [
-            {"id": 1, "type": "message", "date": "2024-01-01T10:00:00",
-             "from": "alice", "from_id": "u1",
-             "text": "We should use PostgreSQL for this project data storage."},
-            {"id": 2, "type": "message", "date": "2024-01-01T10:02:00",
-             "from": "bob", "from_id": "u2", "text": "Agreed, it handles relations well."},
-        ]
+            {
+                "id": 1,
+                "type": "message",
+                "date": "2024-01-01T10:00:00",
+                "from": "alice",
+                "from_id": "u1",
+                "text": "We should use PostgreSQL for this project data storage.",
+            },
+            {
+                "id": 2,
+                "type": "message",
+                "date": "2024-01-01T10:02:00",
+                "from": "bob",
+                "from_id": "u2",
+                "text": "Agreed, it handles relations well.",
+            },
+        ],
     }
     export.write_text(json.dumps(data))
     miner = Miner(mem)
@@ -499,9 +583,14 @@ def test_miner_telegram_export(tmp_path, mem):
 # OpenClaw
 # ---------------------------------------------------------------------------
 
+
 def test_parse_openclaw_cron_log():
-    data = {"job": "forge-chantier-memos", "status": "done",
-            "ts": 1700000000, "output": "Implemented wiki compile mode with 10 tests."}
+    data = {
+        "job": "forge-chantier-memos",
+        "status": "done",
+        "ts": 1700000000,
+        "output": "Implemented wiki compile mode with 10 tests.",
+    }
     result = list(_parse_openclaw_session(data))
     assert len(result) == 1
     assert "forge-chantier-memos" in result[0]["text"]
@@ -512,7 +601,10 @@ def test_parse_openclaw_cron_log():
 def test_parse_openclaw_summary():
     data = {
         "summary": "Session focused on MCP server implementation.",
-        "learnings": ["JSON-RPC 2.0 requires exact id matching", "FastAPI Request type must be imported at module level"],
+        "learnings": [
+            "JSON-RPC 2.0 requires exact id matching",
+            "FastAPI Request type must be imported at module level",
+        ],
         "decisions": ["Use stdio transport for Claude Code integration"],
     }
     result = list(_parse_openclaw_session(data))
@@ -545,8 +637,11 @@ def test_parse_openclaw_list():
 
 def test_miner_openclaw_json(tmp_path, mem):
     log = tmp_path / "session.json"
-    data = {"job": "forge-chantier-memos", "status": "done",
-            "output": "Added temporal knowledge graph with SQLite backend and validity windows."}
+    data = {
+        "job": "forge-chantier-memos",
+        "status": "done",
+        "output": "Added temporal knowledge graph with SQLite backend and validity windows.",
+    }
     log.write_text(json.dumps(data))
     miner = Miner(mem)
     result = miner.mine_openclaw(log)
@@ -567,8 +662,9 @@ def test_miner_openclaw_jsonl(tmp_path, mem):
 
 
 def test_miner_openclaw_directory(tmp_path, mem):
-    (tmp_path / "session1.json").write_text(json.dumps(
-        {"job": "j1", "output": "Implemented first feature successfully."}))
+    (tmp_path / "session1.json").write_text(
+        json.dumps({"job": "j1", "output": "Implemented first feature successfully."})
+    )
     (tmp_path / "notes.md").write_text("## Learnings\n\nAlways validate before building.")
     miner = Miner(mem)
     result = miner.mine_openclaw(tmp_path)
@@ -577,9 +673,11 @@ def test_miner_openclaw_directory(tmp_path, mem):
 
 def test_miner_auto_openclaw(tmp_path, mem):
     log = tmp_path / "openclaw_session.json"
-    data = {"summary": "Session implementing the wiki compile mode for MemOS.",
-            "learnings": ["WikiEngine groups by tag efficiently"],
-            "decisions": ["Use ~/.memos/wiki as default output dir"]}
+    data = {
+        "summary": "Session implementing the wiki compile mode for MemOS.",
+        "learnings": ["WikiEngine groups by tag efficiently"],
+        "decisions": ["Use ~/.memos/wiki as default output dir"],
+    }
     log.write_text(json.dumps(data))
     miner = Miner(mem)
     result = miner.mine_auto(log)
@@ -590,26 +688,51 @@ def test_miner_auto_openclaw(tmp_path, mem):
 # mine CLI format option
 # ---------------------------------------------------------------------------
 
+
 def test_miner_format_choices(tmp_path, mem):
     """Verify each format can be explicitly forced."""
     # Discord
     discord_file = tmp_path / "d.json"
-    discord_file.write_text(json.dumps({
-        "guild": {"name": "S"}, "channel": {"name": "c"},
-        "messages": [{"id": "1", "timestamp": "2024-01-01T10:00:00+00:00",
-                      "author": {"name": "u"}, "content": "Discord message content here."}]
-    }))
+    discord_file.write_text(
+        json.dumps(
+            {
+                "guild": {"name": "S"},
+                "channel": {"name": "c"},
+                "messages": [
+                    {
+                        "id": "1",
+                        "timestamp": "2024-01-01T10:00:00+00:00",
+                        "author": {"name": "u"},
+                        "content": "Discord message content here.",
+                    }
+                ],
+            }
+        )
+    )
     miner = Miner(mem)
     r = miner.mine_discord_export(discord_file)
     assert r.imported >= 1
 
     # Telegram
     tg_file = tmp_path / "t.json"
-    tg_file.write_text(json.dumps({
-        "name": "C", "type": "personal_chat",
-        "messages": [{"id": 1, "type": "message", "date": "2024-01-01T10:00:00",
-                      "from": "u", "from_id": "u1", "text": "Telegram message content here."}]
-    }))
+    tg_file.write_text(
+        json.dumps(
+            {
+                "name": "C",
+                "type": "personal_chat",
+                "messages": [
+                    {
+                        "id": 1,
+                        "type": "message",
+                        "date": "2024-01-01T10:00:00",
+                        "from": "u",
+                        "from_id": "u1",
+                        "text": "Telegram message content here.",
+                    }
+                ],
+            }
+        )
+    )
     r = miner.mine_telegram_export(tg_file)
     assert r.imported >= 1
 

@@ -168,6 +168,7 @@ class NamespaceACL:
             # Check expiration
             if policy.expires_at is not None:
                 import time as _time
+
                 if _time.time() > policy.expires_at:
                     # Auto-cleanup expired policy
                     self._policies.pop((agent_id, namespace), None)
@@ -192,17 +193,12 @@ class NamespaceACL:
         """
         role = self.get_role(agent_id, namespace)
         if role is None:
-            raise PermissionError(
-                f"Agent '{agent_id}' has no access to namespace '{namespace}'"
-            )
+            raise PermissionError(f"Agent '{agent_id}' has no access to namespace '{namespace}'")
         if role == Role.DENIED:
-            raise PermissionError(
-                f"Agent '{agent_id}' is explicitly denied access to namespace '{namespace}'"
-            )
+            raise PermissionError(f"Agent '{agent_id}' is explicitly denied access to namespace '{namespace}'")
         if permission not in _ROLE_PERMISSIONS.get(role, set()):
             raise PermissionError(
-                f"Agent '{agent_id}' (role={role.value}) lacks '{permission}' "
-                f"permission on namespace '{namespace}'"
+                f"Agent '{agent_id}' (role={role.value}) lacks '{permission}' permission on namespace '{namespace}'"
             )
 
     # ── Queries ─────────────────────────────────────────────
@@ -215,6 +211,7 @@ class NamespaceACL:
                 if aid == agent_id and policy.role != Role.DENIED:
                     if policy.expires_at is not None:
                         import time as _time
+
                         if _time.time() > policy.expires_at:
                             continue
                     result.append(ns)
@@ -231,6 +228,7 @@ class NamespaceACL:
                 if ns == namespace and policy.role != Role.DENIED:
                     if policy.expires_at is not None:
                         import time as _time
+
                         if _time.time() > policy.expires_at:
                             continue
                     result.append((aid, policy.role.value))
@@ -242,6 +240,7 @@ class NamespaceACL:
             policy = self._policies.get((agent_id, namespace))
             if policy and policy.expires_at is not None:
                 import time as _time
+
                 if _time.time() > policy.expires_at:
                     return None
             return policy
@@ -281,7 +280,8 @@ class NamespaceACL:
         with self._lock:
             now = _time.time()
             expired = [
-                key for key, policy in self._policies.items()
+                key
+                for key, policy in self._policies.items()
                 if policy.expires_at is not None and now > policy.expires_at
             ]
             for key in expired:

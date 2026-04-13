@@ -318,9 +318,7 @@ def test_add_fact_populates_entities(kg: KnowledgeGraph) -> None:
     """Bug 1 regression: add_fact must upsert both nodes into entities table."""
     kg.add_fact("Alice", "works_on", "ProjectX")
     s = kg.stats()
-    assert s["total_entities"] >= 2, (
-        f"Expected at least 2 entities after add_fact, got {s['total_entities']}"
-    )
+    assert s["total_entities"] >= 2, f"Expected at least 2 entities after add_fact, got {s['total_entities']}"
     results = kg.search_entities("Alice")
     assert len(results) >= 1, "search_entities('Alice') should return at least 1 result"
     names = {r["name"] for r in results}
@@ -331,9 +329,7 @@ def test_add_fact_populates_entities_stats(kg: KnowledgeGraph) -> None:
     """After add_fact, stats()['total_entities'] must be >= 2 (subject + object)."""
     kg.add_fact("Alice", "knows", "Bob")
     s = kg.stats()
-    assert s["total_entities"] >= 2, (
-        f"Expected >= 2 entities after add_fact, got {s['total_entities']}"
-    )
+    assert s["total_entities"] >= 2, f"Expected >= 2 entities after add_fact, got {s['total_entities']}"
 
 
 def test_add_fact_search_entities_finds_subject(kg: KnowledgeGraph) -> None:
@@ -375,9 +371,7 @@ def test_add_fact_populates_entities_table(kg: KnowledgeGraph) -> None:
     """Regression: add_fact() must upsert subject and object into entities."""
     kg.add_fact("Alice", "works_on", "ProjectX")
     s = kg.stats()
-    assert s["total_entities"] >= 2, (
-        f"Expected at least 2 entities after add_fact, got {s['total_entities']}"
-    )
+    assert s["total_entities"] >= 2, f"Expected at least 2 entities after add_fact, got {s['total_entities']}"
     results = kg.search_entities("Alice")
     assert len(results) >= 1, "search_entities('Alice') should return at least 1 result"
     names = {r["name"] for r in results}
@@ -389,9 +383,7 @@ def test_query_self_referential_no_duplicate_ids(kg: KnowledgeGraph) -> None:
     kg.add_fact("X", "relates_to", "X")
     facts = kg.query("X", direction="both")
     ids = [f["id"] for f in facts]
-    assert len(ids) == len(set(ids)), (
-        f"Duplicate fact IDs returned by query with direction='both': {ids}"
-    )
+    assert len(ids) == len(set(ids)), f"Duplicate fact IDs returned by query with direction='both': {ids}"
 
 
 def test_query_both_direction_no_duplicates(kg: KnowledgeGraph) -> None:
@@ -400,9 +392,7 @@ def test_query_both_direction_no_duplicates(kg: KnowledgeGraph) -> None:
     kg.add_fact("Alice", "knows", "Alice")
     facts = kg.query("Alice", direction="both")
     ids = [f["id"] for f in facts]
-    assert len(ids) == len(set(ids)), (
-        f"Duplicate fact IDs returned by query(direction='both'): {ids}"
-    )
+    assert len(ids) == len(set(ids)), f"Duplicate fact IDs returned by query(direction='both'): {ids}"
 
 
 # ---------------------------------------------------------------------------
@@ -563,9 +553,14 @@ def test_cli_kg_query(tmp_path, capsys) -> None:
     db = str(tmp_path / "test.db")
 
     ns_add = argparse.Namespace(
-        subject="Alice", predicate="knows", object="Bob",
-        valid_from=None, valid_to=None, confidence=1.0,
-        source=None, kg_db=db,
+        subject="Alice",
+        predicate="knows",
+        object="Bob",
+        valid_from=None,
+        valid_to=None,
+        confidence=1.0,
+        source=None,
+        kg_db=db,
     )
     cmd_kg_add(ns_add)
 
@@ -583,9 +578,14 @@ def test_cli_kg_timeline(tmp_path, capsys) -> None:
 
     db = str(tmp_path / "test.db")
     ns_add = argparse.Namespace(
-        subject="Alice", predicate="born_in", object="Paris",
-        valid_from=None, valid_to=None, confidence=1.0,
-        source=None, kg_db=db,
+        subject="Alice",
+        predicate="born_in",
+        object="Paris",
+        valid_from=None,
+        valid_to=None,
+        confidence=1.0,
+        source=None,
+        kg_db=db,
     )
     cmd_kg_add(ns_add)
 
@@ -604,9 +604,14 @@ def test_cli_kg_invalidate(tmp_path, capsys) -> None:
 
     # Add fact
     ns_add = argparse.Namespace(
-        subject="Alice", predicate="knows", object="Bob",
-        valid_from=None, valid_to=None, confidence=1.0,
-        source=None, kg_db=db,
+        subject="Alice",
+        predicate="knows",
+        object="Bob",
+        valid_from=None,
+        valid_to=None,
+        confidence=1.0,
+        source=None,
+        kg_db=db,
     )
     cmd_kg_add(ns_add)
 
@@ -659,11 +664,14 @@ async def test_rest_kg_add_fact(app) -> None:
     from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        resp = await client.post("/api/v1/kg/facts", json={
-            "subject": "Alice",
-            "predicate": "knows",
-            "object": "Bob",
-        })
+        resp = await client.post(
+            "/api/v1/kg/facts",
+            json={
+                "subject": "Alice",
+                "predicate": "knows",
+                "object": "Bob",
+            },
+        )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
@@ -675,9 +683,14 @@ async def test_rest_kg_query(app) -> None:
     from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/v1/kg/facts", json={
-            "subject": "Alice", "predicate": "knows", "object": "Bob",
-        })
+        await client.post(
+            "/api/v1/kg/facts",
+            json={
+                "subject": "Alice",
+                "predicate": "knows",
+                "object": "Bob",
+            },
+        )
         resp = await client.get("/api/v1/kg/query", params={"entity": "Alice"})
 
     assert resp.status_code == 200
@@ -692,9 +705,14 @@ async def test_rest_kg_timeline(app) -> None:
     from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/v1/kg/facts", json={
-            "subject": "Alice", "predicate": "born_in", "object": "Paris",
-        })
+        await client.post(
+            "/api/v1/kg/facts",
+            json={
+                "subject": "Alice",
+                "predicate": "born_in",
+                "object": "Paris",
+            },
+        )
         resp = await client.get("/api/v1/kg/timeline", params={"entity": "Alice"})
 
     assert resp.status_code == 200
@@ -708,9 +726,14 @@ async def test_rest_kg_invalidate(app) -> None:
     from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        add_resp = await client.post("/api/v1/kg/facts", json={
-            "subject": "Alice", "predicate": "works_at", "object": "Acme",
-        })
+        add_resp = await client.post(
+            "/api/v1/kg/facts",
+            json={
+                "subject": "Alice",
+                "predicate": "works_at",
+                "object": "Acme",
+            },
+        )
         fact_id = add_resp.json()["id"]
 
         del_resp = await client.delete(f"/api/v1/kg/facts/{fact_id}")
@@ -726,9 +749,14 @@ async def test_rest_kg_stats(app) -> None:
     from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        await client.post("/api/v1/kg/facts", json={
-            "subject": "A", "predicate": "rel", "object": "B",
-        })
+        await client.post(
+            "/api/v1/kg/facts",
+            json={
+                "subject": "A",
+                "predicate": "rel",
+                "object": "B",
+            },
+        )
         resp = await client.get("/api/v1/kg/stats")
 
     assert resp.status_code == 200

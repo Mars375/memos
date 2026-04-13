@@ -1,4 +1,5 @@
 """Tests for wiki compile mode (P3)."""
+
 from __future__ import annotations
 
 import tempfile
@@ -101,6 +102,7 @@ def test_compile_sorts_by_importance(mem, tmp_path):
 def test_wiki_engine_default_dir(mem):
     """WikiEngine should not crash even without explicit wiki_dir."""
     import os
+
     # Use a custom home to avoid polluting ~/.memos
     with tempfile.TemporaryDirectory() as tmpdir:
         old_home = os.environ.get("HOME")

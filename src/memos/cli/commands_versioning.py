@@ -48,8 +48,7 @@ def cmd_diff(ns: argparse.Namespace) -> None:
         print(json.dumps(result.to_dict(), indent=2))
         return
     d = result.to_dict()
-    print(f"Diff: {item_id[:12]}...  v{d['from_version']} -> v{d['to_version']}  "
-          f"(delta {d['delta_seconds']:.1f}s)\n")
+    print(f"Diff: {item_id[:12]}...  v{d['from_version']} -> v{d['to_version']}  (delta {d['delta_seconds']:.1f}s)\n")
     if not d["changes"]:
         print("  (no changes)")
     else:
@@ -132,9 +131,21 @@ def cmd_recall_at(ns: argparse.Namespace) -> None:
     ts = _parse_timestamp(ns.timestamp)
     results = memos.recall_at(ns.query, ts, top=ns.top, min_score=ns.min_score)
     if getattr(ns, "json", False):
-        print(json.dumps([{"id": r.item.id, "content": r.item.content,
-                           "score": round(r.score, 4), "tags": r.item.tags,
-                           "match_reason": r.match_reason} for r in results], indent=2))
+        print(
+            json.dumps(
+                [
+                    {
+                        "id": r.item.id,
+                        "content": r.item.content,
+                        "score": round(r.score, 4),
+                        "tags": r.item.tags,
+                        "match_reason": r.match_reason,
+                    }
+                    for r in results
+                ],
+                indent=2,
+            )
+        )
         return
     if not results:
         print(f"No memories found at {_fmt_ts(ts)}.")
@@ -158,7 +169,7 @@ def cmd_version_stats(ns: argparse.Namespace) -> None:
     print(f"  Tracked items:         {s.get('total_items', 0)}")
     print(f"  Avg versions/item:     {s.get('avg_versions_per_item', 0):.1f}")
     print(f"  Max versions/item:     {s.get('max_versions_per_item', 0)}")
-    oldest = s.get('oldest_version')
+    oldest = s.get("oldest_version")
     print(f"  Oldest version:        {_fmt_ts(oldest) if oldest else 'N/A'}")
     print(f"  Estimated memory (KB): {s.get('estimated_size_kb', 0):.1f}")
 
@@ -169,10 +180,7 @@ def cmd_version_gc(ns: argparse.Namespace) -> None:
     if getattr(ns, "dry_run", False):
         sb = memos.versioning_stats()
         print(f"Current: {sb.get('total_versions', 0)} versions")
-        print(f"Would remove versions older than {ns.max_age_days} days "
-              f"(keeping latest {ns.keep_latest}/item)")
+        print(f"Would remove versions older than {ns.max_age_days} days (keeping latest {ns.keep_latest}/item)")
         return
     removed = memos.versioning_gc(max_age_days=ns.max_age_days, keep_latest=ns.keep_latest)
     print(f"OK Garbage collected {removed} old versions")
-
-

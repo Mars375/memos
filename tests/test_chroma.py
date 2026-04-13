@@ -64,10 +64,17 @@ class TestChromaBackend:
     def test_get_existing(self):
         item = _make_item()
         self.mock_collection.get.return_value = _chroma_results(
-            [item.id], [item.content],
-            [{"tags": json.dumps(item.tags), "importance": item.importance,
-              "created_at": item.created_at, "accessed_at": item.accessed_at,
-              "access_count": item.access_count}]
+            [item.id],
+            [item.content],
+            [
+                {
+                    "tags": json.dumps(item.tags),
+                    "importance": item.importance,
+                    "created_at": item.created_at,
+                    "accessed_at": item.accessed_at,
+                    "access_count": item.access_count,
+                }
+            ],
         )
         result = self.backend.get(item.id)
         assert result is not None
@@ -90,11 +97,12 @@ class TestChromaBackend:
 
     def test_list_all_returns_items(self):
         self.mock_collection.get.return_value = _chroma_results(
-            ["id1", "id2"], ["content1", "content2"],
+            ["id1", "id2"],
+            ["content1", "content2"],
             [
                 {"tags": "[]", "importance": 0.5, "created_at": 0, "accessed_at": 0, "access_count": 0},
-                {"tags": "[\"x\"]", "importance": 0.8, "created_at": 0, "accessed_at": 0, "access_count": 1},
-            ]
+                {"tags": '["x"]', "importance": 0.8, "created_at": 0, "accessed_at": 0, "access_count": 1},
+            ],
         )
         items = self.backend.list_all()
         assert len(items) == 2
@@ -141,10 +149,17 @@ class TestChromaBackend:
     def test_upsert_then_get_roundtrip(self):
         item = _make_item(tags=["roundtrip"], importance=0.88, access_count=3)
         self.mock_collection.get.return_value = _chroma_results(
-            [item.id], [item.content],
-            [{"tags": json.dumps(item.tags), "importance": item.importance,
-              "created_at": item.created_at, "accessed_at": item.accessed_at,
-              "access_count": item.access_count}]
+            [item.id],
+            [item.content],
+            [
+                {
+                    "tags": json.dumps(item.tags),
+                    "importance": item.importance,
+                    "created_at": item.created_at,
+                    "accessed_at": item.accessed_at,
+                    "access_count": item.access_count,
+                }
+            ],
         )
         self.backend.upsert(item)
         result = self.backend.get(item.id)

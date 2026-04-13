@@ -23,14 +23,22 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
             return {"status": "error", "message": "subject, predicate and object are required"}
         try:
             from ...knowledge_graph import KnowledgeGraph
+
             confidence_label = body.get("confidence_label", "EXTRACTED")
             if confidence_label not in KnowledgeGraph.VALID_LABELS:
-                return {"status": "error", "message": f"Invalid confidence_label. Must be one of {KnowledgeGraph.VALID_LABELS}"}
+                return {
+                    "status": "error",
+                    "message": f"Invalid confidence_label. Must be one of {KnowledgeGraph.VALID_LABELS}",
+                }
             fact_id = _kg.add_fact(
-                subject=subject, predicate=predicate, object=obj,
-                valid_from=body.get("valid_from"), valid_to=body.get("valid_to"),
+                subject=subject,
+                predicate=predicate,
+                object=obj,
+                valid_from=body.get("valid_from"),
+                valid_to=body.get("valid_to"),
                 confidence=float(body.get("confidence", 1.0)),
-                confidence_label=confidence_label, source=body.get("source"),
+                confidence_label=confidence_label,
+                source=body.get("source"),
             )
             return {"status": "ok", "id": fact_id, "confidence_label": confidence_label}
         except Exception as exc:
@@ -64,6 +72,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     @router.get("/api/v1/kg/labels")
     async def kg_labels(label: Optional[str] = None, active_only: bool = True):
         from ...knowledge_graph import KnowledgeGraph
+
         if label:
             if label not in KnowledgeGraph.VALID_LABELS:
                 return {"status": "error", "message": f"Invalid label. Must be one of {KnowledgeGraph.VALID_LABELS}"}
@@ -90,9 +99,23 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     async def kg_paths(entity_a: str, entity_b: str, max_hops: int = 3, max_paths: int = 10):
         paths = _kg.find_paths(entity_a, entity_b, max_hops=max_hops, max_paths=max_paths)
         return {
-            "entity_a": entity_a, "entity_b": entity_b, "max_hops": max_hops,
+            "entity_a": entity_a,
+            "entity_b": entity_b,
+            "max_hops": max_hops,
             "paths": [
-                {"hops": len(p), "edges": [{"id": t["id"], "subject": t["subject"], "predicate": t["predicate"], "object": t["object"], "confidence": t["confidence"]} for t in p]}
+                {
+                    "hops": len(p),
+                    "edges": [
+                        {
+                            "id": t["id"],
+                            "subject": t["subject"],
+                            "predicate": t["predicate"],
+                            "object": t["object"],
+                            "confidence": t["confidence"],
+                        }
+                        for t in p
+                    ],
+                }
                 for p in paths
             ],
             "total": len(paths),
@@ -102,10 +125,22 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     async def kg_neighbors(entity: str, depth: int = 1, direction: str = "both"):
         result = _kg.neighbors(entity, depth=depth, direction=direction)
         return {
-            "center": result["center"], "depth": result["depth"],
-            "total_nodes": len(result["nodes"]), "total_edges": len(result["edges"]),
-            "nodes": result["nodes"], "layers": result["layers"],
-            "edges": [{"id": t["id"], "subject": t["subject"], "predicate": t["predicate"], "object": t["object"], "confidence": t["confidence"]} for t in result["edges"]],
+            "center": result["center"],
+            "depth": result["depth"],
+            "total_nodes": len(result["nodes"]),
+            "total_edges": len(result["edges"]),
+            "nodes": result["nodes"],
+            "layers": result["layers"],
+            "edges": [
+                {
+                    "id": t["id"],
+                    "subject": t["subject"],
+                    "predicate": t["predicate"],
+                    "object": t["object"],
+                    "confidence": t["confidence"],
+                }
+                for t in result["edges"]
+            ],
         }
 
     # ── Brain Search ──────────────────────────────────────────
@@ -114,13 +149,16 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     async def brain_search(body: dict):
         """Unified search across memories, living wiki pages, and the knowledge graph."""
         from ...brain import BrainSearch
+
         query = body.get("query", "").strip()
         if not query:
             return {"status": "error", "message": "query is required"}
         try:
             searcher = BrainSearch(memos, kg=_kg, wiki_dir=body.get("wiki_dir"))
             result = searcher.search(
-                query, top_k=int(body.get("top_k", 10)), filter_tags=body.get("tags"),
+                query,
+                top_k=int(body.get("top_k", 10)),
+                filter_tags=body.get("tags"),
                 min_score=float(body.get("min_score", 0.0)),
                 retrieval_mode=body.get("retrieval_mode", "hybrid"),
                 max_context_chars=int(body.get("max_context_chars", 2000)),
@@ -132,9 +170,12 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
             return {"status": "error", "message": str(exc)}
 
     @router.get("/api/v1/brain/entity/{name}")
-    async def brain_entity_detail(name: str, top_memories: int = 5, neighbor_limit: int = 12, wiki_dir: str | None = None):
+    async def brain_entity_detail(
+        name: str, top_memories: int = 5, neighbor_limit: int = 12, wiki_dir: str | None = None
+    ):
         """Return a unified entity detail view across wiki, memories, and KG."""
         from ...brain import BrainSearch
+
         try:
             searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
             detail = searcher.entity_detail(name, top_memories=top_memories, neighbor_limit=neighbor_limit)
@@ -148,10 +189,18 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     async def brain_entity_subgraph(name: str, depth: int = 2, wiki_dir: str | None = None):
         """Return an ego-network subgraph for an entity."""
         from ...brain import BrainSearch
+
         try:
             searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
             subgraph = searcher.entity_subgraph(name, depth=depth)
-            return {"status": "ok", "entity": subgraph.center, "depth": subgraph.depth, "nodes": subgraph.nodes, "edges": subgraph.edges, "layers": subgraph.layers}
+            return {
+                "status": "ok",
+                "entity": subgraph.center,
+                "depth": subgraph.depth,
+                "nodes": subgraph.nodes,
+                "edges": subgraph.edges,
+                "layers": subgraph.layers,
+            }
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
@@ -209,11 +258,21 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     @router.get("/api/v1/palace/recall")
     async def palace_recall_endpoint(query: str, wing: Optional[str] = None, room: Optional[str] = None, top: int = 10):
         from ...palace import PalaceRecall as _PalaceRecall
+
         pr = _PalaceRecall(_palace)
         results = pr.palace_recall(memos, query, wing_name=wing, room_name=room, top=top)
         return {
             "status": "ok",
-            "results": [{"id": r.item.id, "content": r.item.content, "score": round(r.score, 4), "tags": r.item.tags, "match_reason": r.match_reason} for r in results],
+            "results": [
+                {
+                    "id": r.item.id,
+                    "content": r.item.content,
+                    "score": round(r.score, 4),
+                    "tags": r.item.tags,
+                    "match_reason": r.match_reason,
+                }
+                for r in results
+            ],
         }
 
     @router.get("/api/v1/palace/stats")
@@ -254,6 +313,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         created_before: optional Unix timestamp — only include memories created before this time.
         """
         import time as _time
+
         items = memos._store.list_all(namespace=memos._namespace)
         now = _time.time()
         nodes = []
@@ -263,19 +323,21 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
             if created_before is not None and item.created_at > created_before:
                 continue
             age_days = (now - item.created_at) / 86400
-            nodes.append({
-                "id": item.id,
-                "label": item.content[:60] + ("…" if len(item.content) > 60 else ""),
-                "content": item.content,
-                "tags": item.tags,
-                "importance": item.importance,
-                "relevance": item.relevance_score,
-                "age_days": round(age_days, 1),
-                "access_count": item.access_count,
-                "primary_tag": item.tags[0] if item.tags else "__untagged__",
-                "namespace": getattr(item, "namespace", memos._namespace or "default"),
-                "created_at": item.created_at,
-            })
+            nodes.append(
+                {
+                    "id": item.id,
+                    "label": item.content[:60] + ("…" if len(item.content) > 60 else ""),
+                    "content": item.content,
+                    "tags": item.tags,
+                    "importance": item.importance,
+                    "relevance": item.relevance_score,
+                    "age_days": round(age_days, 1),
+                    "access_count": item.access_count,
+                    "primary_tag": item.tags[0] if item.tags else "__untagged__",
+                    "namespace": getattr(item, "namespace", memos._namespace or "default"),
+                    "created_at": item.created_at,
+                }
+            )
         edges = []
         tag_to_ids: dict[str, list[str]] = {}
         for n in nodes:
@@ -299,10 +361,13 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
             edges = [e for e in edges if e["weight"] >= min_shared_tags]
         stats = memos.stats()
         return {
-            "nodes": nodes, "edges": edges,
+            "nodes": nodes,
+            "edges": edges,
             "meta": {
-                "total_nodes": len(nodes), "total_edges": len(edges),
-                "total_memories": stats.total_memories, "total_tags": stats.total_tags,
+                "total_nodes": len(nodes),
+                "total_edges": len(edges),
+                "total_memories": stats.total_memories,
+                "total_tags": stats.total_tags,
                 "created_before": created_before,
             },
         }
@@ -314,6 +379,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         """List all living wiki pages (name, slug, memory_count, updated_at)."""
         try:
             from ...wiki_living import LivingWikiEngine
+
             wiki = LivingWikiEngine(memos)
             pages = wiki.list_pages()
             return {
@@ -337,6 +403,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         """Read a single living wiki page by slug or entity name."""
         try:
             from ...wiki_living import LivingWikiEngine
+
             wiki = LivingWikiEngine(memos)
             # Try slug first, then as entity name directly
             content = wiki.read_page(slug)
@@ -356,6 +423,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         """Search living wiki pages."""
         try:
             from ...wiki_living import LivingWikiEngine
+
             wiki = LivingWikiEngine(memos)
             results = wiki.search(q)
             return {"status": "ok", "results": results, "query": q}

@@ -11,6 +11,7 @@ from typing import Any, Optional
 @dataclass
 class MemoryItem:
     """A single memory entry."""
+
     id: str
     content: str
     tags: list[str] = field(default_factory=list)
@@ -45,6 +46,7 @@ class MemoryItem:
 @dataclass
 class ScoreBreakdown:
     """Detailed score breakdown for a recall result."""
+
     semantic: float = 0.0
     keyword: float = 0.0
     importance: float = 0.0
@@ -68,6 +70,7 @@ class ScoreBreakdown:
 @dataclass
 class RecallResult:
     """Result from a recall query."""
+
     item: MemoryItem
     score: float  # 0.0 to 1.0
     match_reason: str = ""  # "semantic" | "keyword" | "recent" | "tag"
@@ -77,6 +80,7 @@ class RecallResult:
 @dataclass
 class MemoryStats:
     """Statistics about the memory store."""
+
     total_memories: int = 0
     total_tags: int = 0
     avg_relevance: float = 0.0
@@ -87,10 +91,10 @@ class MemoryStats:
     expired_memories: int = 0
     top_tags: list[str] = field(default_factory=list)
     # Token compression reporting (P9)
-    total_chars: int = 0        # sum of len(content) across all memories
-    total_tokens: int = 0       # estimated tokens (chars // 4)
-    prunable_tokens: int = 0    # tokens in decay-candidate memories
-    expired_tokens: int = 0     # tokens in expired (TTL) memories
+    total_chars: int = 0  # sum of len(content) across all memories
+    total_tokens: int = 0  # estimated tokens (chars // 4)
+    prunable_tokens: int = 0  # tokens in decay-candidate memories
+    expired_tokens: int = 0  # tokens in expired (TTL) memories
 
 
 def generate_id(content: str) -> str:
@@ -138,10 +142,7 @@ def parse_ttl(value: str) -> float:
 
     suffix = value[-1].lower()
     if suffix not in units:
-        raise ValueError(
-            f"Invalid TTL format: '{value}'. "
-            f"Use a number or Ns/Nm/Nh/Nd/Nw (e.g., '30m', '2h', '7d')"
-        )
+        raise ValueError(f"Invalid TTL format: '{value}'. Use a number or Ns/Nm/Nh/Nd/Nw (e.g., '30m', '2h', '7d')")
 
     try:
         amount = float(value[:-1])
@@ -157,6 +158,7 @@ def parse_ttl(value: str) -> float:
 @dataclass
 class FeedbackEntry:
     """A single relevance feedback entry for a memory item."""
+
     item_id: str
     feedback: str  # "relevant" or "not-relevant"
     query: str = ""  # the query that triggered the recall
@@ -182,6 +184,7 @@ class FeedbackEntry:
 @dataclass
 class FeedbackStats:
     """Statistics about feedback collected."""
+
     total_feedback: int = 0
     relevant_count: int = 0
     not_relevant_count: int = 0

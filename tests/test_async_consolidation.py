@@ -32,6 +32,7 @@ class TestAsyncConsolidationHandle:
 
     def test_to_dict_completed(self):
         from memos.consolidation.engine import ConsolidationResult
+
         handle = AsyncConsolidationHandle(task_id="abc123")
         handle.status = "completed"
         handle.finished_at = handle.started_at + 1.5
@@ -215,6 +216,3 @@ class TestMemOSAsyncConsolidation:
     def test_consolidation_tasks_empty(self):
         mem = MemOS(backend="memory", sanitize=False)
         assert mem.consolidation_tasks() == []
-
-
-

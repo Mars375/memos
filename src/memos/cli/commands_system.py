@@ -31,6 +31,7 @@ def cmd_serve(ns: argparse.Namespace) -> None:
         chroma_url = os.environ.get("MEMOS_CHROMA_URL", "")
         if chroma_url and "//" in chroma_url:
             from urllib.parse import urlparse
+
             parsed = urlparse(chroma_url)
             kwargs["chroma_host"] = parsed.hostname or "localhost"
             kwargs["chroma_port"] = parsed.port or 8000
@@ -42,11 +43,10 @@ def cmd_serve(ns: argparse.Namespace) -> None:
     uvicorn.run(app, host=ns.host, port=ns.port)
 
 
-
-
 def cmd_mcp_serve(ns: argparse.Namespace) -> None:
     """Start MCP HTTP server."""
     from ..mcp_server import create_mcp_app
+
     try:
         import uvicorn
     except ImportError:
@@ -63,10 +63,9 @@ def cmd_mcp_serve(ns: argparse.Namespace) -> None:
 def cmd_mcp_stdio(ns: argparse.Namespace) -> None:
     """Start MCP server over stdio."""
     from ..mcp_server import run_stdio
+
     memos = _get_memos(ns)
     run_stdio(memos)
-
-
 
 
 def cmd_config(ns: argparse.Namespace) -> None:

@@ -17,6 +17,7 @@ from memos.ingest.conversation import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 class _FakeMemory:
     def __init__(self, id: str, content: str, tags: list):
         self.id = id
@@ -33,18 +34,21 @@ class _FakeMemos:
 
     def learn(self, content: str, tags=None, importance: float = 0.5, **kw) -> _FakeMemory:
         mem = _FakeMemory(id=f"id{len(self._stored)}", content=content, tags=tags or [])
-        self._stored.append({
-            "content": content,
-            "tags": list(tags or []),
-            "namespace": self.namespace,
-            "importance": importance,
-        })
+        self._stored.append(
+            {
+                "content": content,
+                "tags": list(tags or []),
+                "namespace": self.namespace,
+                "importance": importance,
+            }
+        )
         return mem
 
 
 # ---------------------------------------------------------------------------
 # parse_transcript tests
 # ---------------------------------------------------------------------------
+
 
 def test_parse_plain_format():
     text = textwrap.dedent("""\
@@ -132,6 +136,7 @@ def test_parse_mixed_formats():
 # _slug tests
 # ---------------------------------------------------------------------------
 
+
 def test_slug_basic():
     assert _slug("Alice") == "alice"
 
@@ -148,6 +153,7 @@ def test_slug_max_length():
 # ---------------------------------------------------------------------------
 # ConversationMiner — per_speaker mode
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def transcript_file(tmp_path):
@@ -216,6 +222,7 @@ def test_mine_per_speaker_namespace_restored(transcript_file):
 # ConversationMiner — combined (non-per-speaker) mode
 # ---------------------------------------------------------------------------
 
+
 def test_mine_combined_single_namespace(transcript_file):
     memos = _FakeMemos()
     miner = ConversationMiner(memos)
@@ -255,6 +262,7 @@ def test_mine_combined_speaker_prefix_in_content(transcript_file):
 # ConversationMiner — dry run
 # ---------------------------------------------------------------------------
 
+
 def test_mine_dry_run_stores_nothing(transcript_file):
     memos = _FakeMemos()
     miner = ConversationMiner(memos, dry_run=True)
@@ -266,6 +274,7 @@ def test_mine_dry_run_stores_nothing(transcript_file):
 # ---------------------------------------------------------------------------
 # ConversationMiner — error handling
 # ---------------------------------------------------------------------------
+
 
 def test_mine_file_not_found():
     memos = _FakeMemos()
@@ -290,6 +299,7 @@ def test_mine_no_speaker_turns(tmp_path):
 # ConversationMiner — custom extra tags
 # ---------------------------------------------------------------------------
 
+
 def test_mine_extra_tags_propagated(transcript_file):
     memos = _FakeMemos()
     miner = ConversationMiner(memos)
@@ -303,6 +313,7 @@ def test_mine_extra_tags_propagated(transcript_file):
 # ---------------------------------------------------------------------------
 # ConversationMineResult __str__
 # ---------------------------------------------------------------------------
+
 
 def test_result_str():
     r = ConversationMineResult(imported=5, skipped_duplicates=1, speakers=["Alice", "Bob"])

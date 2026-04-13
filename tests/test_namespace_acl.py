@@ -54,7 +54,9 @@ class TestNamespacePolicy:
 
     def test_roundtrip(self):
         original = NamespacePolicy(
-            agent_id="a", namespace="ns", role=Role.OWNER,
+            agent_id="a",
+            namespace="ns",
+            role=Role.OWNER,
             granted_at=time.time(),
         )
         restored = NamespacePolicy.from_dict(original.to_dict())
@@ -212,6 +214,7 @@ class TestNamespaceACL:
 
     def test_thread_safety(self):
         import threading
+
         errors = []
 
         def writer(i):

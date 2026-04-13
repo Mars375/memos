@@ -51,10 +51,7 @@ class JsonFileBackend(StorageBackend):
                     self._data = {_DEFAULT: {}}
                     for ns, items in raw.items():
                         if isinstance(items, dict):
-                            self._data[ns] = {
-                                k: v for k, v in items.items()
-                                if isinstance(v, dict) and "content" in v
-                            }
+                            self._data[ns] = {k: v for k, v in items.items() if isinstance(v, dict) and "content" in v}
             except (json.JSONDecodeError, OSError):
                 self._data = {_DEFAULT: {}}
         else:

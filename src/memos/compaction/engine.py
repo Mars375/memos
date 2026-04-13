@@ -16,36 +16,39 @@ from ..storage.base import StorageBackend
 @dataclass
 class CompactionConfig:
     """Configuration for memory compaction."""
+
     # Age-based archiving
-    archive_age_days: float = 90.0          # Age threshold for archiving
-    archive_importance_floor: float = 0.3   # Never archive above this importance
+    archive_age_days: float = 90.0  # Age threshold for archiving
+    archive_importance_floor: float = 0.3  # Never archive above this importance
 
     # Stale memory merging
-    stale_score_threshold: float = 0.25     # Score below which a memory is "stale"
-    merge_similarity_threshold: float = 0.6 # Jaccard threshold for grouping stales
+    stale_score_threshold: float = 0.25  # Score below which a memory is "stale"
+    merge_similarity_threshold: float = 0.6  # Jaccard threshold for grouping stales
 
     # Cluster compaction
-    cluster_min_size: int = 3               # Min memories to form a cluster
-    cluster_max_size: int = 20              # Max memories per cluster
+    cluster_min_size: int = 3  # Min memories to form a cluster
+    cluster_max_size: int = 20  # Max memories per cluster
 
     # Safety
-    dry_run: bool = False                   # If True, don't modify anything
-    max_compact_per_run: int = 200          # Cap on modifications per run
+    dry_run: bool = False  # If True, don't modify anything
+    max_compact_per_run: int = 200  # Cap on modifications per run
 
 
 @dataclass
 class ClusterInfo:
     """A group of related memories identified for compaction."""
+
     memories: list[MemoryItem]
     avg_importance: float
     avg_age_days: float
     avg_score: float
-    tag: str = ""                           # Dominant tag
+    tag: str = ""  # Dominant tag
 
 
 @dataclass
 class CompactionReport:
     """Result of a compaction run."""
+
     # Archiving
     archived: int = 0
     archive_details: list[dict] = field(default_factory=list)
@@ -149,9 +152,7 @@ class CompactionEngine:
 
         return report
 
-    def find_archive_candidates(
-        self, items: list[MemoryItem]
-    ) -> list[MemoryItem]:
+    def find_archive_candidates(self, items: list[MemoryItem]) -> list[MemoryItem]:
         """Find memories eligible for archival."""
         now = time.time()
         candidates = []
@@ -174,9 +175,7 @@ class CompactionEngine:
 
         return candidates
 
-    def find_stale_groups(
-        self, items: list[MemoryItem]
-    ) -> list[ClusterInfo]:
+    def find_stale_groups(self, items: list[MemoryItem]) -> list[ClusterInfo]:
         """Group stale memories by semantic similarity."""
         now = time.time()
         stale = []
@@ -211,18 +210,20 @@ class CompactionEngine:
                     similar.append((item_b, tokens_b))
 
             if len(similar) >= self._config.cluster_min_size:
-                group_items = [s[0] for s in similar[:self._config.cluster_max_size]]
+                group_items = [s[0] for s in similar[: self._config.cluster_max_size]]
                 ages = [(now - m.created_at) / 86400 for m in group_items]
                 scores = [self._decay.adjusted_score(0.5, m) for m in group_items]
                 dominant_tag = self._dominant_tag(group_items)
 
-                groups.append(ClusterInfo(
-                    memories=group_items,
-                    avg_importance=sum(m.importance for m in group_items) / len(group_items),
-                    avg_age_days=sum(ages) / len(ages),
-                    avg_score=sum(scores) / len(scores),
-                    tag=dominant_tag,
-                ))
+                groups.append(
+                    ClusterInfo(
+                        memories=group_items,
+                        avg_importance=sum(m.importance for m in group_items) / len(group_items),
+                        avg_age_days=sum(ages) / len(ages),
+                        avg_score=sum(scores) / len(scores),
+                        tag=dominant_tag,
+                    )
+                )
 
                 for m in group_items:
                     used.add(m.id)
@@ -245,7 +246,9 @@ class CompactionEngine:
             return
 
         result = self._consolidation.consolidate(
-            store, merge_content=False, dry_run=False,
+            store,
+            merge_content=False,
+            dry_run=False,
         )
         report.dedup_groups = result.groups_found
         report.dedup_merged = result.space_freed
@@ -260,7 +263,7 @@ class CompactionEngine:
         candidates = self.find_archive_candidates(items)
         budget_used = report.archived + report.dedup_merged + report.stale_merged
         remaining_budget = self._config.max_compact_per_run - budget_used
-        candidates = candidates[:max(0, remaining_budget)]
+        candidates = candidates[: max(0, remaining_budget)]
 
         if not candidates:
             return
@@ -272,12 +275,14 @@ class CompactionEngine:
 
             if self._config.dry_run:
                 report.archived += 1
-                report.archive_details.append({
-                    "id": item.id,
-                    "content": item.content[:100],
-                    "age_days": round((time.time() - item.created_at) / 86400, 1),
-                    "original_importance": item.importance,
-                })
+                report.archive_details.append(
+                    {
+                        "id": item.id,
+                        "content": item.content[:100],
+                        "age_days": round((time.time() - item.created_at) / 86400, 1),
+                        "original_importance": item.importance,
+                    }
+                )
                 continue
 
             # Create a modified copy to avoid in-place mutation issues
@@ -299,12 +304,14 @@ class CompactionEngine:
             store.upsert(archived_item)
 
             report.archived += 1
-            report.archive_details.append({
-                "id": item.id,
-                "content": item.content[:100],
-                "age_days": round((time.time() - item.created_at) / 86400, 1),
-                "original_importance": archived_meta["original_importance"],
-            })
+            report.archive_details.append(
+                {
+                    "id": item.id,
+                    "content": item.content[:100],
+                    "age_days": round((time.time() - item.created_at) / 86400, 1),
+                    "original_importance": archived_meta["original_importance"],
+                }
+            )
 
     def _phase_stale_merge(
         self,
@@ -383,13 +390,15 @@ class CompactionEngine:
             report.total_removed += len(to_compress)
             report.total_added += 1
             budget_used += len(to_compress)
-            report.cluster_details.append({
-                "tag": tag,
-                "cluster_size": len(tag_items),
-                "kept": keep_count,
-                "compressed": len(to_compress),
-                "summary_preview": summary.content[:150],
-            })
+            report.cluster_details.append(
+                {
+                    "tag": tag,
+                    "cluster_size": len(tag_items),
+                    "kept": keep_count,
+                    "compressed": len(to_compress),
+                    "summary_preview": summary.content[:150],
+                }
+            )
 
     # ── Helpers ────────────────────────────────────────────
 
@@ -447,9 +456,7 @@ class CompactionEngine:
             metadata=merged_meta,
         )
 
-    def _create_cluster_summary(
-        self, tag: str, items: list[MemoryItem]
-    ) -> MemoryItem:
+    def _create_cluster_summary(self, tag: str, items: list[MemoryItem]) -> MemoryItem:
         """Create a summary memory for a cluster of related items."""
         # Extract key phrases from each item
         key_points = []
@@ -457,7 +464,7 @@ class CompactionEngine:
             content = item.content.strip()
             if len(content) > 200:
                 # Truncate to first sentence or 200 chars
-                first_sentence = re.split(r'[.!?]', content)[0]
+                first_sentence = re.split(r"[.!?]", content)[0]
                 key_points.append(first_sentence.strip()[:200])
             else:
                 key_points.append(content)
@@ -491,13 +498,64 @@ class CompactionEngine:
         """Tokenize text into meaningful word set."""
         words = re.findall(r"\w+", text.lower())
         stopwords = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "can", "shall",
-            "to", "of", "in", "for", "on", "with", "at", "by", "from",
-            "as", "into", "and", "but", "or", "not", "it", "its", "i",
-            "me", "my", "we", "our", "you", "your", "he", "him", "his",
-            "she", "her", "they", "them", "their", "this", "that",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "and",
+            "but",
+            "or",
+            "not",
+            "it",
+            "its",
+            "i",
+            "me",
+            "my",
+            "we",
+            "our",
+            "you",
+            "your",
+            "he",
+            "him",
+            "his",
+            "she",
+            "her",
+            "they",
+            "them",
+            "their",
+            "this",
+            "that",
         }
         return {w for w in words if len(w) > 2 and w not in stopwords}
 

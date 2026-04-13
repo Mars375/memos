@@ -17,15 +17,15 @@ class MemoryVersion:
     the full state of the item at that moment.
     """
 
-    version_id: str          # "{item_id}#{version_number}"
-    item_id: str             # The original memory item ID
-    version_number: int      # Monotonically increasing (1, 2, 3, ...)
-    content: str             # Content snapshot
-    tags: list[str]          # Tags snapshot
-    importance: float        # Importance snapshot
-    metadata: dict[str, Any] # Metadata snapshot
-    created_at: float        # When this version was recorded (= item modified time)
-    source: str = "upsert"   # What caused this version: "upsert" | "learn" | "consolidate" | "import"
+    version_id: str  # "{item_id}#{version_number}"
+    item_id: str  # The original memory item ID
+    version_number: int  # Monotonically increasing (1, 2, 3, ...)
+    content: str  # Content snapshot
+    tags: list[str]  # Tags snapshot
+    importance: float  # Importance snapshot
+    metadata: dict[str, Any]  # Metadata snapshot
+    created_at: float  # When this version was recorded (= item modified time)
+    source: str = "upsert"  # What caused this version: "upsert" | "learn" | "consolidate" | "import"
 
     def to_memory_item(self) -> MemoryItem:
         """Reconstruct a MemoryItem from this version snapshot."""
@@ -101,7 +101,7 @@ class VersionDiff:
     from_version: int
     to_version: int
     changes: dict[str, Any]  # field -> {"from": old, "to": new}
-    delta_seconds: float     # Time between versions
+    delta_seconds: float  # Time between versions
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -116,10 +116,7 @@ class VersionDiff:
     def between(cls, v_old: MemoryVersion, v_new: MemoryVersion) -> VersionDiff:
         """Compute diff between two versions of the same item."""
         if v_old.item_id != v_new.item_id:
-            raise ValueError(
-                f"Cannot diff versions of different items: "
-                f"{v_old.item_id} vs {v_new.item_id}"
-            )
+            raise ValueError(f"Cannot diff versions of different items: {v_old.item_id} vs {v_new.item_id}")
 
         changes: dict[str, Any] = {}
 

@@ -164,6 +164,7 @@ def test_wake_up_memory_line_format(cs_with_memories: ContextStack) -> None:
     assert len(mem_lines) > 0
     # Score format: [0.XX] or [1.00]
     import re
+
     for line in mem_lines:
         assert re.match(r"^\[[\d.]+\]", line), f"unexpected format: {line!r}"
 
@@ -414,6 +415,7 @@ def test_cli_wake_up(tmp_path: Path, capsys) -> None:
     m = MemOS(backend="memory")
     m.learn("CLI wake-up test memory", importance=0.8)
     from memos.storage.json_backend import JsonFileBackend
+
     jb = JsonFileBackend(path=str(persist))
     for item in m._store.list_all():
         jb.upsert(item)
@@ -431,9 +433,12 @@ def test_cli_identity_show_empty(tmp_path: Path, capsys) -> None:
 
     class _FakeMemos:
         namespace = ""
+
         def stats(self):
             from memos.models import MemoryStats
+
             return MemoryStats()
+
         _store = type("S", (), {"list_all": lambda self, **kw: []})()
 
     identity_path = tmp_path / "no_identity.txt"
@@ -455,9 +460,12 @@ def test_cli_identity_set_and_show(tmp_path: Path, capsys) -> None:
 
     class _FakeMemos:
         namespace = ""
+
         def stats(self):
             from memos.models import MemoryStats
+
             return MemoryStats()
+
         def _store_list_all(self):
             return []
 
@@ -482,6 +490,7 @@ class _FakeMemosCompact:
 
     def stats(self):
         from memos.models import MemoryStats
+
         return MemoryStats(
             total_memories=len(self._items),
             decay_candidates=1,
@@ -490,6 +499,7 @@ class _FakeMemosCompact:
     class _FakeStore:
         def __init__(self, items):
             self._items = items
+
         def list_all(self, namespace=""):
             return self._items
 
@@ -528,10 +538,7 @@ def test_wake_up_compact_fits_in_200_tokens(tmp_path):
     from memos.context import ContextStack
     from memos.models import MemoryItem
 
-    items = [
-        MemoryItem(id=f"i{i}", content="x" * 200, importance=0.9 - i * 0.1)
-        for i in range(10)
-    ]
+    items = [MemoryItem(id=f"i{i}", content="x" * 200, importance=0.9 - i * 0.1) for i in range(10)]
     fake = _FakeMemosCompact(items)
     cs = ContextStack(fake, identity_path=str(tmp_path / "id.txt"))  # type: ignore[arg-type]
     output = cs.wake_up(compact=True)
@@ -565,8 +572,13 @@ def test_wake_up_compact_cli_flag(tmp_path, capsys):
     ]
 
     ns = argparse.Namespace(
-        max_chars=2000, l1_top=15, no_stats=False, compact=True,
-        backend="memory", db=None, namespace=None,
+        max_chars=2000,
+        l1_top=15,
+        no_stats=False,
+        compact=True,
+        backend="memory",
+        db=None,
+        namespace=None,
     )
     with patch("memos.cli.commands_memory._get_memos", return_value=fake_memos):
         cmd_wake_up(ns)

@@ -20,6 +20,7 @@ def backend(store_path):
 
 def _item(content="hello", tags=None, mid=None):
     from memos.models import generate_id
+
     return MemoryItem(
         id=mid or generate_id(content),
         content=content,
@@ -178,6 +179,7 @@ class TestMemOSWithPersistPath:
 
     def test_memos_persist_learn_recall(self, tmp_path):
         from memos.core import MemOS
+
         store = tmp_path / "store.json"
         m1 = MemOS(backend="memory", persist_path=str(store), sanitize=False)
         m1.learn("persistent test", tags=["test"])
@@ -189,6 +191,7 @@ class TestMemOSWithPersistPath:
 
     def test_memos_json_backend(self, tmp_path):
         from memos.core import MemOS
+
         store = tmp_path / "store.json"
         m = MemOS(backend="json", persist_path=str(store), sanitize=False)
         item = m.learn("json backend test", tags=["json"])
@@ -197,6 +200,7 @@ class TestMemOSWithPersistPath:
 
     def test_memos_forget_persists(self, tmp_path):
         from memos.core import MemOS
+
         store = tmp_path / "store.json"
         m1 = MemOS(backend="memory", persist_path=str(store), sanitize=False)
         m1.learn("to forget", tags=["temp"])

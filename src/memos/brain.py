@@ -502,14 +502,8 @@ class BrainSearch:
         lines.append("Fused context:")
 
         buckets: dict[str, list[tuple[float, str]]] = {
-            "memory": [
-                (item.score, f"[memory {item.score:.2f}] {item.content}")
-                for item in memories[:5]
-            ],
-            "wiki": [
-                (item.score, f"[wiki {item.entity}] {item.snippet}")
-                for item in wiki_pages[:5]
-            ],
+            "memory": [(item.score, f"[memory {item.score:.2f}] {item.content}") for item in memories[:5]],
+            "wiki": [(item.score, f"[wiki {item.entity}] {item.snippet}") for item in wiki_pages[:5]],
             "kg": [
                 (
                     item.score,

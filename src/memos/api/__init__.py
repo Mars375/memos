@@ -29,10 +29,7 @@ def create_fastapi_app(
         kg_db_path: SQLite path for KnowledgeGraph and PalaceIndex.
     """
     if FastAPI is None:
-        raise ImportError(
-            "FastAPI is required for the server. "
-            "Install with: pip install memos-agent[server]"
-        )
+        raise ImportError("FastAPI is required for the server. Install with: pip install memos-agent[server]")
 
     if memos is None:
         memos = MemOS(**kwargs)
@@ -54,6 +51,7 @@ def create_fastapi_app(
             _palace_db_path = ":memory:"
         else:
             from pathlib import Path as _Path
+
             _palace_db_path = str(_Path(kg_db_path).parent / "palace.db")
     else:
         _palace_db_path = None
@@ -87,12 +85,14 @@ def create_fastapi_app(
 
     # ── MCP Streamable HTTP ───────────────────────────────────
     from ..mcp_server import add_mcp_routes as _add_mcp
+
     _add_mcp(app, memos)
 
     # ── Static files (CSS, JS modules) ───────────────────────
     from pathlib import Path as _WebPath
 
     from starlette.staticfiles import StaticFiles
+
     _web_dir = _WebPath(__file__).resolve().parent.parent / "web"
     if _web_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(_web_dir)), name="dashboard_static")

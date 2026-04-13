@@ -240,6 +240,7 @@ class TestRenameTagCore:
 
     def test_rename_updates_accessed_at(self):
         import time
+
         self.memos.learn("hello", tags=["old"])
         item_before = self.memos._store.list_all()[0]
         ts_before = item_before.accessed_at
@@ -415,6 +416,7 @@ class TestDeleteTagCLI:
         build_parser()
         sys.argv = ["memos", "tags", "delete", "remove-me"]
         import unittest.mock
+
         with unittest.mock.patch("memos.cli.commands_memory._get_memos", return_value=m):
             main()
         captured = capsys.readouterr()

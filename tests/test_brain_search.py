@@ -202,20 +202,22 @@ def test_brain_search_cli(tmp_path: Path, capsys):
     kg.add_fact("Alice", "works_at", "OpenAI")
     kg.close()
 
-    main([
-        "brain-search",
-        "Alice OpenAI",
-        "--backend",
-        "json",
-        "--persist-path",
-        str(persist_path),
-        "--wiki-dir",
-        str(wiki_root),
-        "--db",
-        str(kg_path),
-        "--top",
-        "5",
-    ])
+    main(
+        [
+            "brain-search",
+            "Alice OpenAI",
+            "--backend",
+            "json",
+            "--persist-path",
+            str(persist_path),
+            "--wiki-dir",
+            str(wiki_root),
+            "--db",
+            str(kg_path),
+            "--top",
+            "5",
+        ]
+    )
 
     out = capsys.readouterr().out
     assert "Brain search: Alice OpenAI" in out

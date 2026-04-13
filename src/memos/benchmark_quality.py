@@ -93,32 +93,109 @@ CATEGORIES: dict[str, list[str]] = {
 
 QUERY_TEMPLATES: list[dict[str, Any]] = [
     # (query, expected_category, relevance_checker)
-    {"query": "Who works on machine learning?", "category": "person", "expected_keywords": ["Alice", "ML", "NLP", "Eva", "reinforcement"]},
-    {"query": "What is Project Phoenix about?", "category": "project", "expected_keywords": ["Phoenix", "Java", "Go", "microservices", "migrate"]},
-    {"query": "Why did we choose PostgreSQL?", "category": "decision", "expected_keywords": ["PostgreSQL", "MongoDB", "transactional", "integrity"]},
-    {"query": "What are the coding preferences?", "category": "preference", "expected_keywords": ["commits", "code review", "dark mode", "monospace"]},
-    {"query": "What was the Redis incident?", "category": "incident", "expected_keywords": ["Redis", "outage", "downtime", "cluster", "failover"]},
-    {"query": "Who built the data pipeline?", "category": "person", "expected_keywords": ["Frank", "data pipeline", "real-time"]},
-    {"query": "Tell me about Project Atlas", "category": "project", "expected_keywords": ["Atlas", "data platform", "unified"]},
-    {"query": "Why gRPC for internal services?", "category": "decision", "expected_keywords": ["gRPC", "REST", "internal", "external"]},
-    {"query": "How do we handle code reviews?", "category": "preference", "expected_keywords": ["code review", "24 hours", "review"]},
-    {"query": "What happened with the SSL certificate?", "category": "incident", "expected_keywords": ["SSL", "certificate", "staging", "expired"]},
-    {"query": "Who handles security?", "category": "person", "expected_keywords": ["Grace", "security", "compliance", "audit"]},
+    {
+        "query": "Who works on machine learning?",
+        "category": "person",
+        "expected_keywords": ["Alice", "ML", "NLP", "Eva", "reinforcement"],
+    },
+    {
+        "query": "What is Project Phoenix about?",
+        "category": "project",
+        "expected_keywords": ["Phoenix", "Java", "Go", "microservices", "migrate"],
+    },
+    {
+        "query": "Why did we choose PostgreSQL?",
+        "category": "decision",
+        "expected_keywords": ["PostgreSQL", "MongoDB", "transactional", "integrity"],
+    },
+    {
+        "query": "What are the coding preferences?",
+        "category": "preference",
+        "expected_keywords": ["commits", "code review", "dark mode", "monospace"],
+    },
+    {
+        "query": "What was the Redis incident?",
+        "category": "incident",
+        "expected_keywords": ["Redis", "outage", "downtime", "cluster", "failover"],
+    },
+    {
+        "query": "Who built the data pipeline?",
+        "category": "person",
+        "expected_keywords": ["Frank", "data pipeline", "real-time"],
+    },
+    {
+        "query": "Tell me about Project Atlas",
+        "category": "project",
+        "expected_keywords": ["Atlas", "data platform", "unified"],
+    },
+    {
+        "query": "Why gRPC for internal services?",
+        "category": "decision",
+        "expected_keywords": ["gRPC", "REST", "internal", "external"],
+    },
+    {
+        "query": "How do we handle code reviews?",
+        "category": "preference",
+        "expected_keywords": ["code review", "24 hours", "review"],
+    },
+    {
+        "query": "What happened with the SSL certificate?",
+        "category": "incident",
+        "expected_keywords": ["SSL", "certificate", "staging", "expired"],
+    },
+    {
+        "query": "Who handles security?",
+        "category": "person",
+        "expected_keywords": ["Grace", "security", "compliance", "audit"],
+    },
     {"query": "What does Project Echo do?", "category": "project", "expected_keywords": ["Echo", "encryption", "API"]},
-    {"query": "Why Kubernetes over Nomad?", "category": "decision", "expected_keywords": ["Kubernetes", "Nomad", "orchestration"]},
-    {"query": "What is our scaling strategy?", "category": "preference", "expected_keywords": ["horizontal", "scaling", "stateless"]},
-    {"query": "What caused the database migration issue?", "category": "incident", "expected_keywords": ["database", "migration", "locked", "users"]},
-    {"query": "Who designed the architecture?", "category": "person", "expected_keywords": ["Carol", "microservices", "architecture"]},
-    {"query": "Project Beacon monitoring", "category": "project", "expected_keywords": ["Beacon", "monitoring", "dashboard"]},
-    {"query": "Why did we adopt TypeScript?", "category": "decision", "expected_keywords": ["TypeScript", "JavaScript", "type safety"]},
-    {"query": "What CI/CD tool do we use?", "category": "decision", "expected_keywords": ["GitHub Actions", "Jenkins", "CI/CD"]},
-    {"query": "DNS outage in Asia Pacific", "category": "incident", "expected_keywords": ["DNS", "APAC", "outage", "propagation"]},
+    {
+        "query": "Why Kubernetes over Nomad?",
+        "category": "decision",
+        "expected_keywords": ["Kubernetes", "Nomad", "orchestration"],
+    },
+    {
+        "query": "What is our scaling strategy?",
+        "category": "preference",
+        "expected_keywords": ["horizontal", "scaling", "stateless"],
+    },
+    {
+        "query": "What caused the database migration issue?",
+        "category": "incident",
+        "expected_keywords": ["database", "migration", "locked", "users"],
+    },
+    {
+        "query": "Who designed the architecture?",
+        "category": "person",
+        "expected_keywords": ["Carol", "microservices", "architecture"],
+    },
+    {
+        "query": "Project Beacon monitoring",
+        "category": "project",
+        "expected_keywords": ["Beacon", "monitoring", "dashboard"],
+    },
+    {
+        "query": "Why did we adopt TypeScript?",
+        "category": "decision",
+        "expected_keywords": ["TypeScript", "JavaScript", "type safety"],
+    },
+    {
+        "query": "What CI/CD tool do we use?",
+        "category": "decision",
+        "expected_keywords": ["GitHub Actions", "Jenkins", "CI/CD"],
+    },
+    {
+        "query": "DNS outage in Asia Pacific",
+        "category": "incident",
+        "expected_keywords": ["DNS", "APAC", "outage", "propagation"],
+    },
 ]
 
 
 @dataclass
 class QualityQueryResult:
     """Result of a single quality benchmark query."""
+
     query: str
     expected_category: str
     expected_keywords: list[str]
@@ -134,6 +211,7 @@ class QualityQueryResult:
 @dataclass
 class QualityReport:
     """Full quality benchmark report."""
+
     version: str
     backend: str
     total_memories: int
@@ -188,15 +266,15 @@ class QualityReport:
     def to_text(self) -> str:
         """Human-readable quality benchmark report."""
         lines = [
-            f"{'='*60}",
+            f"{'=' * 60}",
             "  MemOS Recall Quality Benchmark",
-            f"{'='*60}",
+            f"{'=' * 60}",
             f"  Version:     {self.version}",
             f"  Backend:     {self.backend}",
             f"  Memories:    {self.total_memories}",
             f"  Queries:     {self.total_queries}",
             f"  Top-K:       {self.top_k}",
-            f"{'='*60}",
+            f"{'=' * 60}",
             "",
             f"  Recall@{self.top_k}:    {self.recall_at_k:.1%}  (hit rate)",
             f"  MRR:          {self.mrr:.4f}   (mean reciprocal rank)",
@@ -219,11 +297,12 @@ class QualityReport:
                     f"recall@{self.top_k}={sr['recall_at_k']:.1%}, "
                     f"avg_latency={sr['avg_latency_ms']:.1f}ms"
                 )
-        lines.extend(["", f"{'='*60}"])
+        lines.extend(["", f"{'=' * 60}"])
         return "\n".join(lines)
 
 
 # ── Metric Calculators ────────────────────────────────────────────────────────
+
 
 def _is_relevant(query_result: QualityQueryResult, content: str) -> bool:
     """Check if a returned memory is relevant to the query."""
@@ -234,6 +313,7 @@ def _is_relevant(query_result: QualityQueryResult, content: str) -> bool:
 
 def _ndcg_at_k(relevances: list[bool], k: int) -> float:
     """Compute NDCG@K."""
+
     def dcg(rels: list[float]) -> float:
         return sum(rel / math.log2(i + 2) for i, rel in enumerate(rels))
 
@@ -260,6 +340,7 @@ def _percentile(sorted_data: list[float], p: float) -> float:
 
 # ── Dataset Generator ─────────────────────────────────────────────────────────
 
+
 def generate_dataset(
     memories_per_category: int = 10,
     extra_noise: int = 50,
@@ -275,13 +356,15 @@ def generate_dataset(
 
     for category, templates in CATEGORIES.items():
         for i, template in enumerate(templates[:memories_per_category]):
-            memories.append({
-                "content": template,
-                "tags": [category],
-                "importance": 0.3 + rng.random() * 0.6,
-                "category": category,
-                "idx": i,
-            })
+            memories.append(
+                {
+                    "content": template,
+                    "tags": [category],
+                    "importance": 0.3 + rng.random() * 0.6,
+                    "category": category,
+                    "idx": i,
+                }
+            )
 
     # Add noise memories (should NOT be recalled for our queries)
     noise_topics = [
@@ -298,18 +381,21 @@ def generate_dataset(
     ]
     for i in range(extra_noise):
         topic = noise_topics[i % len(noise_topics)]
-        memories.append({
-            "content": f"{topic} — note #{i+1}",
-            "tags": ["noise"],
-            "importance": 0.2 + rng.random() * 0.3,
-            "category": "noise",
-            "idx": i,
-        })
+        memories.append(
+            {
+                "content": f"{topic} — note #{i + 1}",
+                "tags": ["noise"],
+                "importance": 0.2 + rng.random() * 0.3,
+                "category": "noise",
+                "idx": i,
+            }
+        )
 
     return memories, QUERY_TEMPLATES
 
 
 # ── Main Benchmark Runner ─────────────────────────────────────────────────────
+
 
 def run_quality_benchmark(
     memos: Optional[MemOS] = None,
@@ -389,18 +475,20 @@ def run_quality_benchmark(
         relevant_count = sum(relevances)
         prec_k = relevant_count / top_k if top_k > 0 else 0.0
 
-        query_results.append(QualityQueryResult(
-            query=q["query"],
-            expected_category=q["category"],
-            expected_keywords=q["expected_keywords"],
-            returned_ids=returned_ids,
-            returned_contents=returned_contents,
-            scores=scores,
-            hit=hit,
-            hit_rank=hit_rank,
-            precision_at_k=prec_k,
-            latency_ms=latency,
-        ))
+        query_results.append(
+            QualityQueryResult(
+                query=q["query"],
+                expected_category=q["category"],
+                expected_keywords=q["expected_keywords"],
+                returned_ids=returned_ids,
+                returned_contents=returned_contents,
+                scores=scores,
+                hit=hit,
+                hit_rank=hit_rank,
+                precision_at_k=prec_k,
+                latency_ms=latency,
+            )
+        )
 
     # ── Compute aggregate metrics ────────────────────────────
     n = len(query_results)
@@ -436,7 +524,11 @@ def run_quality_benchmark(
     scalability_results = None
     if run_scalability and scalability_sizes:
         scalability_results = _run_scalability_benchmark(
-            scalability_sizes, queries, top_k, seed, backend,
+            scalability_sizes,
+            queries,
+            top_k,
+            seed,
+            backend,
         )
 
     finished = datetime.now(timezone.utc).isoformat()
@@ -467,7 +559,9 @@ def run_quality_benchmark(
 def _is_relevant_for(query_spec, content: str) -> bool:
     """Check if content is relevant to a query specification."""
     content_lower = content.lower()
-    keywords = getattr(query_spec, "expected_keywords", None) or (query_spec.get("expected_keywords", []) if isinstance(query_spec, dict) else [])
+    keywords = getattr(query_spec, "expected_keywords", None) or (
+        query_spec.get("expected_keywords", []) if isinstance(query_spec, dict) else []
+    )
     hits = sum(1 for kw in keywords if kw.lower() in content_lower)
     return hits >= 1
 
@@ -562,10 +656,12 @@ def _run_scalability_benchmark(
                 if any(_is_relevant_for(q, c) for c in contents):
                     hits += 1
 
-        results.append({
-            "memories": size,
-            "recall_at_k": hits / len(sample) if sample else 0.0,
-            "avg_latency_ms": statistics.mean(latencies) if latencies else 0.0,
-        })
+        results.append(
+            {
+                "memories": size,
+                "recall_at_k": hits / len(sample) if sample else 0.0,
+                "avg_latency_ms": statistics.mean(latencies) if latencies else 0.0,
+            }
+        )
 
     return results

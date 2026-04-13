@@ -233,6 +233,7 @@ def test_cli_decay_dry_run(mem: MemOS, capsys):
     )
     # Inject the memos instance
     import memos.cli as cli_mod
+
     original = cli_mod._get_memos
     cli_mod._get_memos = lambda ns: mem
     try:
@@ -259,6 +260,7 @@ def test_cli_decay_apply(mem: MemOS, capsys):
     )
 
     import memos.cli as cli_mod
+
     original = cli_mod._get_memos
     cli_mod._get_memos = lambda ns: mem
     try:
@@ -283,6 +285,7 @@ def test_cli_reinforce(mem: MemOS, capsys):
     )
 
     import memos.cli as cli_mod
+
     original = cli_mod._get_memos
     cli_mod._get_memos = lambda ns: mem
     try:
@@ -307,6 +310,7 @@ def test_cli_reinforce_not_found(mem: MemOS):
     )
 
     import memos.cli as cli_mod
+
     original = cli_mod._get_memos
     cli_mod._get_memos = lambda ns: mem
     try:
@@ -324,6 +328,7 @@ def test_cli_reinforce_not_found(mem: MemOS):
 @pytest.fixture()
 def app(mem: MemOS):
     from memos.api import create_fastapi_app
+
     return create_fastapi_app(memos=mem)
 
 

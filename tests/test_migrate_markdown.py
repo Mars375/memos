@@ -1,4 +1,5 @@
 """Tests for markdown migration tool (P4)."""
+
 from __future__ import annotations
 
 import sys
@@ -17,6 +18,7 @@ from memos.core import MemOS  # noqa: E402
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def simple_md(tmp_path) -> Path:
@@ -88,6 +90,7 @@ def mem():
 # parse_markdown_file
 # ---------------------------------------------------------------------------
 
+
 def test_parse_sections(simple_md):
     memories = parse_markdown_file(simple_md)
     assert len(memories) >= 2
@@ -146,6 +149,7 @@ def test_content_capped_at_2000(tmp_path):
 # collect_files
 # ---------------------------------------------------------------------------
 
+
 def test_collect_files_dir(tmp_path):
     (tmp_path / "a.md").write_text("# A")
     (tmp_path / "b.md").write_text("# B")
@@ -167,6 +171,7 @@ def test_collect_files_recursive(tmp_path):
 # ---------------------------------------------------------------------------
 # migrate
 # ---------------------------------------------------------------------------
+
 
 def test_migrate_imports(simple_md, mem):
     imported, errors = migrate([simple_md], mem)
@@ -207,6 +212,7 @@ def test_migrate_missing_file(tmp_path, mem):
 # ---------------------------------------------------------------------------
 # filename tag derivation
 # ---------------------------------------------------------------------------
+
 
 def test_tags_from_daily_filename():
     tags = _tags_from_filename(Path("2026-04-07.md"))

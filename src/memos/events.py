@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class MemoryEvent:
     """A single memory change event."""
 
-    type: str                           # learned | recalled | forgotten | pruned | consolidated
+    type: str  # learned | recalled | forgotten | pruned | consolidated
     data: dict[str, Any] = field(default_factory=dict)
     namespace: str = ""
     timestamp: float = field(default_factory=time.time)
@@ -148,7 +148,9 @@ class EventBus:
                 event_types=event_types,
                 namespaces=namespaces,
                 tags=tags,
-            ) if any(v is not None for v in (event_types, namespaces, tags)) else None,
+            )
+            if any(v is not None for v in (event_types, namespaces, tags))
+            else None,
             active=active,
             label=label,
         )
@@ -184,7 +186,7 @@ class EventBus:
         # Store in history
         self._history.append(event)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
         # Push to rich subscriptions (queues + callbacks)
         try:
@@ -228,7 +230,7 @@ class EventBus:
         # Store in history
         self._history.append(event)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
         for record in self._subscriptions.matching(event):
             if record.kind == "queue" and record.queue is not None:

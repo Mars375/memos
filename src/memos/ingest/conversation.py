@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 # Result type
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ConversationMineResult:
     imported: int = 0
@@ -55,22 +56,18 @@ class ConversationMineResult:
 _TS_PREFIX = r"(?:\[[\d]{1,2}:[\d]{2}(?::[\d]{2})?\]\s*)?"
 
 # Speaker name: starts with letter, up to 40 chars (letters, digits, space, hyphen, underscore, dot)
-_SPEAKER_PAT = r"([A-Za-z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff][A-Za-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff _\-\.]{0,39})"
+_SPEAKER_PAT = (
+    r"([A-Za-z\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff][A-Za-z0-9\u00C0-\u024F\u0400-\u04FF\u4e00-\u9fff _\-\.]{0,39})"
+)
 
 # Pattern 1: [HH:MM] Speaker: message
-_RE_PLAIN = re.compile(
-    r"^" + _TS_PREFIX + _SPEAKER_PAT + r":\s+(.+)$"
-)
+_RE_PLAIN = re.compile(r"^" + _TS_PREFIX + _SPEAKER_PAT + r":\s+(.+)$")
 
 # Pattern 2: **Speaker:** message  (Markdown bold)
-_RE_BOLD = re.compile(
-    r"^\*\*" + _SPEAKER_PAT + r":\*\*\s+(.+)$"
-)
+_RE_BOLD = re.compile(r"^\*\*" + _SPEAKER_PAT + r":\*\*\s+(.+)$")
 
 # Date-only line detector (to extract conversation date)
-_RE_DATE_LINE = re.compile(
-    r"(\d{4}-\d{2}-\d{2})"
-)
+_RE_DATE_LINE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 
 
 def _slug(name: str) -> str:
@@ -144,6 +141,7 @@ def parse_transcript(text: str) -> Tuple[List[Turn], Optional[str]]:
 # ConversationMiner
 # ---------------------------------------------------------------------------
 
+
 class ConversationMiner:
     """Mine speaker-attributed transcripts into MemOS.
 
@@ -169,6 +167,7 @@ class ConversationMiner:
 
     def _content_hash(self, text: str) -> str:
         import hashlib
+
         return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
     def _is_duplicate(self, text: str) -> bool:

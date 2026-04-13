@@ -26,6 +26,7 @@ from .export_markdown import MarkdownExporter, MarkdownExportResult
 @dataclass
 class ObsidianExportResult(MarkdownExportResult):
     """Export result with Obsidian-specific stats."""
+
     wikilinks_added: int = 0
 
 
@@ -125,7 +126,7 @@ class ObsidianExporter:
         for md_path in entities_dir.glob("*.md"):
             # Try to read the 'entity' field from frontmatter
             content = md_path.read_text(encoding="utf-8")
-            match = re.search(r'^entity:\s*(.+)$', content, re.MULTILINE)
+            match = re.search(r"^entity:\s*(.+)$", content, re.MULTILINE)
             if match:
                 names.append(match.group(1).strip())
             else:
@@ -152,7 +153,7 @@ class ObsidianExporter:
                 continue
             escaped = re.escape(name)
             # Match the name as a whole word, not already inside [[ ]]
-            pattern = r'(?<!\[\[)(?<!\[)\b' + escaped + r'\b(?!\]\])(?!\])'
+            pattern = r"(?<!\[\[)(?<!\[)\b" + escaped + r"\b(?!\]\])(?!\])"
             new_body, n = re.subn(pattern, f"[[{name}]]", body)
             if n:
                 body = new_body
@@ -179,16 +180,16 @@ class ObsidianExporter:
             return content
 
         fm_block = content[4:end]  # the YAML body between the ---'s
-        body_after = content[end + 5:]
+        body_after = content[end + 5 :]
 
         # Extract existing tags list if present
-        tags_match = re.search(r'^tags:\s*\[([^\]]*)\]', fm_block, re.MULTILINE)
+        tags_match = re.search(r"^tags:\s*\[([^\]]*)\]", fm_block, re.MULTILINE)
         existing_tags: list[str] = []
         if tags_match:
-            existing_tags = [t.strip().strip('"\'') for t in tags_match.group(1).split(',') if t.strip()]
+            existing_tags = [t.strip().strip("\"'") for t in tags_match.group(1).split(",") if t.strip()]
 
         # Extract entity name
-        entity_match = re.search(r'^entity:\s*(.+)$', fm_block, re.MULTILINE)
+        entity_match = re.search(r"^entity:\s*(.+)$", fm_block, re.MULTILINE)
         entity_name = entity_match.group(1).strip() if entity_match else md_file.stem
 
         # Add aliases if not present
@@ -212,5 +213,5 @@ class ObsidianExporter:
     def _plain_links_to_wikilinks(self, content: str) -> str:
         """Convert ``[EntityName](entities/slug.md)`` links to ``[[EntityName]]`` wikilinks."""
         # Match: [Some Text](entities/some_slug.md) or [Some Text](communities/...)
-        pattern = r'\[([^\]]+)\]\((?:entities|memories|communities)/[^)]+\.md\)'
-        return re.sub(pattern, r'[[\1]]', content)
+        pattern = r"\[([^\]]+)\]\((?:entities|memories|communities)/[^)]+\.md\)"
+        return re.sub(pattern, r"[[\1]]", content)

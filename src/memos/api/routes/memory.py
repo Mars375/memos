@@ -144,6 +144,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         limit: int = 50,
     ):
         from datetime import datetime as _dt
+
         after_ts = _dt.fromisoformat(after).timestamp() if after else None
         before_ts = _dt.fromisoformat(before).timestamp() if before else None
         items = memos.list_memories(
@@ -184,21 +185,30 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     ):
         """Recall memories and augment them with KG facts."""
         from datetime import datetime as _dt
+
         tags = [t.strip() for t in filter_tags.split(",") if t.strip()] if filter_tags else None
         after_ts = _dt.fromisoformat(filter_after).timestamp() if filter_after else None
         before_ts = _dt.fromisoformat(filter_before).timestamp() if filter_before else None
         payload = _kg_bridge.recall_enriched(
-            q, top=top, filter_tags=tags, min_score=min_score,
-            filter_after=after_ts, filter_before=before_ts,
+            q,
+            top=top,
+            filter_tags=tags,
+            min_score=min_score,
+            filter_after=after_ts,
+            filter_before=before_ts,
         )
         return {"status": "ok", **payload}
 
     @router.get("/api/v1/recall/stream")
     async def api_recall_stream(
-        q: str, top: int = 5, filter_tags: str | None = None, min_score: float = 0.0,
+        q: str,
+        top: int = 5,
+        filter_tags: str | None = None,
+        min_score: float = 0.0,
     ):
         """Stream recall results as Server-Sent Events (SSE)."""
         from ..sse import sse_stream
+
         tags = [t.strip() for t in filter_tags.split(",") if t.strip()] if filter_tags else None
         recall_gen = memos.recall_stream(query=q, top=top, filter_tags=tags, min_score=min_score)
         return StreamingResponse(
@@ -231,9 +241,13 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         if item is None:
             return {"status": "not_found", "message": f"Memory {item_id} not found"}
         result = {
-            "id": item.id, "content": item.content, "tags": item.tags,
-            "importance": item.importance, "created_at": item.created_at,
-            "accessed_at": item.accessed_at, "access_count": item.access_count,
+            "id": item.id,
+            "content": item.content,
+            "tags": item.tags,
+            "importance": item.importance,
+            "created_at": item.created_at,
+            "accessed_at": item.accessed_at,
+            "access_count": item.access_count,
             "relevance_score": item.relevance_score,
         }
         if item.ttl is not None:
@@ -261,6 +275,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     async def api_classify(text: str):
         """Classify text into memory type tags (zero-LLM)."""
         from ...tagger import AutoTagger
+
         tagger = AutoTagger()
         return {"status": "ok", "tags": tagger.tag(text), "matches": tagger.tag_detailed(text)}
 
@@ -294,7 +309,12 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
             handle = await memos.consolidate_async(similarity_threshold=threshold, merge_content=merge, dry_run=dry)
             return {"status": "started", "task_id": handle.task_id}
         result = memos.consolidate(similarity_threshold=threshold, merge_content=merge, dry_run=dry)
-        return {"status": "completed", "groups_found": result.groups_found, "memories_merged": result.memories_merged, "space_freed": result.space_freed}
+        return {
+            "status": "completed",
+            "groups_found": result.groups_found,
+            "memories_merged": result.memories_merged,
+            "space_freed": result.space_freed,
+        }
 
     @router.get("/api/v1/consolidate/{task_id}")
     async def api_consolidate_status(task_id: str):
@@ -339,7 +359,13 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         result = memos.rollback(item_id, version)
         if result is None:
             return {"status": "not_found", "item_id": item_id, "version": version}
-        return {"status": "ok", "item_id": result.id, "content": result.content[:200], "tags": result.tags, "rolled_back_to": version}
+        return {
+            "status": "ok",
+            "item_id": result.id,
+            "content": result.content[:200],
+            "tags": result.tags,
+            "rolled_back_to": version,
+        }
 
     @router.get("/api/v1/snapshot")
     async def api_snapshot(at: float):
@@ -350,8 +376,19 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     async def api_recall_at(q: str, at: float, top: int = 5, min_score: float = 0.0):
         results = memos.recall_at(q, at, top=top, min_score=min_score)
         return {
-            "query": q, "timestamp": at, "total": len(results),
-            "results": [{"id": r.item.id, "content": r.item.content, "score": round(r.score, 4), "tags": r.item.tags, "match_reason": r.match_reason} for r in results],
+            "query": q,
+            "timestamp": at,
+            "total": len(results),
+            "results": [
+                {
+                    "id": r.item.id,
+                    "content": r.item.content,
+                    "score": round(r.score, 4),
+                    "tags": r.item.tags,
+                    "match_reason": r.match_reason,
+                }
+                for r in results
+            ],
         }
 
     @router.get("/api/v1/versioning/stats")
@@ -361,7 +398,9 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     @router.post("/api/v1/versioning/gc")
     async def api_versioning_gc(body: dict = None):
         body = body or {}
-        removed = memos.versioning_gc(max_age_days=body.get("max_age_days", 90.0), keep_latest=body.get("keep_latest", 3))
+        removed = memos.versioning_gc(
+            max_age_days=body.get("max_age_days", 90.0), keep_latest=body.get("keep_latest", 3)
+        )
         return {"status": "ok", "removed": removed}
 
     @router.get("/api/v1/recall/at/stream")
@@ -370,6 +409,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         import asyncio as _asyncio
 
         from ..sse import sse_stream
+
         results = memos.recall_at(q, at, top=top, min_score=min_score)
 
         async def _gen():
@@ -392,8 +432,10 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
             return {"status": "error", "message": "item_id and feedback are required"}
         try:
             entry = memos.record_feedback(
-                item_id=item_id, feedback=feedback,
-                query=body.get("query", ""), score_at_recall=body.get("score_at_recall", 0.0),
+                item_id=item_id,
+                feedback=feedback,
+                query=body.get("query", ""),
+                score_at_recall=body.get("score_at_recall", 0.0),
                 agent_id=body.get("agent_id", ""),
             )
             return {"status": "ok", "feedback": entry.to_dict()}
@@ -415,12 +457,16 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     async def api_decay_run(body: dict = None):
         body = body or {}
         items = memos._store.list_all(namespace=memos._namespace)
-        report = memos._decay.run_decay(items, min_age_days=body.get("min_age_days"), floor=body.get("floor"), dry_run=body.get("dry_run", True))
+        report = memos._decay.run_decay(
+            items, min_age_days=body.get("min_age_days"), floor=body.get("floor"), dry_run=body.get("dry_run", True)
+        )
         if not body.get("dry_run", True):
             for item in items:
                 memos._store.upsert(item, namespace=memos._namespace)
         return {
-            "status": "ok", "total": report.total, "decayed": report.decayed,
+            "status": "ok",
+            "total": report.total,
+            "decayed": report.decayed,
             "avg_importance_before": round(report.avg_importance_before, 4),
             "avg_importance_after": round(report.avg_importance_after, 4),
             "details": report.details[:50],
@@ -435,7 +481,12 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         old_imp = item.importance
         new_imp = memos._decay.reinforce(item, strength=body.get("strength"))
         memos._store.upsert(item, namespace=memos._namespace)
-        return {"status": "ok", "id": item.id, "importance_before": round(old_imp, 4), "importance_after": round(new_imp, 4)}
+        return {
+            "status": "ok",
+            "id": item.id,
+            "importance_before": round(old_imp, 4),
+            "importance_after": round(new_imp, 4),
+        }
 
     # ── Compress ──────────────────────────────────────────────
 
@@ -444,8 +495,12 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         body = body or {}
         result = memos.compress(threshold=float(body.get("threshold", 0.1)), dry_run=bool(body.get("dry_run", True)))
         return {
-            "status": "ok", "compressed_count": result.compressed_count, "summary_count": result.summary_count,
-            "freed_bytes": result.freed_bytes, "groups_considered": result.groups_considered, "details": result.details,
+            "status": "ok",
+            "compressed_count": result.compressed_count,
+            "summary_count": result.summary_count,
+            "freed_bytes": result.freed_bytes,
+            "groups_considered": result.groups_considered,
+            "details": result.details,
         }
 
     # ── Dedup ─────────────────────────────────────────────────
@@ -458,16 +513,24 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         result = memos.dedup_check(content_text, threshold=body.get("threshold"))
         resp = {"is_duplicate": result.is_duplicate, "reason": result.reason, "similarity": result.similarity}
         if result.match:
-            resp["match"] = {"id": result.match.id, "content": result.match.content[:500], "tags": result.match.tags, "importance": result.match.importance}
+            resp["match"] = {
+                "id": result.match.id,
+                "content": result.match.content[:500],
+                "tags": result.match.tags,
+                "importance": result.match.importance,
+            }
         return resp
 
     @router.post("/api/v1/dedup/scan")
     async def api_dedup_scan(body: dict):
         result = memos.dedup_scan(fix=body.get("fix", False), threshold=body.get("threshold"))
         return {
-            "total_scanned": result.total_scanned, "exact_duplicates": result.exact_duplicates,
-            "near_duplicates": result.near_duplicates, "total_duplicates": result.total_duplicates,
-            "fixed": result.fixed, "groups": result.groups[:50],
+            "total_scanned": result.total_scanned,
+            "exact_duplicates": result.exact_duplicates,
+            "near_duplicates": result.near_duplicates,
+            "total_duplicates": result.total_duplicates,
+            "fixed": result.fixed,
+            "groups": result.groups[:50],
         }
 
     # ── Sync & Conflict ───────────────────────────────────────
@@ -476,6 +539,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     async def api_sync_check(body: dict):
         from ...conflict import ConflictDetector
         from ...sharing.models import MemoryEnvelope
+
         try:
             envelope = MemoryEnvelope.from_dict(body["envelope"])
         except (KeyError, ValueError) as exc:
@@ -489,6 +553,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     async def api_sync_apply(body: dict):
         from ...conflict import ConflictDetector, ResolutionStrategy
         from ...sharing.models import MemoryEnvelope
+
         try:
             envelope = MemoryEnvelope.from_dict(body["envelope"])
         except (KeyError, ValueError) as exc:
@@ -520,13 +585,17 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         from ...export_markdown import MarkdownExporter
 
         export_root = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="memos-markdown-export-"))
-        MarkdownExporter(memos, kg=_kg_bridge._kg if hasattr(_kg_bridge, "_kg") else None, wiki_dir=wiki_dir).export(str(export_root), update=update)
+        MarkdownExporter(memos, kg=_kg_bridge._kg if hasattr(_kg_bridge, "_kg") else None, wiki_dir=wiki_dir).export(
+            str(export_root), update=update
+        )
         zip_path = export_root.parent / f"{export_root.name}.zip"
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
             for file_path in sorted(export_root.rglob("*")):
                 if file_path.is_file():
                     bundle.write(file_path, arcname=str(file_path.relative_to(export_root)))
-        return FileResponse(str(zip_path), media_type="application/zip", filename=f"memos-markdown-export-{int(time.time())}.zip")
+        return FileResponse(
+            str(zip_path), media_type="application/zip", filename=f"memos-markdown-export-{int(time.time())}.zip"
+        )
 
     @router.get("/api/v1/export/parquet")
     async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd"):
@@ -534,10 +603,12 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         import tempfile
 
         from fastapi.responses import FileResponse
+
         with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
             result = memos.export_parquet(tmp.name, include_metadata=include_metadata, compression=compression)
             return FileResponse(
-                tmp.name, media_type="application/octet-stream",
+                tmp.name,
+                media_type="application/octet-stream",
                 filename=f"memos-export-{int(time.time())}.parquet",
                 headers={"X-Memos-Total": str(result["total"]), "X-Memos-Size": str(result["size_bytes"])},
             )

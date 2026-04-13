@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DedupCheckResult:
     """Result of a duplicate check."""
+
     is_duplicate: bool = False
     match: Optional[MemoryItem] = None
     reason: str = ""  # "exact" | "near" | ""
@@ -33,6 +34,7 @@ class DedupCheckResult:
 @dataclass
 class DedupScanResult:
     """Result of a batch dedup scan."""
+
     total_scanned: int = 0
     exact_duplicates: int = 0
     near_duplicates: int = 0
@@ -179,13 +181,15 @@ class DedupEngine:
                 original = seen_hashes[h]
                 result.exact_duplicates += 1
                 result.total_duplicates += 1
-                result.groups.append({
-                    "duplicate_id": item.id,
-                    "original_id": original.id,
-                    "reason": "exact",
-                    "similarity": 1.0,
-                    "content_preview": item.content[:100],
-                })
+                result.groups.append(
+                    {
+                        "duplicate_id": item.id,
+                        "original_id": original.id,
+                        "reason": "exact",
+                        "similarity": 1.0,
+                        "content_preview": item.content[:100],
+                    }
+                )
                 used.add(item.id)
                 if fix:
                     self._store.delete(item.id, namespace=self._namespace)
@@ -208,13 +212,15 @@ class DedupEngine:
                     if sim >= thresh:
                         result.near_duplicates += 1
                         result.total_duplicates += 1
-                        result.groups.append({
-                            "duplicate_id": item.id,
-                            "original_id": existing_item.id,
-                            "reason": "near",
-                            "similarity": round(sim, 4),
-                            "content_preview": item.content[:100],
-                        })
+                        result.groups.append(
+                            {
+                                "duplicate_id": item.id,
+                                "original_id": existing_item.id,
+                                "reason": "near",
+                                "similarity": round(sim, 4),
+                                "content_preview": item.content[:100],
+                            }
+                        )
                         used.add(item.id)
                         if fix:
                             self._store.delete(item.id, namespace=self._namespace)
@@ -247,7 +253,7 @@ class DedupEngine:
         norm = DedupEngine._normalize(text)
         if len(norm) < 3:
             return set()
-        return {norm[i:i+3] for i in range(len(norm) - 2)}
+        return {norm[i : i + 3] for i in range(len(norm) - 2)}
 
     @staticmethod
     def _jaccard(a: set[str], b: set[str]) -> float:

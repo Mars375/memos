@@ -53,15 +53,71 @@ _ENTITY_PATTERNS = [
 
 # Stopwords to filter out false-positive entities
 _STOPWORDS = {
-    "The", "This", "That", "These", "Those", "There", "Then", "They",
-    "When", "Where", "What", "Which", "While", "With", "From", "Into",
-    "About", "After", "Before", "Between", "Through", "During", "Without",
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-    "First", "Second", "Third", "Last", "Next", "Each", "Every",
-    "NOTE", "TODO", "FIXME", "XXX", "Use", "Read", "Write", "Scan", "Search", "List", "Stats",
-    "Update", "Index", "Log", "Wiki", "Project",
+    "The",
+    "This",
+    "That",
+    "These",
+    "Those",
+    "There",
+    "Then",
+    "They",
+    "When",
+    "Where",
+    "What",
+    "Which",
+    "While",
+    "With",
+    "From",
+    "Into",
+    "About",
+    "After",
+    "Before",
+    "Between",
+    "Through",
+    "During",
+    "Without",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+    "First",
+    "Second",
+    "Third",
+    "Last",
+    "Next",
+    "Each",
+    "Every",
+    "NOTE",
+    "TODO",
+    "FIXME",
+    "XXX",
+    "Use",
+    "Read",
+    "Write",
+    "Scan",
+    "Search",
+    "List",
+    "Stats",
+    "Update",
+    "Index",
+    "Log",
+    "Wiki",
+    "Project",
 }
 
 
@@ -92,6 +148,7 @@ def extract_entities(text: str) -> List[Tuple[str, str]]:
 # Page templates
 # ---------------------------------------------------------------------------
 
+
 def _frontmatter(meta: Dict[str, Any]) -> str:
     """Generate YAML frontmatter block."""
     lines = ["---"]
@@ -99,7 +156,7 @@ def _frontmatter(meta: Dict[str, Any]) -> str:
         if isinstance(v, list):
             lines.append(f"{k}:")
             for item in v:
-                lines.append(f"  - \"{item}\"")
+                lines.append(f'  - "{item}"')
         elif isinstance(v, str):
             lines.append(f'{k}: "{v}"')
         else:
@@ -109,96 +166,110 @@ def _frontmatter(meta: Dict[str, Any]) -> str:
 
 
 _PAGE_TEMPLATES = {
-    "person": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Overview",
-        "",
-        f"<!-- Auto-generated page for {name}. Update as needed. -->",
-        "",
-        "## Key Facts",
-        "",
-        "<!-- Facts extracted from memories appear here. -->",
-        "",
-    ]),
-    "project": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Overview",
-        "",
-        f"<!-- Auto-generated page for project: {name}. -->",
-        "",
-        "## Status",
-        "",
-        "<!-- Current status and progress. -->",
-        "",
-        "## Architecture",
-        "",
-        "<!-- Technical details and decisions. -->",
-        "",
-    ]),
-    "concept": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Definition",
-        "",
-        f"<!-- Concept: {name}. -->",
-        "",
-        "## Related",
-        "",
-        "<!-- Links to related concepts. -->",
-        "",
-    ]),
-    "topic": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Summary",
-        "",
-        f"<!-- Topic: {name}. -->",
-        "",
-        "## Notes",
-        "",
-        "<!-- Accumulated notes. -->",
-        "",
-    ]),
-    "resource": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Details",
-        "",
-        f"<!-- Resource: {name}. -->",
-        "",
-    ]),
-    "contact": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Contact Info",
-        "",
-        f"<!-- Contact: {name}. -->",
-        "",
-    ]),
-    "default": lambda name, meta: "\n".join([
-        _frontmatter(meta),
-        "",
-        f"# {name}",
-        "",
-        "## Notes",
-        "",
-        "<!-- Content accumulated from memories. -->",
-        "",
-    ]),
+    "person": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Overview",
+            "",
+            f"<!-- Auto-generated page for {name}. Update as needed. -->",
+            "",
+            "## Key Facts",
+            "",
+            "<!-- Facts extracted from memories appear here. -->",
+            "",
+        ]
+    ),
+    "project": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Overview",
+            "",
+            f"<!-- Auto-generated page for project: {name}. -->",
+            "",
+            "## Status",
+            "",
+            "<!-- Current status and progress. -->",
+            "",
+            "## Architecture",
+            "",
+            "<!-- Technical details and decisions. -->",
+            "",
+        ]
+    ),
+    "concept": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Definition",
+            "",
+            f"<!-- Concept: {name}. -->",
+            "",
+            "## Related",
+            "",
+            "<!-- Links to related concepts. -->",
+            "",
+        ]
+    ),
+    "topic": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Summary",
+            "",
+            f"<!-- Topic: {name}. -->",
+            "",
+            "## Notes",
+            "",
+            "<!-- Accumulated notes. -->",
+            "",
+        ]
+    ),
+    "resource": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Details",
+            "",
+            f"<!-- Resource: {name}. -->",
+            "",
+        ]
+    ),
+    "contact": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Contact Info",
+            "",
+            f"<!-- Contact: {name}. -->",
+            "",
+        ]
+    ),
+    "default": lambda name, meta: "\n".join(
+        [
+            _frontmatter(meta),
+            "",
+            f"# {name}",
+            "",
+            "## Notes",
+            "",
+            "<!-- Content accumulated from memories. -->",
+            "",
+        ]
+    ),
 }
 
 
@@ -206,9 +277,11 @@ _PAGE_TEMPLATES = {
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class LivingPage:
     """A single living wiki page."""
+
     entity: str
     entity_type: str
     path: Path
@@ -224,6 +297,7 @@ class LivingPage:
 @dataclass
 class LintReport:
     """Result of linting the living wiki."""
+
     orphan_pages: List[str] = field(default_factory=list)
     empty_pages: List[str] = field(default_factory=list)
     contradictions: List[Dict[str, Any]] = field(default_factory=list)
@@ -234,6 +308,7 @@ class LintReport:
 @dataclass
 class UpdateResult:
     """Result of a living wiki update."""
+
     pages_created: int = 0
     pages_updated: int = 0
     entities_found: int = 0
@@ -244,6 +319,7 @@ class UpdateResult:
 # ---------------------------------------------------------------------------
 # Living Wiki Engine
 # ---------------------------------------------------------------------------
+
 
 class LivingWikiEngine:
     """Entity/concept-based living wiki with incremental updates."""
@@ -372,9 +448,7 @@ class LivingWikiEngine:
 
         # Track which memory IDs we've already indexed
         if not force:
-            existing = set(
-                row[0] for row in db.execute("SELECT memory_id FROM entity_memories").fetchall()
-            )
+            existing = set(row[0] for row in db.execute("SELECT memory_id FROM entity_memories").fetchall())
         else:
             existing = set()
             # Clear existing for full rebuild
@@ -391,16 +465,14 @@ class LivingWikiEngine:
             entities = extract_entities(item.content)
 
             # Also treat tags as entities
-            for tag in (item.tags or []):
+            for tag in item.tags or []:
                 entities.append((tag, "topic"))
 
             for ename, etype in entities:
                 entity_mems.setdefault(ename, set()).add(item.id)
 
                 # Ensure entity exists
-                row = db.execute(
-                    "SELECT name FROM entities WHERE name = ?", (ename,)
-                ).fetchone()
+                row = db.execute("SELECT name FROM entities WHERE name = ?", (ename,)).fetchone()
 
                 if row is None:
                     # Create page
@@ -476,7 +548,7 @@ class LivingWikiEngine:
         # Build backlinks — if two entities share memories, they link to each other
         all_entities = [row["name"] for row in db.execute("SELECT name FROM entities").fetchall()]
         for i, e1 in enumerate(all_entities):
-            for e2 in all_entities[i + 1:]:
+            for e2 in all_entities[i + 1 :]:
                 # Check if they share any memories
                 shared = db.execute(
                     "SELECT COUNT(*) FROM entity_memories em1 "
@@ -509,9 +581,11 @@ class LivingWikiEngine:
                 if page_path.exists():
                     content = page_path.read_text(encoding="utf-8")
                     # Replace or append backlinks section
-                    link_lines = "\n## Backlinks\n\n" + "\n".join(
-                        f"- [[{self._safe_slug(line)}|{line}]]" for line in links
-                    ) + "\n"
+                    link_lines = (
+                        "\n## Backlinks\n\n"
+                        + "\n".join(f"- [[{self._safe_slug(line)}|{line}]]" for line in links)
+                        + "\n"
+                    )
                     if "## Backlinks" in content:
                         content = re.sub(
                             r"## Backlinks\n.*",
@@ -534,10 +608,14 @@ class LivingWikiEngine:
                             for edge in neighbor_edges:
                                 other = edge["object"] if edge["subject"] == ename else edge["subject"]
                                 seen_neighbors.setdefault(other, set()).add(edge["predicate"])
-                            neighbor_lines = "\n## Graph Neighbors\n\n" + "\n".join(
-                                f"- [[{self._safe_slug(other)}|{other}]] ({', '.join(sorted(predicates))})"
-                                for other, predicates in sorted(seen_neighbors.items())
-                            ) + "\n"
+                            neighbor_lines = (
+                                "\n## Graph Neighbors\n\n"
+                                + "\n".join(
+                                    f"- [[{self._safe_slug(other)}|{other}]] ({', '.join(sorted(predicates))})"
+                                    for other, predicates in sorted(seen_neighbors.items())
+                                )
+                                + "\n"
+                            )
 
                     if "## Graph Neighbors" in content:
                         content = re.sub(
@@ -551,7 +629,9 @@ class LivingWikiEngine:
                     page_path.write_text(content, encoding="utf-8")
 
         self._log_action(
-            db, "update", "",
+            db,
+            "update",
+            "",
             f"Created {result.pages_created}, updated {result.pages_updated}, "
             f"indexed {result.memories_indexed} memories, {result.backlinks_added} backlinks",
         )
@@ -590,20 +670,16 @@ class LivingWikiEngine:
 
         try:
             # Skip if already indexed
-            already = db.execute(
-                "SELECT COUNT(*) FROM entity_memories WHERE memory_id = ?", (item.id,)
-            ).fetchone()[0]
+            already = db.execute("SELECT COUNT(*) FROM entity_memories WHERE memory_id = ?", (item.id,)).fetchone()[0]
             if already > 0:
                 return result
 
             entities = extract_entities(item.content)
-            for tag in (item.tags or []):
+            for tag in item.tags or []:
                 entities.append((tag, "topic"))
 
             for ename, etype in entities:
-                row = db.execute(
-                    "SELECT name FROM entities WHERE name = ?", (ename,)
-                ).fetchone()
+                row = db.execute("SELECT name FROM entities WHERE name = ?", (ename,)).fetchone()
 
                 slug = self._safe_slug(ename)
                 page_path = self._wiki_dir / "pages" / f"{slug}.md"
@@ -632,10 +708,7 @@ class LivingWikiEngine:
                 else:
                     if page_path.exists():
                         existing_content = page_path.read_text(encoding="utf-8")
-                        snippet = (
-                            f"\n## Snippet ({time.strftime('%Y-%m-%d %H:%M')})\n\n"
-                            f"> {item.content[:200]}\n"
-                        )
+                        snippet = f"\n## Snippet ({time.strftime('%Y-%m-%d %H:%M')})\n\n> {item.content[:200]}\n"
                         existing_content = re.sub(
                             r"memory_count: \d+",
                             lambda m: f"memory_count: {int(m.group().split(': ')[1]) + 1}",
@@ -717,8 +790,10 @@ class LivingWikiEngine:
                 content = page_path.read_text(encoding="utf-8")
                 # Count non-template lines (not comments, not frontmatter)
                 real_lines = [
-                    line for line in content.splitlines()
-                    if line.strip() and not line.strip().startswith("<!--")
+                    line
+                    for line in content.splitlines()
+                    if line.strip()
+                    and not line.strip().startswith("<!--")
                     and not line.strip().startswith("---")
                     and not line.startswith("# ")
                     and not line.startswith("## ")
@@ -753,10 +828,12 @@ class LivingWikiEngine:
 
             conflicts = negated & affirmed
             if conflicts:
-                report.contradictions.append({
-                    "entity": ename,
-                    "conflicting_terms": list(conflicts),
-                })
+                report.contradictions.append(
+                    {
+                        "entity": ename,
+                        "conflicting_terms": list(conflicts),
+                    }
+                )
 
         # Missing backlinks: if page A mentions entity B but no backlink exists
         for ename in all_entities:
@@ -791,9 +868,7 @@ class LivingWikiEngine:
 
     def _regenerate_index(self, db: sqlite3.Connection) -> str:
         """Internal: regenerate index.md from DB."""
-        entities = db.execute(
-            "SELECT name, entity_type, updated_at FROM entities ORDER BY name"
-        ).fetchall()
+        entities = db.execute("SELECT name, entity_type, updated_at FROM entities ORDER BY name").fetchall()
 
         lines = [
             "# Living Wiki Index\n",
@@ -902,12 +977,14 @@ class LivingWikiEngine:
                 end = min(len(content), idx + len(query) + 60)
                 snippet = content[start:end].replace("\n", " ")
 
-                results.append({
-                    "entity": entity,
-                    "type": etype,
-                    "matches": matches,
-                    "snippet": snippet,
-                })
+                results.append(
+                    {
+                        "entity": entity,
+                        "type": etype,
+                        "matches": matches,
+                        "snippet": snippet,
+                    }
+                )
 
         db.close()
         results.sort(key=lambda x: -x["matches"])
@@ -967,16 +1044,18 @@ class LivingWikiEngine:
 
             size = page_path.stat().st_size if page_path.exists() else 0
 
-            pages.append(LivingPage(
-                entity=row["name"],
-                entity_type=row["entity_type"],
-                path=page_path,
-                memory_ids=mem_ids,
-                backlinks=backlinks,
-                created_at=row["created_at"],
-                updated_at=row["updated_at"],
-                size_bytes=size,
-            ))
+            pages.append(
+                LivingPage(
+                    entity=row["name"],
+                    entity_type=row["entity_type"],
+                    path=page_path,
+                    memory_ids=mem_ids,
+                    backlinks=backlinks,
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                    size_bytes=size,
+                )
+            )
 
         db.close()
         return pages
@@ -989,11 +1068,7 @@ class LivingWikiEngine:
         entity_count = db.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         mem_links = db.execute("SELECT COUNT(*) FROM entity_memories").fetchone()[0]
         link_count = db.execute("SELECT COUNT(*) FROM backlinks").fetchone()[0]
-        type_dist = dict(
-            db.execute(
-                "SELECT entity_type, COUNT(*) FROM entities GROUP BY entity_type"
-            ).fetchall()
-        )
+        type_dist = dict(db.execute("SELECT entity_type, COUNT(*) FROM entities GROUP BY entity_type").fetchall())
 
         db.close()
         return {

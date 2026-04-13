@@ -33,6 +33,7 @@ def mem_with_versions(mem):
     # For true version history, we need the same item to be updated
     # Let's use storage.upsert directly
     from memos.models import MemoryItem
+
     updated_item1 = MemoryItem(
         id=item1.id,
         content="Updated content about AI and ML",
@@ -58,7 +59,7 @@ def mem_with_versions(mem):
 @pytest.fixture
 def mock_mem(mem):
     """Patch _get_memos to return our shared MemOS instance."""
-    with patch('memos.cli.commands_versioning._get_memos', return_value=mem):
+    with patch("memos.cli.commands_versioning._get_memos", return_value=mem):
         yield mem
 
 

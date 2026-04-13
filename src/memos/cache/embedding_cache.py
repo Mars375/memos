@@ -19,6 +19,7 @@ from typing import Optional
 @dataclass
 class CacheStats:
     """Cache performance statistics."""
+
     hits: int = 0
     misses: int = 0
     evictions: int = 0
@@ -135,9 +136,7 @@ class EmbeddingCache:
 
                 # Check TTL
                 if self._ttl > 0 and (now - row[1]) > self._ttl:
-                    conn.execute(
-                        "DELETE FROM embedding_cache WHERE cache_key = ?", (key,)
-                    )
+                    conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
                     conn.commit()
                     self._misses += 1
                     return None
@@ -197,9 +196,7 @@ class EmbeddingCache:
         key = self._make_key(text, model)
         with self._lock:
             with self._connect() as conn:
-                cursor = conn.execute(
-                    "DELETE FROM embedding_cache WHERE cache_key = ?", (key,)
-                )
+                cursor = conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
                 conn.commit()
                 return cursor.rowcount > 0
 
@@ -211,9 +208,7 @@ class EmbeddingCache:
         """
         with self._lock:
             with self._connect() as conn:
-                count = conn.execute(
-                    "SELECT COUNT(*) FROM embedding_cache"
-                ).fetchone()[0]
+                count = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
                 conn.execute("DELETE FROM embedding_cache")
                 conn.commit()
                 return count
@@ -222,9 +217,7 @@ class EmbeddingCache:
         """Get cache performance statistics."""
         with self._lock:
             with self._connect() as conn:
-                size = conn.execute(
-                    "SELECT COUNT(*) FROM embedding_cache"
-                ).fetchone()[0]
+                size = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
 
         total = self._hits + self._misses
         hit_rate = (self._hits / total) if total > 0 else 0.0
@@ -241,9 +234,7 @@ class EmbeddingCache:
     def _evict_if_needed(self) -> None:
         """Evict oldest-accessed entries if over max_size."""
         with self._connect() as conn:
-            count = conn.execute(
-                "SELECT COUNT(*) FROM embedding_cache"
-            ).fetchone()[0]
+            count = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
 
             if count <= self._max_size:
                 return
@@ -263,9 +254,7 @@ class EmbeddingCache:
 
     def __len__(self) -> int:
         with self._connect() as conn:
-            return conn.execute(
-                "SELECT COUNT(*) FROM embedding_cache"
-            ).fetchone()[0]
+            return conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
 
     def __contains__(self, text: str) -> bool:
         return self.get(text) is not None

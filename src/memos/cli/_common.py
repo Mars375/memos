@@ -100,11 +100,10 @@ def _parse_kv_options(values: list[str] | None) -> dict[str, object]:
     return parsed
 
 
-
-
 def _get_kg(ns: argparse.Namespace):
     """Return a KnowledgeGraph instance from CLI namespace."""
     from ..knowledge_graph import KnowledgeGraph
+
     db_path = getattr(ns, "kg_db", None)
     return KnowledgeGraph(db_path=db_path)
 
@@ -113,12 +112,11 @@ def _get_kg_bridge(ns: argparse.Namespace, memos: Any | None = None):
     """Return a KGBridge instance from CLI namespace."""
     from ..kg_bridge import KGBridge
     from ..knowledge_graph import KnowledgeGraph
+
     if memos is None:
         memos = _get_memos(ns)
     kg = KnowledgeGraph(db_path=getattr(ns, "kg_db", None))
     return KGBridge(memos, kg)
-
-
 
 
 def _ts(val) -> str:
@@ -126,12 +124,11 @@ def _ts(val) -> str:
     if val is None:
         return ""
     from datetime import datetime, timezone
+
     try:
         return datetime.fromtimestamp(val, tz=timezone.utc).strftime("%Y-%m-%d")
     except Exception:
         return str(val)
-
-
 
 
 def _parse_timestamp(ts_str: str) -> float:
@@ -147,8 +144,14 @@ def _parse_timestamp(ts_str: str) -> float:
             return now - float(ts_str[:-1]) * units[ts_str[-1]]
         except (ValueError, IndexError):
             pass
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M",
-                "%Y-%m-%dT%H:%M%z", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+    for fmt in (
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M",
+        "%Y-%m-%dT%H:%M%z",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+    ):
         try:
             dt = datetime.strptime(ts_str, fmt)
             if dt.tzinfo is None:
@@ -164,16 +167,11 @@ def _fmt_ts(epoch: float) -> str:
     return datetime.fromtimestamp(epoch).strftime("%Y-%m-%d %H:%M:%S")
 
 
-
-
-
-
 def _get_palace(ns: argparse.Namespace):
     """Return a PalaceIndex using the --db flag or the default path."""
     from ..palace import PalaceIndex
+
     db = getattr(ns, "palace_db", None) or None
     if db:
         return PalaceIndex(db_path=db)
     return PalaceIndex()
-
-

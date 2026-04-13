@@ -22,6 +22,7 @@ try:
     from fastapi import FastAPI
     from fastapi.requests import Request
     from fastapi.responses import JSONResponse, StreamingResponse
+
     _FASTAPI_AVAILABLE = True
 except ImportError:
     _FASTAPI_AVAILABLE = False
@@ -30,9 +31,7 @@ __all__ = ["create_mcp_app", "run_stdio", "TOOLS", "_dispatch", "add_mcp_routes"
 
 _MCP_VERSION = "2025-03-26"
 
-_CORS_ALLOWED_ORIGINS = os.environ.get(
-    "MEMOS_CORS_ORIGINS", "*"
-)
+_CORS_ALLOWED_ORIGINS = os.environ.get("MEMOS_CORS_ORIGINS", "*")
 
 _CORS_HEADERS = {
     "Access-Control-Allow-Origin": _CORS_ALLOWED_ORIGINS,
@@ -51,8 +50,16 @@ TOOLS = [
                 "query": {"type": "string", "description": "Search query"},
                 "top_k": {"type": "integer", "default": 5, "description": "Number of results"},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Include tags (ANY match)"},
-                "require_tags": {"type": "array", "items": {"type": "string"}, "description": "Tags that must all be present"},
-                "exclude_tags": {"type": "array", "items": {"type": "string"}, "description": "Tags that must not be present"},
+                "require_tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags that must all be present",
+                },
+                "exclude_tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags that must not be present",
+                },
                 "min_importance": {"type": "number", "description": "Minimum importance filter"},
                 "max_importance": {"type": "number", "description": "Maximum importance filter"},
                 "created_after": {"type": "string", "description": "Only memories created after this ISO date"},
@@ -115,7 +122,10 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "entity": {"type": "string", "description": "Entity name to query"},
-                "time": {"type": "string", "description": "Point in time (epoch, ISO 8601, or relative). Defaults to now."},
+                "time": {
+                    "type": "string",
+                    "description": "Point in time (epoch, ISO 8601, or relative). Defaults to now.",
+                },
                 "direction": {"type": "string", "enum": ["both", "subject", "object"], "default": "both"},
             },
             "required": ["entity"],
@@ -156,7 +166,11 @@ TOOLS = [
                 "top_k": {"type": "integer", "default": 10, "description": "Max results per source"},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter memories by tags"},
                 "min_score": {"type": "number", "default": 0.0, "description": "Minimum memory score"},
-                "max_context_chars": {"type": "integer", "default": 2000, "description": "Max characters for fused context"}
+                "max_context_chars": {
+                    "type": "integer",
+                    "default": 2000,
+                    "description": "Max characters for fused context",
+                },
             },
             "required": ["query"],
         },
@@ -317,7 +331,9 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
                 filter_after=_parse_date(args.get("created_after")),
                 filter_before=_parse_date(args.get("created_before")),
                 retrieval_mode=args.get("retrieval_mode", "semantic"),
-                tag_filter={"require": require_tags, "exclude": exclude_tags} if (require_tags or exclude_tags) else None,
+                tag_filter={"require": require_tags, "exclude": exclude_tags}
+                if (require_tags or exclude_tags)
+                else None,
                 min_importance=args.get("min_importance"),
                 max_importance=args.get("max_importance"),
             )
@@ -326,10 +342,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             lines = []
             for r in results:
                 tag_str = f"[{', '.join(r.item.tags)}]" if r.item.tags else ""
-                lines.append(
-                    f"[{r.score:.3f}] {r.item.content} {tag_str}"
-                    f" (importance={r.item.importance:.2f})"
-                )
+                lines.append(f"[{r.score:.3f}] {r.item.content} {tag_str} (importance={r.item.importance:.2f})")
             return _text("\n".join(lines))
 
         elif tool == "memory_save":
@@ -364,6 +377,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "kg_add_fact":
             from .knowledge_graph import KnowledgeGraph
+
             subject = args.get("subject", "").strip()
             predicate = args.get("predicate", "").strip()
             obj = args.get("object", "").strip()
@@ -386,6 +400,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "kg_query_entity":
             from .knowledge_graph import KnowledgeGraph
+
             entity = args.get("entity", "").strip()
             if not entity:
                 return _error("entity is required")
@@ -405,6 +420,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "kg_timeline":
             from .knowledge_graph import KnowledgeGraph
+
             entity = args.get("entity", "").strip()
             if not entity:
                 return _error("entity is required")
@@ -421,6 +437,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
         elif tool == "memory_recall_enriched":
             from .kg_bridge import KGBridge
             from .knowledge_graph import KnowledgeGraph
+
             query = args.get("query", "").strip()
             if not query:
                 return _error("query is required")
@@ -451,6 +468,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
         elif tool == "brain_search":
             from .brain import BrainSearch
             from .knowledge_graph import KnowledgeGraph
+
             query = args.get("query", "").strip()
             if not query:
                 return _error("query is required")
@@ -512,6 +530,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "memory_wake_up":
             from .context import ContextStack
+
             cs = ContextStack(memos)
             max_chars = int(args.get("max_chars", 2000))
             l1_top = int(args.get("l1_top", 15))
@@ -521,6 +540,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "memory_context_for":
             from .context import ContextStack
+
             query = args.get("query", "").strip()
             if not query:
                 return _error("query is required")
@@ -533,6 +553,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
         elif tool == "memory_sync_check":
             from .conflict import ConflictDetector
             from .sharing.models import MemoryEnvelope
+
             envelope_data = args.get("envelope", {})
             if not envelope_data:
                 return _error("envelope is required")
@@ -543,7 +564,9 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             detector = ConflictDetector()
             report = detector.detect(memos, envelope)
             rdict = report.to_dict()
-            lines = [f"Sync check: {rdict['total_remote']} remote, {rdict['new_memories']} new, {rdict['unchanged']} unchanged, {rdict['conflict_count']} conflicts"]
+            lines = [
+                f"Sync check: {rdict['total_remote']} remote, {rdict['new_memories']} new, {rdict['unchanged']} unchanged, {rdict['conflict_count']} conflicts"
+            ]
             for c in report.conflicts:
                 types = ", ".join(t.value for t in c.conflict_types)
                 lines.append(f"  \u26a0 {c.memory_id[:12]}\u2026 [{types}]")
@@ -554,6 +577,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
         elif tool == "memory_sync_apply":
             from .conflict import ConflictDetector, ResolutionStrategy
             from .sharing.models import MemoryEnvelope
+
             envelope_data = args.get("envelope", {})
             if not envelope_data:
                 return _error("envelope is required")
@@ -570,9 +594,13 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             report = detector.detect(memos, envelope)
             if args.get("dry_run", False):
                 detector.resolve(report.conflicts, strategy)
-                return _text(f"Dry run: {len(report.conflicts)} conflicts would be resolved with {strategy.value}, {report.new_memories} new memories added")
+                return _text(
+                    f"Dry run: {len(report.conflicts)} conflicts would be resolved with {strategy.value}, {report.new_memories} new memories added"
+                )
             report = detector.apply(memos, report, strategy)
-            return _text(f"Sync applied ({strategy.value}): {report.applied} applied, {report.skipped} skipped, {len(report.conflicts)} conflicts resolved")
+            return _text(
+                f"Sync applied ({strategy.value}): {report.applied} applied, {report.skipped} skipped, {len(report.conflicts)} conflicts resolved"
+            )
 
         else:
             return _error(f"Unknown tool: {tool}")
@@ -639,11 +667,15 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
         method = body.get("method", "")
         params = body.get("params") or {}
         if method == "initialize":
-            return _ok(req_id, {
-                "protocolVersion": _MCP_VERSION,
-                "capabilities": {"tools": {}, "experimental": {}},
-                "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
-            }, sid)
+            return _ok(
+                req_id,
+                {
+                    "protocolVersion": _MCP_VERSION,
+                    "capabilities": {"tools": {}, "experimental": {}},
+                    "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
+                },
+                sid,
+            )
         elif method in ("notifications/initialized", "initialized"):
             return JSONResponse({}, headers=_h(sid))
         elif method == "tools/list":
@@ -678,7 +710,12 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
             return StreamingResponse(
                 _sse(),
                 media_type="text/event-stream",
-                headers={**_CORS_HEADERS, "Mcp-Session-Id": sid, "Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                headers={
+                    **_CORS_HEADERS,
+                    "Mcp-Session-Id": sid,
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                },
             )
 
         return await _handle(body, sid)
@@ -701,15 +738,18 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
 
     @app.get("/.well-known/mcp.json")
     async def mcp_discovery() -> JSONResponse:
-        return JSONResponse({
-            "schema_version": "1.0",
-            "name": "memos-mcp",
-            "description": "MemOS — Memory Operating System. Search, save, and recall memories for AI agents.",
-            "version": "1.0.0",
-            "protocol_version": _MCP_VERSION,
-            "endpoint": "/mcp",
-            "capabilities": {"tools": True},
-        }, headers=_CORS_HEADERS)
+        return JSONResponse(
+            {
+                "schema_version": "1.0",
+                "name": "memos-mcp",
+                "description": "MemOS — Memory Operating System. Search, save, and recall memories for AI agents.",
+                "version": "1.0.0",
+                "protocol_version": _MCP_VERSION,
+                "endpoint": "/mcp",
+                "capabilities": {"tools": True},
+            },
+            headers=_CORS_HEADERS,
+        )
 
 
 def create_mcp_app(memos: Any) -> Any:
@@ -740,11 +780,17 @@ def create_mcp_app(memos: Any) -> Any:
         method = body.get("method", "")
         params = body.get("params") or {}
         if method == "initialize":
-            return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {
-                "protocolVersion": _MCP_VERSION,
-                "capabilities": {"tools": {}, "experimental": {}},
-                "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
-            }})
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "protocolVersion": _MCP_VERSION,
+                        "capabilities": {"tools": {}, "experimental": {}},
+                        "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
+                    },
+                }
+            )
         elif method == "tools/list":
             return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}})
         elif method == "tools/call":
@@ -752,7 +798,10 @@ def create_mcp_app(memos: Any) -> Any:
             return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": result})
         elif method == "ping":
             return JSONResponse({"jsonrpc": "2.0", "id": req_id, "result": {}})
-        return JSONResponse({"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}, status_code=404)
+        return JSONResponse(
+            {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": f"Method not found: {method}"}},
+            status_code=404,
+        )
 
     add_mcp_routes(app, memos)
     return app
@@ -760,6 +809,7 @@ def create_mcp_app(memos: Any) -> Any:
 
 def run_stdio(memos: Any) -> None:
     """Run MCP server over stdio (for Claude Code / Cursor direct integration)."""
+
     def _send(obj: dict) -> None:
         sys.stdout.write(json.dumps(obj) + "\n")
         sys.stdout.flush()
@@ -779,11 +829,17 @@ def run_stdio(memos: Any) -> None:
         params = body.get("params", {})
 
         if method == "initialize":
-            _send({"jsonrpc": "2.0", "id": req_id, "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
-            }})
+            _send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
+                    },
+                }
+            )
         elif method == "tools/list":
             _send({"jsonrpc": "2.0", "id": req_id, "result": {"tools": TOOLS}})
         elif method == "tools/call":

@@ -30,6 +30,7 @@ class _CachedOllamaEF:
     def _db(self):
         import pathlib
         import sqlite3
+
         pathlib.Path(self._cache_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._cache_path, timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")
@@ -73,6 +74,7 @@ class _CachedOllamaEF:
 
     def _call_ollama(self, text: str) -> list[float]:
         import urllib.request
+
         payload = json.dumps({"model": self._embed_model, "input": text}).encode()
         req = urllib.request.Request(
             f"{self._embed_host}/api/embed",
@@ -154,6 +156,7 @@ class ChromaBackend(StorageBackend):
             return None
         if self._ef is None:
             import os
+
             cache_path = os.path.expanduser(self._embed_cache)
             self._ef = _CachedOllamaEF(self._embed_host, self._embed_model, cache_path)
         return self._ef
@@ -164,10 +167,7 @@ class ChromaBackend(StorageBackend):
         try:
             import chromadb
         except ImportError:
-            raise ImportError(
-                "chromadb is required for ChromaBackend. "
-                "Install with: pip install memos[chroma]"
-            )
+            raise ImportError("chromadb is required for ChromaBackend. Install with: pip install memos[chroma]")
         self._client = chromadb.HttpClient(host=self._host, port=self._port)
 
     def _collection_for(self, namespace: str = ""):
@@ -232,11 +232,7 @@ class ChromaBackend(StorageBackend):
     def list_namespaces(self) -> list[str]:
         self._ensure_client()
         prefix = f"{self.COLLECTION_PREFIX}__"
-        return sorted(
-            c.name[len(prefix):]
-            for c in self._client.list_collections()
-            if c.name.startswith(prefix)
-        )
+        return sorted(c.name[len(prefix) :] for c in self._client.list_collections() if c.name.startswith(prefix))
 
     @staticmethod
     def _doc_to_item(results, idx: int, doc_idx: int = 0) -> MemoryItem:

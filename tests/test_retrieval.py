@@ -1,4 +1,5 @@
 """Tests for HybridRetriever and BM25 (P20)."""
+
 from __future__ import annotations
 
 import pytest
@@ -186,10 +187,7 @@ def test_hybridretriever_rerank_orders_by_relevance() -> None:
 
 def test_hybridretriever_rerank_preserves_count() -> None:
     retriever = HybridRetriever()
-    candidates = [
-        _FakeRecallResult(f"content about topic {i}", score=float(i) / 10, id=str(i))
-        for i in range(10)
-    ]
+    candidates = [_FakeRecallResult(f"content about topic {i}", score=float(i) / 10, id=str(i)) for i in range(10)]
     result = retriever.rerank("topic", candidates)
     assert len(result) == 10
 

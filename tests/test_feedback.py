@@ -47,8 +47,9 @@ class TestFeedbackStats:
         assert s.to_dict()["avg_feedback_score"] == 0.0
 
     def test_stats_to_dict(self):
-        s = FeedbackStats(total_feedback=10, relevant_count=7, not_relevant_count=3,
-                         items_with_feedback=5, avg_feedback_score=0.4)
+        s = FeedbackStats(
+            total_feedback=10, relevant_count=7, not_relevant_count=3, items_with_feedback=5, avg_feedback_score=0.4
+        )
         d = s.to_dict()
         assert d["total_feedback"] == 10
         assert d["relevant_count"] == 7
@@ -159,7 +160,7 @@ class TestFeedbackStatsIntegration:
         assert stats.relevant_count == 2
         assert stats.not_relevant_count == 1
         assert stats.items_with_feedback == 2
-        assert stats.avg_feedback_score == pytest.approx(1/3)
+        assert stats.avg_feedback_score == pytest.approx(1 / 3)
 
     def test_stats_to_dict(self, memos):
         item = memos.learn("test", tags=["test"])

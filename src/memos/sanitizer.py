@@ -17,6 +17,7 @@ class Severity(Enum):
 @dataclass
 class SanitizeIssue:
     """A detected sanitization issue."""
+
     rule: str
     severity: Severity
     description: str
@@ -25,32 +26,27 @@ class SanitizeIssue:
 
 # Patterns that could indicate prompt injection in memory content
 _INJECTION_PATTERNS = [
-    (r"(?i)ignore\s+(all\s+)?previous\s+instructions", Severity.CRITICAL,
-     "Ignore-previous-instructions pattern"),
-    (r"(?i)you\s+are\s+now\s+(a|an)\s+\w+", Severity.HIGH,
-     "Role override pattern"),
-    (r"(?i)system\s*:\s*", Severity.HIGH,
-     "System message injection"),
-    (r"(?i)(forget|discard|erase|delete|wipe)\s+(all\s+)?(your|the)?\s*(memory|memories|instructions|context|history)",
-     Severity.CRITICAL, "Memory wipe instruction"),
-    (r"<\|im_start\|>|<\|im_end\|>", Severity.HIGH,
-     "ChatML token injection"),
-    (r"(?i)^(human|assistant|system)\s*:", Severity.MEDIUM,
-     "Role prefix injection"),
-    (r"\[INST\]|\[/INST\]", Severity.HIGH,
-     "Llama instruction token"),
-    (r"(?i)api[_\s-]*key[^a-z]{0,5}(?:is\s+)?(sk-[a-z0-9]+|\S{8,})", Severity.MEDIUM,
-     "API key in memory (credential leak)"),
-    (r"(?i)password\s*[=:]\s*\S+", Severity.MEDIUM,
-     "Password in memory (credential leak)"),
-    (r"(?i)secret[_-]?key\s*[=:]\s*\S+", Severity.MEDIUM,
-     "Secret key in memory (credential leak)"),
-    (r"(?i)token\s*[=:]\s*['\"]?\w{20,}", Severity.MEDIUM,
-     "Long token value (possible credential)"),
-    (r"(?i)\bssh[-_]\w+\s*[=:]", Severity.LOW,
-     "SSH credential pattern"),
-    (r"(?i)private[-_]key\s*[=:]", Severity.MEDIUM,
-     "Private key reference"),
+    (r"(?i)ignore\s+(all\s+)?previous\s+instructions", Severity.CRITICAL, "Ignore-previous-instructions pattern"),
+    (r"(?i)you\s+are\s+now\s+(a|an)\s+\w+", Severity.HIGH, "Role override pattern"),
+    (r"(?i)system\s*:\s*", Severity.HIGH, "System message injection"),
+    (
+        r"(?i)(forget|discard|erase|delete|wipe)\s+(all\s+)?(your|the)?\s*(memory|memories|instructions|context|history)",
+        Severity.CRITICAL,
+        "Memory wipe instruction",
+    ),
+    (r"<\|im_start\|>|<\|im_end\|>", Severity.HIGH, "ChatML token injection"),
+    (r"(?i)^(human|assistant|system)\s*:", Severity.MEDIUM, "Role prefix injection"),
+    (r"\[INST\]|\[/INST\]", Severity.HIGH, "Llama instruction token"),
+    (
+        r"(?i)api[_\s-]*key[^a-z]{0,5}(?:is\s+)?(sk-[a-z0-9]+|\S{8,})",
+        Severity.MEDIUM,
+        "API key in memory (credential leak)",
+    ),
+    (r"(?i)password\s*[=:]\s*\S+", Severity.MEDIUM, "Password in memory (credential leak)"),
+    (r"(?i)secret[_-]?key\s*[=:]\s*\S+", Severity.MEDIUM, "Secret key in memory (credential leak)"),
+    (r"(?i)token\s*[=:]\s*['\"]?\w{20,}", Severity.MEDIUM, "Long token value (possible credential)"),
+    (r"(?i)\bssh[-_]\w+\s*[=:]", Severity.LOW, "SSH credential pattern"),
+    (r"(?i)private[-_]key\s*[=:]", Severity.MEDIUM, "Private key reference"),
 ]
 
 # Maximum memory length to prevent token flooding
@@ -71,23 +67,27 @@ class MemorySanitizer:
 
         # Check length
         if len(content) > MAX_MEMORY_LENGTH:
-            issues.append(SanitizeIssue(
-                rule="max_length",
-                severity=Severity.MEDIUM,
-                description=f"Memory exceeds {MAX_MEMORY_LENGTH} chars ({len(content)})",
-                match=content[:50],
-            ))
+            issues.append(
+                SanitizeIssue(
+                    rule="max_length",
+                    severity=Severity.MEDIUM,
+                    description=f"Memory exceeds {MAX_MEMORY_LENGTH} chars ({len(content)})",
+                    match=content[:50],
+                )
+            )
 
         # Check injection patterns
         for pattern, severity, description in _INJECTION_PATTERNS:
             match = re.search(pattern, content)
             if match:
-                issues.append(SanitizeIssue(
-                    rule=f"pattern_{pattern[:20]}",
-                    severity=severity,
-                    description=description,
-                    match=match.group(),
-                ))
+                issues.append(
+                    SanitizeIssue(
+                        rule=f"pattern_{pattern[:20]}",
+                        severity=severity,
+                        description=description,
+                        match=match.group(),
+                    )
+                )
 
         return issues
 

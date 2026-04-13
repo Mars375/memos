@@ -1,4 +1,5 @@
 """Tests for SkillsExporter — P10 skills-as-markdown."""
+
 from __future__ import annotations
 
 import argparse
@@ -119,7 +120,6 @@ class TestCLI:
     def test_skills_export_cli_command_registered(self):
         """skills-export must appear in the memos help output."""
         import subprocess
-        result = subprocess.run(
-            ["memos", "--help"], capture_output=True, text=True
-        )
+
+        result = subprocess.run(["memos", "--help"], capture_output=True, text=True)
         assert "skills-export" in result.stdout or "skills-export" in result.stderr

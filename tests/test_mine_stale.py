@@ -1,4 +1,5 @@
 """Tests for MinerCache.staleness_report() — P5 staleness detection."""
+
 import hashlib
 import time
 

@@ -66,6 +66,7 @@ class MemOS:
             import os as _os
 
             from .storage.chroma_backend import ChromaBackend
+
             # Only enable client-side Ollama embeddings when MEMOS_EMBED_HOST is
             # explicitly configured. When unset, Chroma uses its built-in ONNX
             # embedder (backward compatible with existing collections).
@@ -78,6 +79,7 @@ class MemOS:
             )
         elif backend == "qdrant":
             from .storage.qdrant_backend import QdrantBackend
+
             store = QdrantBackend(
                 host=kwargs.get("qdrant_host", "localhost"),
                 port=kwargs.get("qdrant_port", 6333),
@@ -89,6 +91,7 @@ class MemOS:
             )
         elif backend == "pinecone":
             from .storage.pinecone_backend import PineconeBackend
+
             store = PineconeBackend(
                 api_key=kwargs.get("pinecone_api_key", ""),
                 environment=kwargs.get("pinecone_environment"),
@@ -128,6 +131,7 @@ class MemOS:
         if _use_local:
             local_model = kwargs.get("local_model") or "all-MiniLM-L6-v2"
             from .embeddings import LocalEmbedder
+
             retrieval_embedder = LocalEmbedder(
                 model=local_model,
                 device=kwargs.get("local_device"),
@@ -192,7 +196,6 @@ class MemOS:
             retention_days=kwargs.get("analytics_retention_days", 90),
         )
 
-
         # Dedup engine (prevent duplicate memories at write time)
         self._dedup_enabled: bool = kwargs.get("dedup_enabled", True)
         self._dedup_threshold: float = kwargs.get("dedup_threshold", 0.95)
@@ -216,6 +219,7 @@ class MemOS:
             Optional path to the wiki directory.  Defaults to ``~/.memos/wiki``.
         """
         from .wiki_living import LivingWikiEngine
+
         self._compounding_wiki = LivingWikiEngine(self, wiki_dir=wiki_dir)
         self._compounding_ingest = True
 
@@ -375,13 +379,17 @@ class MemOS:
         self._versioning.record_version(item, source="learn")
 
         # Emit event
-        self._events.emit_sync("learned", {
-            "id": item.id,
-            "content": item.content[:200],
-            "tags": item.tags,
-            "importance": item.importance,
-            "ttl": item.ttl,
-        }, namespace=self._namespace)
+        self._events.emit_sync(
+            "learned",
+            {
+                "id": item.id,
+                "content": item.content[:200],
+                "tags": item.tags,
+                "importance": item.importance,
+                "ttl": item.ttl,
+            },
+            namespace=self._namespace,
+        )
 
         # Compounding ingest (P8): auto-update wiki pages on learn
         if self._compounding_ingest and self._compounding_wiki is not None:
@@ -391,7 +399,6 @@ class MemOS:
                 pass  # Never let wiki update break learn()
 
         return item
-
 
     # ── Dedup ──────────────────────────────────────────
 
@@ -498,10 +505,12 @@ class MemOS:
             if self._sanitize:
                 issues = MemorySanitizer.check(content)
                 if issues:
-                    result["errors"].append({
-                        "content": content[:100],
-                        "reason": f"Sanitization failed: {issues}",
-                    })
+                    result["errors"].append(
+                        {
+                            "content": content[:100],
+                            "reason": f"Sanitization failed: {issues}",
+                        }
+                    )
                     if not continue_on_error:
                         raise ValueError(f"Memory failed sanitization: {issues}")
                     continue
@@ -531,11 +540,13 @@ class MemOS:
         # Index all valid items
         for item in valid_items:
             self._retrieval.index(item)
-            result["items"].append({
-                "id": item.id,
-                "content": item.content[:100],
-                "tags": item.tags,
-            })
+            result["items"].append(
+                {
+                    "id": item.id,
+                    "content": item.content[:100],
+                    "tags": item.tags,
+                }
+            )
 
         result["learned"] = len(valid_items)
 
@@ -546,12 +557,16 @@ class MemOS:
         # Emit batch event
         if valid_items:
             tag_union = sorted({tag for item in valid_items for tag in item.tags})
-            self._events.emit_sync("batch_learned", {
-                "count": len(valid_items),
-                "skipped": result["skipped"],
-                "errors": len(result["errors"]),
-                "tags": tag_union,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "batch_learned",
+                {
+                    "count": len(valid_items),
+                    "skipped": result["skipped"],
+                    "errors": len(result["errors"]),
+                    "tags": tag_union,
+                },
+                namespace=self._namespace,
+            )
 
         return result
 
@@ -616,12 +631,16 @@ class MemOS:
             for result in final_results:
                 result.item.touch()
                 self._store.upsert(result.item, namespace=self._namespace)
-                self._events.emit_sync("recalled", {
-                    "id": result.item.id,
-                    "query": query,
-                    "score": result.score,
-                    "tags": result.item.tags,
-                }, namespace=self._namespace)
+                self._events.emit_sync(
+                    "recalled",
+                    {
+                        "id": result.item.id,
+                        "query": query,
+                        "score": result.score,
+                        "tags": result.item.tags,
+                    },
+                    namespace=self._namespace,
+                )
         finally:
             try:
                 self._analytics.track_recall(query, final_results, (time.perf_counter() - started) * 1000.0)
@@ -650,6 +669,7 @@ class MemOS:
             namespace=self._namespace,
             decay=self._decay,
         )
+
         def _coerce_tags(values: Any) -> list[str]:
             if not values:
                 return []
@@ -701,6 +721,7 @@ class MemOS:
             yield result
             # Allow the event loop to interleave other work
             import asyncio
+
             await asyncio.sleep(0)
 
     def prune(
@@ -724,13 +745,17 @@ class MemOS:
 
             # Emit pruned event
             if candidates:
-                self._events.emit_sync("pruned", {
-                    "count": len(candidates),
-                    "ids": [c.id for c in candidates],
-                    "threshold": threshold,
-                    "max_age_days": max_age_days,
-                    "tags": tag_union,
-                }, namespace=self._namespace)
+                self._events.emit_sync(
+                    "pruned",
+                    {
+                        "count": len(candidates),
+                        "ids": [c.id for c in candidates],
+                        "threshold": threshold,
+                        "max_age_days": max_age_days,
+                        "tags": tag_union,
+                    },
+                    namespace=self._namespace,
+                )
 
         return candidates
 
@@ -750,10 +775,14 @@ class MemOS:
             for item in expired:
                 self._store.delete(item.id, namespace=self._namespace)
             if expired:
-                self._events.emit_sync("expired_pruned", {
-                    "count": len(expired),
-                    "ids": [i.id for i in expired],
-                }, namespace=self._namespace)
+                self._events.emit_sync(
+                    "expired_pruned",
+                    {
+                        "count": len(expired),
+                        "ids": [i.id for i in expired],
+                    },
+                    namespace=self._namespace,
+                )
 
         return expired
 
@@ -765,11 +794,15 @@ class MemOS:
             if tag not in item.tags:
                 continue
             if self._store.delete(item.id, namespace=self._namespace):
-                self._events.emit_sync("forgotten", {
-                    "id": item.id,
-                    "content": item.content[:200],
-                    "tags": item.tags,
-                }, namespace=self._namespace)
+                self._events.emit_sync(
+                    "forgotten",
+                    {
+                        "id": item.id,
+                        "content": item.content[:200],
+                        "tags": item.tags,
+                    },
+                    namespace=self._namespace,
+                )
                 removed += 1
         return removed
 
@@ -778,20 +811,28 @@ class MemOS:
         self._check_acl("delete")
         item = self._store.get(content_or_id, namespace=self._namespace)
         if self._store.delete(content_or_id, namespace=self._namespace):
-            self._events.emit_sync("forgotten", {
-                "id": content_or_id,
-                "content": item.content[:200] if item else "",
-                "tags": item.tags if item else [],
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "forgotten",
+                {
+                    "id": content_or_id,
+                    "content": item.content[:200] if item else "",
+                    "tags": item.tags if item else [],
+                },
+                namespace=self._namespace,
+            )
             return True
         content_id = generate_id(content_or_id)
         item = self._store.get(content_id, namespace=self._namespace)
         if self._store.delete(content_id, namespace=self._namespace):
-            self._events.emit_sync("forgotten", {
-                "id": content_id,
-                "content": item.content[:200] if item else "",
-                "tags": item.tags if item else [],
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "forgotten",
+                {
+                    "id": content_id,
+                    "content": item.content[:200] if item else "",
+                    "tags": item.tags if item else [],
+                },
+                namespace=self._namespace,
+            )
             return True
         return False
 
@@ -880,11 +921,15 @@ class MemOS:
             item.tags = new_tags
             item.accessed_at = time.time()
             self._store.upsert(item, namespace=self._namespace)
-            self._events.emit_sync("tag_renamed", {
-                "id": item.id,
-                "old_tag": old_tag,
-                "new_tag": new_tag,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "tag_renamed",
+                {
+                    "id": item.id,
+                    "old_tag": old_tag,
+                    "new_tag": new_tag,
+                },
+                namespace=self._namespace,
+            )
             updated += 1
         return updated
 
@@ -908,13 +953,16 @@ class MemOS:
             item.tags = new_tags
             item.accessed_at = time.time()
             self._store.upsert(item, namespace=self._namespace)
-            self._events.emit_sync("tag_deleted", {
-                "id": item.id,
-                "tag": tag,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "tag_deleted",
+                {
+                    "id": item.id,
+                    "tag": tag,
+                },
+                namespace=self._namespace,
+            )
             updated += 1
         return updated
-
 
     def search(self, q: str, limit: int = 20) -> list[MemoryItem]:
         """Simple keyword search across all memories."""
@@ -963,14 +1011,21 @@ class MemOS:
         if isinstance(role, str):
             role = Role(role)
         policy = self._acl.grant(
-            agent_id, namespace, role,
-            granted_by=granted_by, expires_at=expires_at,
+            agent_id,
+            namespace,
+            role,
+            granted_by=granted_by,
+            expires_at=expires_at,
         )
-        self._events.emit_sync("acl_granted", {
-            "agent_id": agent_id,
-            "namespace": namespace,
-            "role": role.value,
-        }, namespace=namespace)
+        self._events.emit_sync(
+            "acl_granted",
+            {
+                "agent_id": agent_id,
+                "namespace": namespace,
+                "role": role.value,
+            },
+            namespace=namespace,
+        )
         return policy.to_dict()
 
     def revoke_namespace_access(
@@ -984,10 +1039,14 @@ class MemOS:
         """
         removed = self._acl.revoke(agent_id, namespace)
         if removed:
-            self._events.emit_sync("acl_revoked", {
-                "agent_id": agent_id,
-                "namespace": namespace,
-            }, namespace=namespace)
+            self._events.emit_sync(
+                "acl_revoked",
+                {
+                    "agent_id": agent_id,
+                    "namespace": namespace,
+                },
+                namespace=namespace,
+            )
             return True
         return False
 
@@ -1011,14 +1070,19 @@ class MemOS:
     ) -> "ConsolidationResult":
         """Find and merge semantically similar memories."""
         from .consolidation.engine import ConsolidationEngine
+
         engine = ConsolidationEngine(similarity_threshold=similarity_threshold)
         result = engine.consolidate(self._store, merge_content=merge_content, dry_run=dry_run)
 
         if not dry_run and result.memories_merged > 0:
-            self._events.emit_sync("consolidated", {
-                "groups_found": result.groups_found,
-                "memories_merged": result.memories_merged,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "consolidated",
+                {
+                    "groups_found": result.groups_found,
+                    "memories_merged": result.memories_merged,
+                },
+                namespace=self._namespace,
+            )
 
         return result
 
@@ -1175,15 +1239,20 @@ class MemOS:
             Summary dict with total, path, size_bytes, compression.
         """
         from .parquet_io import export_parquet as _export
+
         items = self._store.list_all(namespace=self._namespace)
         result = _export(items, path, include_metadata=include_metadata, compression=compression)
 
-        self._events.emit_sync("exported", {
-            "format": "parquet",
-            "total": result["total"],
-            "path": result["path"],
-            "size_bytes": result["size_bytes"],
-        }, namespace=self._namespace)
+        self._events.emit_sync(
+            "exported",
+            {
+                "format": "parquet",
+                "total": result["total"],
+                "path": result["path"],
+                "size_bytes": result["size_bytes"],
+            },
+            namespace=self._namespace,
+        )
 
         return result
 
@@ -1232,11 +1301,15 @@ class MemOS:
             except Exception as e:
                 result["errors"].append(str(e))
 
-        self._events.emit_sync("imported", {
-            "format": "parquet",
-            "imported": result["imported"],
-            "skipped": result["skipped"],
-        }, namespace=self._namespace)
+        self._events.emit_sync(
+            "imported",
+            {
+                "format": "parquet",
+                "imported": result["imported"],
+                "skipped": result["skipped"],
+            },
+            namespace=self._namespace,
+        )
 
         return result
 
@@ -1365,13 +1438,17 @@ class MemOS:
         report = engine.compact(self._store)
 
         if not dry_run and report.total_removed > 0:
-            self._events.emit_sync("compacted", {
-                "total_removed": report.total_removed,
-                "archived": report.archived,
-                "dedup_merged": report.dedup_merged,
-                "stale_merged": report.stale_merged,
-                "clusters_compacted": report.clusters_compacted,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "compacted",
+                {
+                    "total_removed": report.total_removed,
+                    "archived": report.archived,
+                    "dedup_merged": report.dedup_merged,
+                    "stale_merged": report.stale_merged,
+                    "clusters_compacted": report.clusters_compacted,
+                },
+                namespace=self._namespace,
+            )
 
         return report.to_dict()
 
@@ -1406,12 +1483,16 @@ class MemOS:
                 self._retrieval.index(summary)
 
             if result.summary_count:
-                self._events.emit_sync("compressed", {
-                    "compressed_count": result.compressed_count,
-                    "summary_count": result.summary_count,
-                    "freed_bytes": result.freed_bytes,
-                    "threshold": threshold,
-                }, namespace=self._namespace)
+                self._events.emit_sync(
+                    "compressed",
+                    {
+                        "compressed_count": result.compressed_count,
+                        "summary_count": result.summary_count,
+                        "freed_bytes": result.freed_bytes,
+                        "threshold": threshold,
+                    },
+                    namespace=self._namespace,
+                )
 
         return result
 
@@ -1506,7 +1587,9 @@ class MemOS:
         """
         # First get current results
         current_results = self.recall(
-            query, top=top, filter_tags=filter_tags,
+            query,
+            top=top,
+            filter_tags=filter_tags,
             min_score=min_score,
         )
 
@@ -1517,19 +1600,25 @@ class MemOS:
             if version is not None:
                 old_item = version.to_memory_item()
                 # Keep the retrieval score from current search
-                time_travel_results.append(RecallResult(
-                    item=old_item,
-                    score=r.score,
-                    match_reason=r.match_reason,
-                ))
+                time_travel_results.append(
+                    RecallResult(
+                        item=old_item,
+                        score=r.score,
+                        match_reason=r.match_reason,
+                    )
+                )
 
         # Emit time-travel event
         if time_travel_results:
-            self._events.emit_sync("time_traveled", {
-                "query": query,
-                "timestamp": timestamp,
-                "results": len(time_travel_results),
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "time_traveled",
+                {
+                    "query": query,
+                    "timestamp": timestamp,
+                    "results": len(time_travel_results),
+                },
+                namespace=self._namespace,
+            )
 
         return sorted(time_travel_results, key=lambda x: x.score, reverse=True)[:top]
 
@@ -1563,15 +1652,21 @@ class MemOS:
             The restored MemoryItem, or None if version not found.
         """
         item = self._versioning.rollback(
-            self._store, item_id, version_number,
+            self._store,
+            item_id,
+            version_number,
             namespace=self._namespace,
         )
         if item is not None:
             self._retrieval.index(item)
-            self._events.emit_sync("rolled_back", {
-                "id": item_id,
-                "to_version": version_number,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "rolled_back",
+                {
+                    "id": item_id,
+                    "to_version": version_number,
+                },
+                namespace=self._namespace,
+            )
         return item
 
     def versioning_stats(self) -> dict[str, Any]:
@@ -1588,7 +1683,6 @@ class MemOS:
         at least keep_latest versions per item.
         """
         return self._versioning.gc(max_age_days=max_age_days, keep_latest=keep_latest)
-
 
     # ── Multi-Agent Sharing ──────────────────────────────────
 
@@ -1696,9 +1790,7 @@ class MemOS:
             learned.append(item)
         return learned
 
-    def list_shares(
-        self, agent: Optional[str] = None, status: Optional[ShareStatus] = None
-    ) -> list[ShareRequest]:
+    def list_shares(self, agent: Optional[str] = None, status: Optional[ShareStatus] = None) -> list[ShareRequest]:
         """List shares, optionally filtered by agent and status."""
         return self._sharing.list_shares(agent=agent, status=status)
 
@@ -1733,9 +1825,7 @@ class MemOS:
             ValueError: If feedback value is invalid.
         """
         if feedback not in ("relevant", "not-relevant"):
-            raise ValueError(
-                f"Invalid feedback: {feedback!r}. Must be 'relevant' or 'not-relevant'"
-            )
+            raise ValueError(f"Invalid feedback: {feedback!r}. Must be 'relevant' or 'not-relevant'")
         entry = FeedbackEntry(
             item_id=item_id,
             feedback=feedback,
@@ -1756,17 +1846,19 @@ class MemOS:
             item.importance = max(0.0, min(1.0, item.importance + delta))
             self._store.upsert(item, namespace=self._namespace)
 
-            self._events.emit_sync("feedback", {
-                "item_id": item_id,
-                "feedback": feedback,
-                "importance": item.importance,
-            }, namespace=self._namespace)
+            self._events.emit_sync(
+                "feedback",
+                {
+                    "item_id": item_id,
+                    "feedback": feedback,
+                    "importance": item.importance,
+                },
+                namespace=self._namespace,
+            )
 
         return entry
 
-    def get_feedback(
-        self, item_id: str | None = None, limit: int = 100
-    ) -> list[FeedbackEntry]:
+    def get_feedback(self, item_id: str | None = None, limit: int = 100) -> list[FeedbackEntry]:
         """Get feedback entries, optionally filtered by item_id."""
         entries: list[FeedbackEntry] = []
         if item_id:
@@ -1777,9 +1869,7 @@ class MemOS:
             all_items = self._store.list_all(namespace=self._namespace)
             for item in all_items:
                 if "_feedback" in item.metadata:
-                    entries.extend(
-                        FeedbackEntry.from_dict(d) for d in item.metadata["_feedback"]
-                    )
+                    entries.extend(FeedbackEntry.from_dict(d) for d in item.metadata["_feedback"])
         entries.sort(key=lambda e: e.created_at)
         return entries[-limit:]
 

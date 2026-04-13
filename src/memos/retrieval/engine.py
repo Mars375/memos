@@ -95,9 +95,13 @@ class RetrievalEngine:
         """
         # Fast path: delegate to Qdrant native hybrid search
         from ..storage.qdrant_backend import QdrantBackend
+
         if isinstance(self._store, QdrantBackend):
             return self._qdrant_hybrid_search(
-                query, top, filter_tags, namespace=namespace,
+                query,
+                top,
+                filter_tags,
+                namespace=namespace,
             )
 
         # Standard in-memory hybrid search
@@ -106,10 +110,7 @@ class RetrievalEngine:
         # Filter by tags if specified
         if filter_tags:
             tag_set = set(t.lower() for t in filter_tags)
-            all_items = [
-                item for item in all_items
-                if tag_set & set(t.lower() for t in item.tags)
-            ]
+            all_items = [item for item in all_items if tag_set & set(t.lower() for t in item.tags)]
 
         if not all_items:
             return []
@@ -126,10 +127,7 @@ class RetrievalEngine:
             # Tag bonus
             tag_bonus = 0.0
             if filter_tags:
-                tag_overlap = len(
-                    set(t.lower() for t in item.tags)
-                    & set(t.lower() for t in filter_tags)
-                )
+                tag_overlap = len(set(t.lower() for t in item.tags) & set(t.lower() for t in filter_tags))
                 tag_bonus = min(tag_overlap * 0.1, 0.3)
 
             # Semantic score
@@ -147,6 +145,7 @@ class RetrievalEngine:
 
             # Recency bonus (fades over 30 days)
             import time
+
             age_days = (time.time() - item.created_at) / 86400
             recency_bonus = max(0, 0.1 * (1 - age_days / 30))
 
@@ -169,12 +168,14 @@ class RetrievalEngine:
                     total=round(min(final_score, 1.0), 4),
                     backend="hybrid" if has_semantic else "keyword-only",
                 )
-                results.append(RecallResult(
-                    item=item,
-                    score=min(final_score, 1.0),
-                    match_reason=match_reason,
-                    score_breakdown=breakdown,
-                ))
+                results.append(
+                    RecallResult(
+                        item=item,
+                        score=min(final_score, 1.0),
+                        match_reason=match_reason,
+                        score_breakdown=breakdown,
+                    )
+                )
 
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top]
@@ -189,10 +190,12 @@ class RetrievalEngine:
     ) -> list[RecallResult]:
         """Delegate hybrid search to QdrantBackend.hybrid_search()."""
         from ..storage.qdrant_backend import QdrantBackend
+
         assert isinstance(self._store, QdrantBackend)
 
         pairs = self._store.hybrid_search(
-            query, limit=top * 2,  # Overfetch for tag filtering
+            query,
+            limit=top * 2,  # Overfetch for tag filtering
             namespace=namespace,
             vector_weight=self._semantic_weight,
             keyword_weight=self._keyword_weight,
@@ -211,6 +214,7 @@ class RetrievalEngine:
 
             # Recency bonus (fades over 30 days)
             import time as _time
+
             age_days = (_time.time() - item.created_at) / 86400
             recency_bonus = max(0, 0.1 * (1 - age_days / 30))
 
@@ -226,12 +230,14 @@ class RetrievalEngine:
                 total=round(final_score, 4),
                 backend="qdrant",
             )
-            results.append(RecallResult(
-                item=item,
-                score=final_score,
-                match_reason=match_reason,
-                score_breakdown=breakdown,
-            ))
+            results.append(
+                RecallResult(
+                    item=item,
+                    score=final_score,
+                    match_reason=match_reason,
+                    score_breakdown=breakdown,
+                )
+            )
 
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top]
@@ -265,6 +271,7 @@ class RetrievalEngine:
         if vec is None:
             try:
                 import httpx
+
                 resp = httpx.post(
                     f"{self._embed_host}/api/embed",
                     json={"model": self._embed_model, "input": text},
