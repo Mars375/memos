@@ -329,6 +329,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <option value="tag">Tag</option>
       </select>
     </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">🕐</span>
+      <input type="range" id="time-slider" min="0" max="100" value="100" step="1" oninput="onTimeChange(this.value)">
+      <span class="filter-val" id="time-val">All</span>
+    </div>
   </div>
   <div id="kg-facts-overlay">
     <h2>
@@ -347,6 +353,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="rp-body">
       <span style="color:var(--text2);font-size:.82em">Click a node to inspect a memory or entity.</span>
+      <div id="health-panel" style="margin-top:12px;display:block;">
+        <div style="font-size:.85em;font-weight:600;color:var(--accent);margin-bottom:8px;">📊 Memory Health</div>
+        <div id="health-stats" style="font-size:.82em;color:var(--text2);line-height:1.8;"></div>
+      </div>
     </div>
   </div>
   <div id="graph-legend">
@@ -420,6 +430,8 @@ let colorMode='namespace'; // 'namespace' | 'cluster' | 'tag'
 let depthLimit=0;        // 0=unlimited, 1-5 = hop limit from selected node
 let focusNode=null;      // currently focused node for depth filtering
 let tooltipEl=null;      // hover tooltip element
+let timeRange=[0,100];   // min/max created_at timestamps
+let timePct=100;         // current time slider percentage (0-100)
 
 function nid(x){return typeof x==='object'?x.id:x;}
 
@@ -584,16 +596,21 @@ function buildGraphData(){
     if(!nodeIds.has(nid(e.target)))nodeIds.add(nid(e.target));
   });
   const finalNodes=GD.nodes.filter(n=>nodeIds.has(n.id));
+  // Time filter — only show nodes created before cutoff
+  let timeFiltered=timePct>=100?finalNodes:finalNodes.filter(n=>shouldShowNode(n));
   // Namespace filter
-  let nodes=finalNodes, links=allLinks;
+  let nodes=timeFiltered, links=allLinks;
   if(activeNS.size>0){
     const nsSet=new Set();
-    finalNodes.forEach(n=>{
+    timeFiltered.forEach(n=>{
       if(activeNS.has(n.namespace||'default'))nsSet.add(n.id);
     });
-    nodes=finalNodes.filter(n=>nsSet.has(n.id));
+    nodes=timeFiltered.filter(n=>nsSet.has(n.id));
     links=allLinks.filter(e=>nsSet.has(nid(e.source))&&nsSet.has(nid(e.target)));
   }
+  // Ensure links only reference visible nodes
+  const visibleIds=new Set(nodes.map(n=>n.id));
+  links=links.filter(e=>visibleIds.has(nid(e.source))&&visibleIds.has(nid(e.target)));
   return {nodes,links};
 }
 
@@ -832,6 +849,62 @@ function onColorModeChange(v){
     fg.nodeColor(fg.nodeColor());
     fg.nodeCanvasObject(fg.nodeCanvasObject());
   }
+}
+function computeTimeRange(){
+  const nodes=GD.nodes;
+  if(!nodes.length){timeRange=[0,100];return;}
+  const times=nodes.map(n=>new Date(n.created_at||0).getTime()).filter(t=>t>0);
+  if(!times.length){timeRange=[0,100];return;}
+  timeRange=[Math.min(...times),Math.max(...times)];
+}
+function onTimeChange(v){
+  timePct=parseInt(v);
+  const label=document.getElementById('time-val');
+  if(timePct>=100){label.textContent='All';initGraph();return;}
+  // Compute cutoff timestamp
+  const span=timeRange[1]-timeRange[0]||1;
+  const cutoff=timeRange[0]+(span*timePct/100);
+  const cutoffDate=new Date(cutoff);
+  label.textContent=cutoffDate.toLocaleDateString('en',{month:'short',day:'numeric'});
+  // Rebuild graph with only nodes created before cutoff
+  initGraph();
+}
+function shouldShowNode(n){
+  if(timePct>=100)return true;
+  const t=new Date(n.created_at||0).getTime();
+  const span=timeRange[1]-timeRange[0]||1;
+  const cutoff=timeRange[0]+(span*timePct/100);
+  return t<=cutoff;
+}
+function updateHealthPanel(){
+  const el=document.getElementById('health-stats');
+  if(!el||!GD.nodes.length)return;
+  const total=GD.nodes.length;
+  // Orphans: nodes with 0 connections
+  const orphans=GD.nodes.filter(n=>(degreeMap[n.id]||0)===0).length;
+  // Average degree
+  const avgDeg=(Object.values(degreeMap).reduce((a,b)=>a+b,0)/total).toFixed(1);
+  // Average importance
+  const avgImp=(GD.nodes.reduce((a,n)=>a+(n.importance||0),0)/total).toFixed(2);
+  // Stale nodes (age > 30 days)
+  const stale=GD.nodes.filter(n=>(n.age_days||0)>30).length;
+  // KG coverage
+  const kgNodes=new Set();
+  GD.kgEdges.forEach(e=>{kgNodes.add(nid(e.source));kgNodes.add(nid(e.target));});
+  const kgPct=((kgNodes.size/total)*100).toFixed(0);
+  // Health score (simple heuristic)
+  const healthScore=Math.max(0,Math.min(100,
+    100 - (orphans/total*50) - (stale/total*20) + (kgPct*0.3)
+  )).toFixed(0);
+  const emoji=healthScore>=80?'🟢':healthScore>=50?'🟡':'🔴';
+  el.innerHTML=
+    emoji+' Health: <b>'+healthScore+'%</b><br>'+
+    '📦 Total: <b>'+total+'</b> memories<br>'+
+    '🔗 Avg degree: <b>'+avgDeg+'</b><br>'+
+    '⭐ Avg importance: <b>'+avgImp+'</b><br>'+
+    '🏝 Orphans: <b>'+(orphans||'<span style="color:#34d399">0</span>')+'</b><br>'+
+    '⏰ Stale (&gt;30d): <b>'+stale+'</b><br>'+
+    '🧠 KG coverage: <b>'+kgPct+'%</b>';
 }
 function toggleNSFilter(ns){
   if(activeNS.has(ns))activeNS.delete(ns);else activeNS.add(ns);
@@ -1294,6 +1367,8 @@ async function refreshGraph(){
     await loadKGLabels();
     buildNSChips();
     detectClusters(); // P1: detect connected components
+    computeTimeRange(); // P2: compute min/max timestamps
+    updateHealthPanel(); // P2: health dashboard
     initGraph();
   }finally{
     document.getElementById('loading').style.display='none';
