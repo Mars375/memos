@@ -6,7 +6,7 @@ MemOS v2.2.0 is in production with 1534 passing tests. This roadmap covers three
 
 ## Phases
 
-- [ ] **Phase 1: Maintenance** - Clear release blockers and infrastructure debt (version drift, Docker hygiene, orphaned code)
+- [x] **Phase 1: Maintenance** - Clear release blockers and infrastructure debt (version drift, Docker hygiene, orphaned code) (completed 2026-04-13)
 - [ ] **Phase 2: Dashboard P1** - Cluster detection, depth navigation, and rich hover previews for the Canvas force-graph
 - [ ] **Phase 3: Documentation Polish** - Golden path README, decision guide for recall APIs, and working integration examples
 
@@ -23,10 +23,10 @@ MemOS v2.2.0 is in production with 1534 passing tests. This roadmap covers three
   4. CI matrix passes on Python 3.11, 3.12, and 3.13 — no green-but-missing-version illusion
   5. `ACTIVE.md` reflects commits through April 13, 2026 — no stale state
   6. `src/memos/miner/` is either removed or its unique logic migrated to `src/memos/ingest/` — no orphaned dead code in the repo
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [x] 01-01-PLAN.md — Version sync, Docker pinning, log limits, CI matrix expansion
-- [ ] 01-02-PLAN.md — ACTIVE.md update and orphaned miner/ removal
+- [x] 01-02-PLAN.md — ACTIVE.md update and orphaned miner/ removal
 
 ### Phase 2: Dashboard P1
 **Goal**: Users can explore the memory graph with meaningful cluster visualization, depth-controlled navigation, and instant node context on hover
@@ -58,6 +58,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Maintenance | 1/2 | In Progress|  |
+| 1. Maintenance | 2/2 | Complete   | 2026-04-13 |
 | 2. Dashboard P1 | 0/? | Not started | - |
 | 3. Documentation Polish | 0/? | Not started | - |

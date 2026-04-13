@@ -13,8 +13,8 @@
 - [x] **MAINT-02**: Les images Docker tierces (`chromadb/chroma`, `qdrant/qdrant`) sont épinglées à une version concrète dans `docker-compose.yml`
 - [x] **MAINT-03**: `docker-compose.yml` inclut des log limits JSON (`max-size: 10m, max-file: 3`) sur tous les services
 - [x] **MAINT-04**: La CI GitHub Actions teste Python 3.11, 3.12 et 3.13
-- [ ] **MAINT-05**: `ACTIVE.md` reflète l'état réel du projet (commits du 11-13 avril intégrés)
-- [ ] **MAINT-06**: `src/memos/miner/` est soit supprimé, soit ses fonctions uniques migrées dans `src/memos/ingest/`
+- [x] **MAINT-05**: `ACTIVE.md` reflète l'état réel du projet (commits du 11-13 avril intégrés)
+- [x] **MAINT-06**: `src/memos/miner/` est soit supprimé, soit ses fonctions uniques migrées dans `src/memos/ingest/`
 
 ### Dashboard — Clustering
 
@@ -99,8 +99,8 @@
 | MAINT-02 | Phase 1 | Complete |
 | MAINT-03 | Phase 1 | Complete |
 | MAINT-04 | Phase 1 | Complete |
-| MAINT-05 | Phase 1 | Pending |
-| MAINT-06 | Phase 1 | Pending |
+| MAINT-05 | Phase 1 | Complete |
+| MAINT-06 | Phase 1 | Complete |
 | DASH-01 | Phase 2 | Pending |
 | DASH-02 | Phase 2 | Pending |
 | DASH-03 | Phase 2 | Pending |
