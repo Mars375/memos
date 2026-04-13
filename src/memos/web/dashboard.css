@@ -199,3 +199,57 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 ::-webkit-scrollbar{width:3px;}
 ::-webkit-scrollbar-track{background:transparent;}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* ── Health dashboard overlay ──────────────────────────────── */
+#health-overlay{display:none;position:absolute;inset:0;background:var(--bg2);z-index:50;overflow-y:auto;padding:20px;}
+#health-overlay h2{font-size:.9em;color:var(--accent2);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.health-score-big{font-size:3em;font-weight:800;text-align:center;margin:16px 0 4px;}
+.health-score-label{text-align:center;font-size:.75em;color:var(--text2);margin-bottom:20px;text-transform:uppercase;letter-spacing:.08em;}
+.health-metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:20px;}
+.health-metric-card{background:var(--bg3);border-radius:8px;padding:12px;text-align:center;}
+.health-metric-card .hmc-val{font-size:1.4em;font-weight:700;color:var(--accent2);}
+.health-metric-card .hmc-lbl{font-size:.65em;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-top:2px;}
+.health-section{margin-bottom:16px;}
+.health-section h3{font-size:.72em;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);margin-bottom:6px;}
+.health-list{display:flex;flex-wrap:wrap;gap:4px;}
+.health-list-item{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:.75em;color:var(--text);cursor:pointer;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.health-list-item:hover{border-color:var(--accent);color:var(--accent2);}
+.health-list-more{font-size:.72em;color:var(--text2);padding:3px 6px;}
+.health-contradictions{display:flex;flex-direction:column;gap:4px;}
+.health-contradiction{background:var(--bg3);border-radius:6px;padding:6px 10px;font-size:.78em;}
+.health-age-chart{display:flex;align-items:flex-end;gap:6px;height:120px;padding:8px 0;}
+.health-age-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;}
+.health-age-bar{width:100%;border-radius:3px 3px 0 0;min-height:2px;transition:height .3s;}
+.health-age-lbl{font-size:.6em;color:var(--text2);margin-top:4px;white-space:nowrap;}
+
+/* ── Treemap view ──────────────────────────────────────────── */
+#treemap-container{position:absolute;inset:0;display:none;flex-direction:row;gap:4px;padding:12px;overflow:auto;background:var(--bg);z-index:5;}
+.treemap-empty{color:var(--text2);text-align:center;padding:60px 20px;font-size:.85em;line-height:2;}
+.treemap-empty code{background:var(--bg3);border-radius:3px;padding:2px 6px;font-size:.9em;}
+.treemap-wing{border:1px solid var(--border);border-radius:8px;padding:10px;display:flex;flex-direction:column;min-width:120px;overflow:hidden;}
+.treemap-wing-header{font-size:.78em;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.treemap-rooms{display:flex;flex-direction:column;gap:3px;flex:1;overflow:hidden;}
+.treemap-room{background:var(--bg3);border-radius:6px;padding:6px 8px;display:flex;flex-direction:column;overflow:hidden;}
+.treemap-room-header{font-size:.7em;color:var(--accent2);font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.treemap-leaves{display:flex;flex-wrap:wrap;gap:2px;}
+.treemap-leaf{font-size:.65em;color:var(--text2);background:var(--bg);border-radius:3px;padding:2px 5px;cursor:pointer;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .15s;}
+.treemap-leaf:hover{color:var(--accent2);}
+
+/* ── Impact modal ──────────────────────────────────────────── */
+#impact-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;}
+#impact-modal.open{display:flex;}
+#impact-modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;width:480px;max-width:92vw;max-height:80vh;overflow-y:auto;}
+#impact-modal-box h3{font-size:.85em;color:var(--accent2);margin-bottom:14px;}
+.impact-score{text-align:center;margin:10px 0 16px;}
+.impact-score-num{font-size:2.4em;font-weight:800;}
+.impact-score-lbl{font-size:.72em;text-transform:uppercase;letter-spacing:.08em;}
+.impact-section{margin-bottom:12px;}
+.impact-section h4{font-size:.7em;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:4px;}
+.impact-list{display:flex;flex-direction:column;gap:3px;}
+.impact-item{background:var(--bg3);border-radius:4px;padding:4px 8px;font-size:.76em;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.impact-more{font-size:.7em;color:var(--text2);padding:2px 6px;}
+.impact-empty{font-size:.76em;color:var(--text2);font-style:italic;}
+
+/* ── Layer legend (added to graph-legend area) ─────────────── */
+.legend-layer{display:flex;align-items:center;gap:4px;font-size:.9em;}
+.legend-layer-dot{width:8px;height:8px;border-radius:50%;}

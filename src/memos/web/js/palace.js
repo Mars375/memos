@@ -91,3 +91,119 @@ async function highlightPalaceRoom(wing, room, rowEl) {
     }
   } catch(_) {}
 }
+
+// ── Treemap Spatial View ──────────────────────────────────────────
+let treemapVisible = false;
+
+async function showTreemap(){
+  treemapVisible = true;
+  const container = document.getElementById('treemap-container');
+  if(!container) return;
+  container.textContent = '';
+  // Load wings if not loaded
+  if(!palaceData.wings.length){
+    try{
+      const wr = await fetch(API+'/palace/wings').then(r=>r.json());
+      palaceData.wings = wr.wings||[];
+    }catch(_){}
+  }
+  if(!palaceData.wings.length){
+    container.innerHTML = '<div class="treemap-empty">No palace data. Run <code>memos palace-build</code>.</div>';
+    return;
+  }
+  // Load rooms for each wing
+  const wingData = [];
+  let totalMemories = 0;
+  for(const wing of palaceData.wings){
+    const wName = wing.name||wing;
+    try{
+      const r = await fetch(API+'/palace/rooms?wing='+encodeURIComponent(wName)).then(res=>res.json());
+      const rooms = r.rooms||[];
+      let wingTotal = 0;
+      const roomData = [];
+      for(const room of rooms){
+        const rName = room.name||room;
+        // Get memories for this room
+        let mems = [];
+        try{
+          const mr = await fetch(API+'/palace/recall?query=*&wing='+encodeURIComponent(wName)+'&room='+encodeURIComponent(rName)+'&top=50').then(res=>res.json());
+          mems = mr.memories||[];
+        }catch(_){}
+        wingTotal += mems.length||room.memory_count||0;
+        roomData.push({name:rName, count:mems.length||room.memory_count||0, memories:mems});
+      }
+      totalMemories += wingTotal;
+      wingData.push({name:wName, rooms:roomData, count:wingTotal});
+    }catch(_){
+      wingData.push({name:wName, rooms:[], count:0});
+    }
+  }
+  if(!totalMemories){
+    container.innerHTML = '<div class="treemap-empty">No palace data. Run <code>memos palace-build</code>.</div>';
+    return;
+  }
+  // Render treemap using flexbox layout
+  const wingColors = ['#7c6ff722','#f9731622','#06b6d422','#22c55e22','#f43f5e22','#a855f722','#eab30822'];
+  const wingBorders = ['#7c6ff744','#f9731644','#06b6d444','#22c55e44','#f43f5e44','#a855f744','#eab30844'];
+  const wingAccents = ['#7c6ff7','#f97316','#06b6d4','#22c55e','#f43f5e','#a855f7','#eab308'];
+  wingData.forEach((wing, wi) => {
+    if(!wing.count) return;
+    const wingEl = document.createElement('div');
+    wingEl.className = 'treemap-wing';
+    const pct = (wing.count / totalMemories * 100).toFixed(1);
+    wingEl.style.flex = wing.count;
+    wingEl.style.background = wingColors[wi%wingColors.length];
+    wingEl.style.borderColor = wingBorders[wi%wingBorders.length];
+    const header = document.createElement('div');
+    header.className = 'treemap-wing-header';
+    header.innerHTML = '<span style="color:'+wingAccents[wi%wingAccents.length]+';font-weight:600">'+escHtml(wing.name)+'</span> <span style="color:var(--text2);font-size:.8em">'+wing.count+' memories ('+pct+'%)</span>';
+    wingEl.appendChild(header);
+    // Rooms
+    if(wing.rooms.length){
+      const roomsEl = document.createElement('div');
+      roomsEl.className = 'treemap-rooms';
+      wing.rooms.forEach(room => {
+        if(!room.count) return;
+        const roomEl = document.createElement('div');
+        roomEl.className = 'treemap-room';
+        roomEl.style.flex = room.count;
+        const roomHeader = document.createElement('div');
+        roomHeader.className = 'treemap-room-header';
+        roomHeader.textContent = room.name + ' (' + room.count + ')';
+        roomEl.appendChild(roomHeader);
+        // Memory leaves
+        if(room.memories.length){
+          const leafEl = document.createElement('div');
+          leafEl.className = 'treemap-leaves';
+          room.memories.slice(0, 20).forEach(mem => {
+            const leaf = document.createElement('div');
+            leaf.className = 'treemap-leaf';
+            leaf.textContent = (mem.content||'').slice(0,30);
+            leaf.title = mem.content||'';
+            leaf.onclick = () => {
+              // Show memory detail
+              selId = mem.id;
+              const fullNode = GD.nodes.find(n=>n.id===mem.id);
+              if(fullNode) showMemoryDetail(fullNode);
+              else {
+                // Construct minimal node for display
+                showMemoryDetail({id:mem.id, content:mem.content||'', tags:mem.tags||[], importance:mem.importance||0.5, age_days:mem.age_days||0, access_count:mem.access_count||0, namespace:mem.namespace||'default'});
+              }
+            };
+            leafEl.appendChild(leaf);
+          });
+          roomEl.appendChild(leafEl);
+        }
+        roomsEl.appendChild(roomEl);
+      });
+      wingEl.appendChild(roomsEl);
+    }
+    container.appendChild(wingEl);
+  });
+}
+
+function hideTreemap(){
+  treemapVisible = false;
+  const container = document.getElementById('treemap-container');
+  if(container) container.style.display = 'none';
+}

@@ -6,6 +6,9 @@ function nodeColorFn(n){
     if(highlightNodes.has(n.id))return '#a78bfa';
     return '#1e2138';
   }
+  if(colorMode==='layer'){
+    return LAYER_COLORS[n.layer!==undefined?n.layer:2]||'#64748b';
+  }
   if(colorMode==='cluster'){
     return clusterColors[clusterMap[n.id]]||'rgba(210,218,255,0.88)';
   }
@@ -15,6 +18,15 @@ function nodeColorFn(n){
   // namespace mode
   if(n.namespace&&n.namespace!=='default')return tc(n.namespace);
   return 'rgba(210,218,255,0.88)';
+}
+
+// ── Edge validity helper ─────────────────────────────────────────
+function edgeValidity(link){
+  if(link._type!=='kg')return 'active';
+  const now=Date.now()/1000;
+  if(link.valid_to){const ts=new Date(link.valid_to).getTime()/1000;if(isNaN(ts))return 'active';if(ts<now)return 'expired';}
+  if(link.valid_from){const ts=new Date(link.valid_from).getTime()/1000;if(isNaN(ts))return 'active';if(ts>now)return 'pending';}
+  return 'active';
 }
 
 // ── Compute degree from all edges ────────────────────────────────
@@ -66,6 +78,12 @@ function buildGraphData(){
   // Ensure links only reference visible nodes
   const visibleIds=new Set(nodes.map(n=>n.id));
   links=links.filter(e=>visibleIds.has(nid(e.source))&&visibleIds.has(nid(e.target)));
+  // Layer filter
+  if(layerFilter!==null){
+    nodes=nodes.filter(n=>n.layer===layerFilter);
+    const layerIds=new Set(nodes.map(n=>n.id));
+    links=links.filter(e=>layerIds.has(nid(e.source))&&layerIds.has(nid(e.target)));
+  }
   return {nodes,links};
 }
 
@@ -138,6 +156,19 @@ function initGraph(){
         ctx.stroke();
       }
 
+      // Layer badge
+      if(node.layer!==undefined&&!dimmed){
+        const lc=LAYER_COLORS[node.layer]||'#64748b';
+        const badgeR=Math.max(r*0.42,3);
+        const bx=node.x+r-badgeR*0.3;
+        const by=node.y-r+badgeR*0.3;
+        ctx.beginPath();ctx.arc(bx,by,badgeR,0,Math.PI*2);
+        ctx.fillStyle=lc;ctx.fill();
+        ctx.font=`bold ${Math.max(5,badgeR*1.2)}px -apple-system,sans-serif`;
+        ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText('L'+node.layer,bx,by);
+      }
+
       // Label at zoom
       if(globalScale>1.2&&!dimmed){
         const label=(node.content||'').slice(0,20);
@@ -150,6 +181,18 @@ function initGraph(){
     .nodeCanvasObjectMode(()=>'replace')
     .linkSource('source')
     .linkTarget('target')
+    .linkLabel(link=>{
+      if(link._type==='kg'){
+        let label=link.predicate||'KG relation';
+        const v=edgeValidity(link);
+        if(v==='expired')label+=' [EXPIRED]';
+        if(v==='pending')label+=' [PENDING]';
+        if(link.valid_from)label+=' | from: '+String(link.valid_from).slice(0,10);
+        if(link.valid_to)label+=' | to: '+String(link.valid_to).slice(0,10);
+        return label;
+      }
+      return 'Memory link (wt: '+(link.weight||1)+')';
+    })
     .linkVisibility(link=>{
       if(highlightLinks.size>0&&!highlightLinks.has(link))return false;
       return true;
@@ -157,17 +200,34 @@ function initGraph(){
     .linkColor(link=>{
       if(highlightLinks.has(link))return'rgba(167,139,250,0.9)';
       if(highlightNodes.size>0)return'rgba(30,33,56,0.15)';
-      if(link._type==='kg')return'rgba(167,139,250,0.7)';
+      if(link._type==='kg'){
+        const v=edgeValidity(link);
+        if(v==='expired')return'rgba(100,116,139,0.3)';
+        if(v==='pending')return'rgba(167,139,250,0.15)';
+        return'rgba(167,139,250,0.7)';
+      }
       const w=link.weight||1;
       const alpha=Math.min(0.12+w*0.06,0.5);
       return `rgba(140,155,210,${alpha})`;
     })
     .linkWidth(link=>{
       if(highlightLinks.has(link))return 2.5;
-      if(link._type==='kg')return 1.5;
+      if(link._type==='kg'){
+        const v=edgeValidity(link);
+        if(v==='expired')return 0.5;
+        return 1.5;
+      }
       return 1;
     })
-    .linkLineDash(link=>link._type==='kg'?[6,3]:null)
+    .linkLineDash(link=>{
+      if(link._type==='kg'){
+        const v=edgeValidity(link);
+        if(v==='expired')return [2,4];
+        if(v==='pending')return [8,6];
+        return [6,3];
+      }
+      return null;
+    })
     .linkDirectionalArrowLength(link=>link._type==='kg'?8:0)
     .linkDirectionalArrowColor(link=>'rgba(167,139,250,0.85)')
     .linkDirectionalArrowRelPos(0.85)
@@ -177,16 +237,36 @@ function initGraph(){
     .linkDirectionalParticleSpeed(0.008)
     .linkCanvasObjectMode(()=>'replace')
     .linkCanvasObject((link,ctx,globalScale)=>{
-      // Draw predicate label for KG edges at high zoom
-      if(link._type==='kg'&&globalScale>0.8&&link.predicate){
+      if(link._type==='kg'&&globalScale>0.8){
         const midX=(link.source.x+link.target.x)/2;
         const midY=(link.source.y+link.target.y)/2;
-        ctx.save();
-        ctx.font=`${Math.max(7,9/globalScale)}px -apple-system,sans-serif`;
-        ctx.fillStyle='rgba(167,139,250,0.7)';
-        ctx.textAlign='center';
-        ctx.fillText(link.predicate,midX,midY-4/globalScale);
-        ctx.restore();
+        // Draw predicate label
+        if(link.predicate){
+          ctx.save();
+          ctx.font=`${Math.max(7,9/globalScale)}px -apple-system,sans-serif`;
+          const v=edgeValidity(link);
+          ctx.fillStyle=v==='expired'?'rgba(100,116,139,0.5)':v==='pending'?'rgba(167,139,250,0.4)':'rgba(167,139,250,0.7)';
+          ctx.textAlign='center';
+          ctx.fillText(link.predicate,midX,midY-4/globalScale);
+          ctx.restore();
+        }
+        // Temporal indicator for expired/pending
+        const v=edgeValidity(link);
+        if(v!=='active'){
+          ctx.save();
+          ctx.font=`${Math.max(8,10/globalScale)}px -apple-system,sans-serif`;
+          ctx.fillStyle=v==='expired'?'rgba(100,116,139,0.6)':'rgba(167,139,250,0.4)';
+          ctx.textAlign='center';
+          ctx.fillText('\u23F1',midX,midY+10/globalScale);
+          // Show validity date
+          const dateStr=v==='expired'&&link.valid_to?link.valid_to:v==='pending'&&link.valid_from?link.valid_from:'';
+          if(dateStr&&globalScale>1.5){
+            ctx.font=`${Math.max(6,7/globalScale)}px -apple-system,sans-serif`;
+            ctx.fillStyle='rgba(100,116,139,0.5)';
+            ctx.fillText(dateStr.slice(0,10),midX,midY+20/globalScale);
+          }
+          ctx.restore();
+        }
       }
     })
     .onNodeClick(node=>{
@@ -213,6 +293,9 @@ function initGraph(){
       showMemoryDetail(node);
       const entities=extractEntitiesFromNode(node);
       if(entities.length)fetchEntityExtra(entities[0]);
+    })
+    .onNodeRightClick(node=>{
+      showImpactAnalysis(node.id);
     })
     .onNodeHover(node=>{
       hoverNode=node;

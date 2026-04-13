@@ -16,7 +16,7 @@ function buildKGEdges(nodes, kgFacts){
     const t=entityToNode[(f.object||'').toLowerCase()];
     if(s&&t&&s!==t){
       const key=[s,t].sort().join('|');
-      if(!seen.has(key)){seen.add(key);edges.push({source:s,target:t,predicate:f.predicate,type:'kg'});}
+      if(!seen.has(key)){seen.add(key);edges.push({source:s,target:t,predicate:f.predicate,type:'kg',valid_from:f.valid_from||null,valid_to:f.valid_to||null,confidence:f.confidence||null});}
     }
   });
   return edges;
@@ -58,6 +58,7 @@ async function refreshGraph(){
     buildNSChips();
     detectClusters(); // P1: detect connected components
     computeTimeRange(); // P2: compute min/max timestamps
+    computeLayers(); // P3: compute memory layers
     updateHealthPanel(); // P2: health dashboard
     initGraph();
   }finally{

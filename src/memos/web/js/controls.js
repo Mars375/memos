@@ -97,12 +97,16 @@ async function resetTimeTravel() {
   await refreshGraph();
 }
 
-// ── Override setRib to handle wiki/palace ─────────────────────────
+// ── Override setRib to handle wiki/palace/treemap/health ──────────
 const _origSetRib = setRib;
 function setRib(view) {
   // Toggle views
   const graphArea = document.getElementById('graph-area');
   const wikiArea = document.getElementById('wiki-area');
+  // Cleanup previous views
+  hideTreemap();
+  closeHealthOverlay();
+
   if (view === 'wiki') {
     graphArea.style.display = 'none';
     wikiArea.classList.add('active');
@@ -118,12 +122,36 @@ function setRib(view) {
   // For any non-wiki view, ensure graph is visible
   graphArea.style.display = '';
   wikiArea.classList.remove('active');
-  // Handle palace specially (stay in sidebar)
+
   if (view === 'palace') {
     _origSetRib('palace');
     if (!palaceData.wings.length) loadPalace();
+    document.getElementById('graph-container').style.display = '';
     return;
   }
+
+  if (view === 'treemap') {
+    showNormalSidebar();
+    document.querySelectorAll('.rib-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('rib-treemap').classList.add('active');
+    document.getElementById('graph-container').style.display = 'none';
+    const tc = document.getElementById('treemap-container');
+    tc.style.display = 'flex';
+    showTreemap();
+    return;
+  }
+
+  if (view === 'health') {
+    showNormalSidebar();
+    document.querySelectorAll('.rib-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('rib-health').classList.add('active');
+    document.getElementById('graph-container').style.display = '';
+    showHealthDashboard();
+    return;
+  }
+
+  // Default: graph, search, kg, analytics
+  document.getElementById('graph-container').style.display = '';
   showNormalSidebar();
   _origSetRib(view);
 }

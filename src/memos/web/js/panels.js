@@ -93,6 +93,14 @@ function showMemoryDetail(d){
   forgetBtn.onclick=forgetSelected;
   body.appendChild(forgetBtn);
 
+  // Impact button
+  const impactBtn=document.createElement('button');
+  impactBtn.className='btn';
+  impactBtn.style.cssText='background:var(--bg3);color:var(--text);margin-left:6px';
+  impactBtn.textContent='\uD83D\uDCA3 Impact';
+  impactBtn.onclick=()=>showImpactAnalysis(d.id);
+  body.appendChild(impactBtn);
+
   // Entity extra placeholder
   const extra=document.createElement('div');
   extra.id='entity-extra';
@@ -178,3 +186,91 @@ async function openEntityPanel(entity){
 }
 
 function closeRightPanel(){document.getElementById('right-panel').classList.remove('open');}
+
+// ── Blast Radius / Impact Analysis ──────────────────────────────
+function showImpactAnalysis(nodeId){
+  selId=nodeId;
+  const node=GD.nodes.find(n=>n.id===nodeId);
+  if(!node)return;
+  const content=document.getElementById('impact-content');
+  content.textContent='Analyzing impact\u2026';
+  document.getElementById('impact-modal').classList.add('open');
+  // Get 1-hop neighbors from current graph data
+  const data=fg?fg.graphData():{links:[]};
+  const neighbors=[];
+  const neighborIds=new Set();
+  data.links.forEach(l=>{
+    const s=nid(l.source),t=nid(l.target);
+    if(s===nodeId){neighborIds.add(t);neighbors.push({id:t,link:l});}
+    if(t===nodeId){neighborIds.add(s);neighbors.push({id:s,link:l});}
+  });
+  // Check which neighbors would become orphans
+  const wouldBeOrphans=[];
+  neighborIds.forEach(nid_val=>{
+    const deg=degreeMap[nid_val]||0;
+    if(deg<=1)wouldBeOrphans.push(nid_val);
+  });
+  // Find KG facts referencing this node
+  const kgFacts=[];
+  GD.kgEdges.forEach(e=>{
+    if(nid(e.source)===nodeId||nid(e.target)===nodeId){
+      kgFacts.push(e);
+    }
+  });
+  // Impact score
+  const impactScore=neighbors.length+wouldBeOrphans.length+kgFacts.length;
+  const impactColor=impactScore<=2?'#22c55e':impactScore<=5?'#eab308':'#e74c3c';
+  const impactLabel=impactScore<=2?'Low':impactScore<=5?'Medium':'High';
+  // Build HTML
+  let html=`<div class="impact-score" style="color:${impactColor}">
+    <div class="impact-score-num">${impactScore}</div>
+    <div class="impact-score-lbl">${impactLabel} impact</div>
+  </div>`;
+  // Direct connections
+  html+=`<div class="impact-section"><h4>Direct connections (${neighbors.length})</h4>`;
+  if(neighbors.length){
+    html+='<div class="impact-list">';
+    neighbors.slice(0,15).forEach(nb=>{
+      const n=GD.nodes.find(x=>x.id===nb.id);
+      const label=n?escHtml((n.content||'').slice(0,35)):nb.id.slice(0,8);
+      html+=`<div class="impact-item">${label}</div>`;
+    });
+    if(neighbors.length>15)html+=`<div class="impact-more">\u2026 +${neighbors.length-15} more</div>`;
+    html+='</div>';
+  }else{html+='<div class="impact-empty">No direct connections</div>';}
+  html+='</div>';
+  // Would-be orphans
+  html+=`<div class="impact-section"><h4>Would become orphans (${wouldBeOrphans.length})</h4>`;
+  if(wouldBeOrphans.length){
+    html+='<div class="impact-list">';
+    wouldBeOrphans.forEach(oid=>{
+      const n=GD.nodes.find(x=>x.id===oid);
+      const label=n?escHtml((n.content||'').slice(0,35)):oid.slice(0,8);
+      html+=`<div class="impact-item" style="color:#e74c3c">${label}</div>`;
+    });
+    html+='</div>';
+  }else{html+='<div class="impact-empty">None</div>';}
+  html+='</div>';
+  // KG facts
+  html+=`<div class="impact-section"><h4>KG facts affected (${kgFacts.length})</h4>`;
+  if(kgFacts.length){
+    html+='<div class="impact-list">';
+    kgFacts.slice(0,10).forEach(f=>{
+      html+=`<div class="impact-item">${escHtml(f.predicate||'relation')}</div>`;
+    });
+    html+='</div>';
+  }else{html+='<div class="impact-empty">None</div>';}
+  html+='</div>';
+  content.innerHTML=html;
+}
+
+function closeImpactModal(){
+  document.getElementById('impact-modal').classList.remove('open');
+}
+function closeImpactModalBg(e){
+  if(e.target===document.getElementById('impact-modal'))closeImpactModal();
+}
+function confirmImpactDelete(){
+  closeImpactModal();
+  forgetSelected();
+}

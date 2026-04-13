@@ -94,6 +94,10 @@ function onColorModeChange(v){
     fg.nodeCanvasObject(fg.nodeCanvasObject());
   }
 }
+function onLayerChange(v){
+  layerFilter=v===''?null:parseInt(v);
+  initGraph();
+}
 function computeTimeRange(){
   const nodes=GD.nodes;
   if(!nodes.length){timeRange=[0,100];return;}
@@ -201,4 +205,127 @@ function onSearch(q){
 function applyFilters(){
   // Filters are now handled by buildGraphData() called in initGraph()
   // This is kept for compatibility with tag tree clicks
+}
+
+// ── Contradiction detection ────────────────────────────────────────
+async function computeContradictions(){
+  try{
+    const facts=[];
+    for(const label of ['EXTRACTED','INFERRED','AMBIGUOUS']){
+      const r=await fetch(API+'/kg/labels?label='+label).then(res=>res.json());
+      facts.push(...(r.facts||[]));
+    }
+    const groups={};
+    facts.forEach(f=>{
+      const key=(f.subject||'').toLowerCase()+'|'+(f.predicate||'').toLowerCase();
+      if(!groups[key])groups[key]=[];
+      groups[key].push(f);
+    });
+    const contradictions=[];
+    Object.entries(groups).forEach(([key,fs])=>{
+      const objects=new Set(fs.map(f=>(f.object||'').toLowerCase()));
+      if(objects.size>1){
+        contradictions.push({subject:fs[0].subject,predicate:fs[0].predicate,objects:[...objects],facts:fs});
+      }
+    });
+    return contradictions;
+  }catch(_){return [];}
+}
+
+// ── Health dashboard overlay ───────────────────────────────────────
+async function showHealthDashboard(){
+  const overlay=document.getElementById('health-overlay');
+  if(!overlay)return;
+  overlay.style.display='block';
+  const content=document.getElementById('health-dashboard-content');
+  content.textContent='Computing health metrics\u2026';
+  const total=GD.nodes.length;
+  const orphans=GD.nodes.filter(n=>(degreeMap[n.id]||0)===0);
+  const stale=GD.nodes.filter(n=>(n.age_days||0)>30&&(n.access_count||0)===0);
+  const kgNodes=new Set();
+  GD.kgEdges.forEach(e=>{kgNodes.add(nid(e.source));kgNodes.add(nid(e.target));});
+  const kgPct=total?((kgNodes.size/total)*100).toFixed(0):0;
+  const contradictions=await computeContradictions();
+  const healthScore=Math.max(0,Math.min(100,
+    100-(orphans.length/Math.max(total,1)*50)-(stale.length/Math.max(total,1)*20)+(kgPct*0.3)-(contradictions.length*2)
+  )).toFixed(0);
+  const scoreColor=healthScore>=80?'#22c55e':healthScore>=50?'#eab308':'#e74c3c';
+  // Age distribution buckets
+  const ageBuckets=[0,0,0,0,0,0]; // <7d, 7-14d, 14-30d, 30-60d, 60-90d, 90d+
+  GD.nodes.forEach(n=>{
+    const d=n.age_days||0;
+    if(d<7)ageBuckets[0]++;
+    else if(d<14)ageBuckets[1]++;
+    else if(d<30)ageBuckets[2]++;
+    else if(d<60)ageBuckets[3]++;
+    else if(d<90)ageBuckets[4]++;
+    else ageBuckets[5]++;
+  });
+  const maxBucket=Math.max(...ageBuckets,1);
+  const bucketLabels=['<7d','7-14d','14-30d','30-60d','60-90d','90d+'];
+  const bucketColors=['#22c55e','#3b82f6','#7c6ff7','#f97316','#eab308','#64748b'];
+  let ageChartHTML='<div class="health-age-chart">';
+  ageBuckets.forEach((c,i)=>{
+    const pct=(c/maxBucket*100).toFixed(0);
+    ageChartHTML+=`<div class="health-age-bar-wrap"><div class="health-age-bar" style="height:${pct}%;background:${bucketColors[i]}"></div><span class="health-age-lbl">${bucketLabels[i]}</span></div>`;
+  });
+  ageChartHTML+='</div>';
+  let html=`<div class="health-score-big" style="color:${scoreColor}">${healthScore}%</div>
+    <div class="health-score-label">Overall Health</div>
+    <div class="health-metrics-grid">
+      <div class="health-metric-card"><div class="hmc-val">${total}</div><div class="hmc-lbl">Total memories</div></div>
+      <div class="health-metric-card"><div class="hmc-val" style="color:${orphans.length?'#e74c3c':'#22c55e'}">${orphans.length}</div><div class="hmc-lbl">Orphans</div></div>
+      <div class="health-metric-card"><div class="hmc-val" style="color:${stale.length>total*0.3?'#e74c3c':'#22c55e'}">${stale.length}</div><div class="hmc-lbl">Stale (>30d)</div></div>
+      <div class="health-metric-card"><div class="hmc-val">${kgPct}%</div><div class="hmc-lbl">KG coverage</div></div>
+      <div class="health-metric-card"><div class="hmc-val" style="color:${contradictions.length?'#f97316':'#22c55e'}">${contradictions.length}</div><div class="hmc-lbl">Contradictions</div></div>
+    </div>`;
+  if(orphans.length){
+    html+='<div class="health-section"><h3>Orphan nodes</h3><div class="health-list">';
+    orphans.slice(0,20).forEach(n=>{html+=`<span class="health-list-item" onclick="highlightNodeById('${n.id}')">${escHtml((n.content||'').slice(0,40))}</span>`;});
+    if(orphans.length>20)html+=`<span class="health-list-more">\u2026 +${orphans.length-20} more</span>`;
+    html+='</div></div>';
+  }
+  if(contradictions.length){
+    html+='<div class="health-section"><h3>Contradictions</h3><div class="health-contradictions">';
+    contradictions.slice(0,10).forEach(c=>{
+      html+=`<div class="health-contradiction"><b>${escHtml(c.subject)}</b> \u2013${escHtml(c.predicate)}\u2192 <span style="color:#e74c3c">${c.objects.map(o=>escHtml(o)).join(' vs ')}</span></div>`;
+    });
+    html+='</div></div>';
+  }
+  html+=`<div class="health-section"><h3>Memory age distribution</h3>${ageChartHTML}</div>`;
+  html+=`<button class="btn" style="background:var(--accent);color:#fff;margin-top:12px" onclick="suggestCleanup()">Suggest cleanup</button>`;
+  content.innerHTML=html;
+}
+
+function closeHealthOverlay(){
+  const overlay=document.getElementById('health-overlay');
+  if(overlay)overlay.style.display='none';
+}
+
+function highlightNodeById(id){
+  closeHealthOverlay();
+  const node=GD.nodes.find(n=>n.id===id);
+  if(!node)return;
+  selId=id;focusNode=id;
+  highlightNodes=new Set([id]);
+  highlightLinks=new Set();
+  if(fg){
+    const data=fg.graphData();
+    data.links.forEach(l=>{
+      const s=nid(l.source),t=nid(l.target);
+      if(s===id||t===id)highlightLinks.add(l);
+    });
+    fg.linkColor(fg.linkColor());fg.nodeColor(fg.nodeColor());
+    if(node.x!==undefined)fg.centerAt(node.x,node.y,600);
+  }
+  showMemoryDetail(node);
+}
+
+function suggestCleanup(){
+  closeHealthOverlay();
+  const orphans=new Set(GD.nodes.filter(n=>(degreeMap[n.id]||0)===0).map(n=>n.id));
+  const stale=new Set(GD.nodes.filter(n=>(n.age_days||0)>30&&(n.access_count||0)===0).map(n=>n.id));
+  highlightNodes=new Set([...orphans,...stale]);
+  highlightLinks=new Set();
+  if(fg){fg.linkColor(fg.linkColor());fg.nodeColor(fg.nodeColor());}
 }

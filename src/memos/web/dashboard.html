@@ -18,6 +18,9 @@
   <button class="rib-btn" id="rib-analytics" title="Analytics" onclick="setRib('analytics')">&#128202;</button>
   <button class="rib-btn" id="rib-wiki" title="Living Wiki" onclick="setRib('wiki')">&#128216;</button>
   <button class="rib-btn" id="rib-palace" title="Memory Palace" onclick="setRib('palace')">&#127963;</button>
+  <button class="rib-btn" id="rib-treemap" title="Treemap View" onclick="setRib('treemap')">&#128506;</button>
+  <div class="rib-spacer"></div>
+  <button class="rib-btn" id="rib-health" title="Health Dashboard" onclick="setRib('health')">&#128202;</button>
   <div class="rib-spacer"></div>
   <button class="rib-btn" title="Refresh" onclick="refreshGraph()">&#8635;</button>
   <button class="rib-btn" title="Add memory" onclick="openAddModal()">&#xff0b;</button>
@@ -125,6 +128,18 @@
         <option value="namespace">NS</option>
         <option value="cluster">Cluster</option>
         <option value="tag">Tag</option>
+        <option value="layer">Layer</option>
+      </select>
+    </div>
+    <div class="filter-sep"></div>
+    <div class="filter-group">
+      <span class="filter-label">Layer</span>
+      <select id="layer-select" onchange="onLayerChange(this.value)" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:1px 4px;font-size:.9em;">
+        <option value="">All</option>
+        <option value="0">L0</option>
+        <option value="1">L1</option>
+        <option value="2">L2</option>
+        <option value="3">L3</option>
       </select>
     </div>
     <div class="filter-sep"></div>
@@ -141,6 +156,14 @@
     </h2>
     <div id="kg-facts-list"></div>
   </div>
+  <div id="health-overlay">
+    <h2>
+      <span>📊 Memory Health Dashboard</span>
+      <button class="btn" style="background:var(--bg3);color:var(--text)" onclick="closeHealthOverlay()">✕ Close</button>
+    </h2>
+    <div id="health-dashboard-content"></div>
+  </div>
+  <div id="treemap-container" style="display:none;"></div>
   <div id="right-panel">
     <div id="rp-header">
       <div>
@@ -200,6 +223,17 @@
     <div class="modal-actions">
       <button class="btn" style="background:var(--bg3);color:var(--text)" onclick="closeAddModal()">Cancel</button>
       <button class="btn btn-primary" onclick="addMemory()">Learn</button>
+    </div>
+  </div>
+</div>
+
+<div id="impact-modal" onclick="closeImpactModalBg(event)">
+  <div id="impact-modal-box">
+    <h3>💣 Impact Analysis</h3>
+    <div id="impact-content"></div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--bg3);color:var(--text)" onclick="closeImpactModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmImpactDelete()">Confirm delete</button>
     </div>
   </div>
 </div>
