@@ -91,6 +91,7 @@ def create_fastapi_app(
 
     # ── Static files (CSS, JS modules) ───────────────────────
     from pathlib import Path as _WebPath
+
     from starlette.staticfiles import StaticFiles
     _web_dir = _WebPath(__file__).resolve().parent.parent / "web"
     if _web_dir.is_dir():

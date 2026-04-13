@@ -13,7 +13,7 @@ def test_dashboard_html_contains_title():
     assert "search" in DASHBOARD_HTML.lower()
     assert "learn" in DASHBOARD_HTML.lower()
     assert "graph" in DASHBOARD_HTML.lower()
-    assert "d3" in DASHBOARD_HTML.lower()
+    assert "force-graph" in DASHBOARD_HTML.lower()
     assert "analytics" in DASHBOARD_HTML.lower()
     assert "chart.js" in DASHBOARD_HTML.lower()
 
