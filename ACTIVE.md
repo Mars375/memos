@@ -1,6 +1,6 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ Dashboard modularisé + Docker all-in-one, Phase 1 Maintenance EN COURS
+## Statut : ✅ Phase 1 Maintenance COMPLÈTE — en route vers Phase 2 Dashboard P1
 
 **Dernière session** : 2026-04-13 — Dashboard modularisation (#40) + image Docker all-in-one
 **Base** : `main` v2.2.0 — branche `main` (stable)
@@ -31,15 +31,19 @@
 ### Planning initialisé
 - Répertoire `.planning/` créé le 13 avril 2026 (cartographie codebase + feuille de route)
 
-## OPEN dans PRIORITIES.md
-- **MAINT-01** — Synchroniser version `pyproject.toml` (1.0.0) ↔ `__init__.py` (2.2.0)
-- **MAINT-02** — Épingler images Docker tiers à des versions concrètes
-- **MAINT-03** — Ajouter log limits JSON au `docker-compose.yml`
-- **MAINT-04** — Ajouter Python 3.13 au matrix CI
+## DONE — Phase 1 Maintenance (13 avril 2026)
+- **MAINT-01** ✅ — Version synchro : `pyproject.toml` + `__init__.py` = `2.2.0`
+- **MAINT-02** ✅ — Images Docker épinglées : `chromadb/chroma:1.5.7`, `qdrant/qdrant:v1.17.1`
+- **MAINT-03** ✅ — Log limits JSON sur les 5 services (`max-size: 10m, max-file: 3`)
+- **MAINT-04** ✅ — CI matrix étendue à Python 3.11 / 3.12 / 3.13
+- **MAINT-05** ✅ — `ACTIVE.md` mis à jour (v2.2.0, 1534 tests, canvas force-graph, all-in-one Docker)
+- **MAINT-06** ✅ — `src/memos/miner/` supprimé (413 lignes orphelines, zéro import cassé)
 
 ## IN PROGRESS / IN REVIEW
-- **Phase 1 — Maintenance** [EN COURS] — Plans 01-01 à 01-02 (version drift, miner orphelin, etc.)
+- **Phase 2 — Dashboard P1** [NEXT] — community detection, depth filter, hover preview enrichi
 
 ## Prochaine étape
-- **Phase 1 — Maintenance** : compléter les 2 plans restants (01-01, 01-02)
-- **Phase 2 — Dashboard P1** : community detection, depth filter, hover preview enrichi
+- **Phase 2 — Dashboard P1** : `/gsd:plan-phase 2`
+  - Community detection + nœuds colorés par cluster (Leiden / connected components)
+  - Depth filter / local graph (slider 1-5 hops)
+  - Hover preview riche (content, tags, namespace, degree)
