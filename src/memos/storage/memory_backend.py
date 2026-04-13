@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .base import StorageBackend
 from ..models import MemoryItem
+from .base import StorageBackend
 
 _DEFAULT = ""  # default (global) namespace key
 

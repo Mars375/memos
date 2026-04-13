@@ -2,8 +2,10 @@
 
 import json
 import time
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from memos.models import MemoryItem
 from memos.storage.chroma_backend import ChromaBackend
 

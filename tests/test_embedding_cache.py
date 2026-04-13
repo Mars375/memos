@@ -1,13 +1,10 @@
 """Tests for the persistent embedding cache."""
 
-import json
 import time
-import tempfile
-import os
 
 import pytest
 
-from memos.cache.embedding_cache import EmbeddingCache, CacheStats
+from memos.cache.embedding_cache import EmbeddingCache
 
 
 @pytest.fixture

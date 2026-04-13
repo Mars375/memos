@@ -1,9 +1,11 @@
 """Tests for TTL (time-to-live) memory expiry."""
 
 import time
+
 import pytest
-from memos.models import MemoryItem, parse_ttl
+
 from memos.core import MemOS
+from memos.models import MemoryItem, parse_ttl
 
 
 class TestParseTTL:

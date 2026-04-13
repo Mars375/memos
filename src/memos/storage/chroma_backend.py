@@ -7,8 +7,8 @@ import json
 import time
 from typing import Optional
 
-from .base import StorageBackend
 from ..models import MemoryItem
+from .base import StorageBackend
 
 
 class _CachedOllamaEF:
@@ -28,8 +28,8 @@ class _CachedOllamaEF:
         return hashlib.sha256(f"{self._embed_model}::{text}".encode()).hexdigest()
 
     def _db(self):
-        import sqlite3
         import pathlib
+        import sqlite3
         pathlib.Path(self._cache_path).parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._cache_path, timeout=10)
         conn.execute("PRAGMA journal_mode=WAL")

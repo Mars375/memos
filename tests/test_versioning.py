@@ -12,7 +12,6 @@ from src.memos.versioning.engine import VersioningEngine
 from src.memos.versioning.models import MemoryVersion, VersionDiff
 from src.memos.versioning.store import VersionStore
 
-
 # ── MemoryVersion model tests ────────────────────────────────
 
 
@@ -561,7 +560,7 @@ class TestMemOSVersioning:
         versions[0].created_at = time.time() - 3600  # 1 hour ago
 
         # Learn item 2 now
-        item2 = mem.learn("recent knowledge about rust", tags=["rust"])
+        mem.learn("recent knowledge about rust", tags=["rust"])
 
         # Recall at a time when only item1 existed
         past_ts = time.time() - 1800  # 30 min ago
@@ -648,7 +647,7 @@ class TestMemOSVersioning:
         mem = MemOS()
 
         # Learn something now
-        item = mem.learn("only recent memory")
+        mem.learn("only recent memory")
 
         # Recall at a time before this item existed
         past_ts = time.time() - 86400  # 1 day ago

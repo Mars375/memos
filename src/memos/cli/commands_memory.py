@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from .. import __version__
-
-from ._common import _get_memos, _get_kg_bridge, _ts
 from ..models import parse_ttl
+from ._common import _fmt_ts, _get_kg, _get_kg_bridge, _get_memos
 
 
 def cmd_init(ns: argparse.Namespace) -> None:
@@ -785,7 +786,6 @@ def cmd_classify(ns: argparse.Namespace) -> None:
 
 def cmd_decay(ns: argparse.Namespace) -> None:
     """Apply importance decay to memories."""
-    from ..core import MemOS
     m = _get_memos(ns)
     items = m._store.list_all(namespace=m._namespace)
     report = m._decay.run_decay(
@@ -812,7 +812,6 @@ def cmd_decay(ns: argparse.Namespace) -> None:
 
 def cmd_reinforce(ns: argparse.Namespace) -> None:
     """Boost a memory's importance."""
-    from ..core import MemOS
     m = _get_memos(ns)
     item = m._store.get(ns.memory_id, namespace=m._namespace)
     if item is None:
@@ -941,7 +940,7 @@ def cmd_wiki_living(ns: argparse.Namespace) -> None:
         print(f"  Types: {s['type_distribution']}")
 
     else:
-        wl_sp.print_help()
+        print("No wiki-living action specified. Use: init, update, lint, index, log, read, search, list, stats")
 
 
 def cmd_wiki_graph(ns: argparse.Namespace) -> None:
@@ -1023,7 +1022,7 @@ def cmd_dedup_scan(ns: argparse.Namespace) -> None:
         fix=getattr(ns, "fix", False),
         threshold=getattr(ns, "threshold", None),
     )
-    print(f"Dedup scan complete:")
+    print("Dedup scan complete:")
     print(f"  Total scanned:     {result.total_scanned}")
     print(f"  Exact duplicates:  {result.exact_duplicates}")
     print(f"  Near duplicates:   {result.near_duplicates}")
@@ -1031,7 +1030,7 @@ def cmd_dedup_scan(ns: argparse.Namespace) -> None:
     if getattr(ns, "fix", False):
         print(f"  Removed:           {result.fixed}")
     if result.groups:
-        print(f"\nDuplicates found:")
+        print("\nDuplicates found:")
         for g in result.groups[:20]:
             print(f"  [{g['reason']}] {g['duplicate_id'][:8]} → {g['original_id'][:8]} (sim={g['similarity']:.3f})")
             print(f"    {g['content_preview'][:80]}")

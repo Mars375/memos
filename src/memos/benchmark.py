@@ -15,7 +15,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import statistics
 import time
 from dataclasses import dataclass, field
@@ -83,7 +82,7 @@ class BenchmarkReport:
         """Human-readable benchmark report."""
         lines = [
             f"{'='*60}",
-            f"  MemOS Benchmark Report",
+            "  MemOS Benchmark Report",
             f"{'='*60}",
             f"  Version:  {self.version}",
             f"  Backend:  {self.backend}",
@@ -175,8 +174,9 @@ def run_benchmark(
     Returns:
         BenchmarkReport with detailed results.
     """
-    from . import __version__
     from datetime import datetime, timezone
+
+    from . import __version__
 
     started = datetime.now(timezone.utc).isoformat()
 

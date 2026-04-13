@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
 
 import pytest
+
 from memos.core import MemOS
 from memos.wiki import WikiEngine
 
@@ -100,7 +100,6 @@ def test_compile_sorts_by_importance(mem, tmp_path):
 
 def test_wiki_engine_default_dir(mem):
     """WikiEngine should not crash even without explicit wiki_dir."""
-    import tempfile
     import os
     # Use a custom home to avoid polluting ~/.memos
     with tempfile.TemporaryDirectory() as tmpdir:

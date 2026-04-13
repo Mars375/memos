@@ -1,10 +1,10 @@
 """Tests for file ingestion engine."""
 
 import json
-import pytest
-from pathlib import Path
 
-from memos.ingest.engine import ingest_file, ingest_files, _chunk_markdown, _chunk_json
+import pytest
+
+from memos.ingest.engine import ingest_file, ingest_files
 
 
 @pytest.fixture

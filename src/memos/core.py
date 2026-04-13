@@ -2,40 +2,42 @@
 
 from __future__ import annotations
 
-import time
 import logging
-
-logger = logging.getLogger(__name__)
+import time
 from typing import Any, Optional
 
-from .models import MemoryItem, RecallResult, MemoryStats, FeedbackEntry, FeedbackStats, generate_id
-from .retrieval.engine import RetrievalEngine
-from .storage.base import StorageBackend
-from .storage.memory_backend import InMemoryBackend
-from .storage.json_backend import JsonFileBackend
-from .decay.engine import DecayEngine
-from .sanitizer import MemorySanitizer
+from .analytics import RecallAnalytics
+from .cache.embedding_cache import EmbeddingCache
+from .compression import CompressionResult, MemoryCompressor
+from .consolidation.async_engine import AsyncConsolidationHandle
+from .consolidation.engine import ConsolidationResult
 from .crypto import MemoryCrypto
-from .storage.encrypted_backend import EncryptedStorageBackend
+from .decay.engine import DecayEngine
+from .dedup import DedupCheckResult, DedupEngine, DedupScanResult
 from .events import EventBus
+from .ingest.engine import IngestResult
+from .migration import MigrationEngine, MigrationReport, _create_backend
+from .models import FeedbackEntry, FeedbackStats, MemoryItem, MemoryStats, RecallResult, generate_id
+from .namespaces.acl import NamespaceACL, Role
+from .query import MemoryQuery, QueryEngine
+from .retrieval.engine import RetrievalEngine
+from .sanitizer import MemorySanitizer
+from .sharing.engine import SharingEngine
+from .sharing.models import MemoryEnvelope, SharePermission, ShareRequest, ShareScope, ShareStatus
+from .storage.base import StorageBackend
+from .storage.encrypted_backend import EncryptedStorageBackend
+from .storage.json_backend import JsonFileBackend
+from .storage.memory_backend import InMemoryBackend
+from .tagger import AutoTagger
 from .versioning.engine import VersioningEngine
 from .versioning.models import MemoryVersion, VersionDiff
-from .compression import MemoryCompressor
-from .namespaces.acl import NamespaceACL, Role
-from .cache.embedding_cache import EmbeddingCache
-from .analytics import RecallAnalytics
-# LocalEmbedder imported lazily when backend=="local"
-from .tagger import AutoTagger
-from .sharing.engine import SharingEngine
-from .sharing.models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
-from .dedup import DedupEngine, DedupCheckResult, DedupScanResult
-from .migration import MigrationEngine, MigrationReport, _create_backend
-from .query import MemoryQuery, QueryEngine
+
+logger = logging.getLogger(__name__)
 
 
 class MemOS:
     """Memory Operating System for LLM Agents.
-    
+
     Usage:
         mem = MemOS(backend="memory")
         mem.learn("User prefers concise responses", tags=["preference"])
@@ -62,6 +64,7 @@ class MemOS:
         # Storage
         if backend == "chroma":
             import os as _os
+
             from .storage.chroma_backend import ChromaBackend
             # Only enable client-side Ollama embeddings when MEMOS_EMBED_HOST is
             # explicitly configured. When unset, Chroma uses its built-in ONNX
@@ -1029,7 +1032,7 @@ class MemOS:
         dry_run: bool = False,
     ) -> "IngestResult":
         """Parse and store memories from a file (markdown, JSON, txt)."""
-        from .ingest.engine import ingest_file, IngestResult
+        from .ingest.engine import ingest_file
 
         result = ingest_file(path, tags=tags, importance=importance, max_chunk=max_chunk)
 
@@ -1347,7 +1350,7 @@ class MemOS:
         Returns:
             dict with detailed compaction report.
         """
-        from .compaction.engine import CompactionEngine, CompactionConfig
+        from .compaction.engine import CompactionConfig, CompactionEngine
 
         config = CompactionConfig(
             archive_age_days=archive_age_days,

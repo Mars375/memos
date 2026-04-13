@@ -16,7 +16,6 @@ import httpx
 from .engine import IngestResult
 from .miner import chunk_text
 
-
 _META_RE = re.compile(
     r"<meta[^>]+(?:name|property)=[\"'](?P<key>[^\"']+)[\"'][^>]+content=[\"'](?P<value>.*?)[\"'][^>]*>",
     re.IGNORECASE | re.DOTALL,

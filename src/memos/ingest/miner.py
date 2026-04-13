@@ -23,14 +23,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, List, Optional
 
-from .chunker import chunk_text, content_hash, detect_room, _ROOM_KEYWORDS
+from .chunker import chunk_text, content_hash, detect_room
 from .parsers import (
-    _parse_claude_export,
     _parse_chatgpt_export,
-    _parse_slack_jsonl,
+    _parse_claude_export,
     _parse_discord_export,
-    _parse_telegram_export,
     _parse_openclaw_session,
+    _parse_slack_jsonl,
+    _parse_telegram_export,
 )
 
 # ---------------------------------------------------------------------------

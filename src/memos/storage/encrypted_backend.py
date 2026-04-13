@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Optional
 
+from ..crypto import MemoryCrypto, NoOpCrypto
 from ..models import MemoryItem
 from .base import StorageBackend
-from ..crypto import MemoryCrypto, NoOpCrypto
 
 
 class EncryptedStorageBackend(StorageBackend):

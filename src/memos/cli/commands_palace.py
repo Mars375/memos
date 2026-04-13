@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 
-from ._common import _get_palace
+from ._common import _get_memos, _get_palace
 
 
 def cmd_palace_init(ns: argparse.Namespace) -> None:

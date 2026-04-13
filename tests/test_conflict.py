@@ -1,9 +1,6 @@
 """Tests for memos.conflict — Memory Conflict Resolution (P12)."""
 
-import json
-import time
 
-import pytest
 
 from memos.conflict import (
     Conflict,
@@ -15,7 +12,6 @@ from memos.conflict import (
 from memos.core import MemOS
 from memos.models import MemoryItem
 from memos.sharing.models import MemoryEnvelope
-
 
 # ── Helpers ──────────────────────────────────────────────
 

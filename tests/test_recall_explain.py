@@ -1,10 +1,7 @@
 """Tests for P35 — Recall Explainability (score breakdown)."""
 
-import time
-import json
-import pytest
-from memos.models import MemoryItem, RecallResult, ScoreBreakdown
 from memos.core import MemOS
+from memos.models import MemoryItem, RecallResult, ScoreBreakdown
 
 
 class TestScoreBreakdownModel:
@@ -108,7 +105,6 @@ class TestRecallExplainCLI:
 
     def test_explain_flag_in_parser(self):
         """Parser accepts --explain."""
-        import argparse
         from memos.cli import build_parser
         parser = build_parser()
         # Should not raise
@@ -116,7 +112,6 @@ class TestRecallExplainCLI:
         assert args.explain is True
 
     def test_no_explain_default(self):
-        import argparse
         from memos.cli import build_parser
         parser = build_parser()
         args = parser.parse_args(["recall", "test"])
@@ -128,8 +123,9 @@ class TestRecallExplainAPI:
 
     def test_api_explain_param(self):
         """API recall endpoint accepts explain field."""
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
         from memos.core import MemOS
 
         mem = MemOS(backend="memory")
@@ -158,8 +154,9 @@ class TestRecallExplainAPI:
 
     def test_api_no_explain_default(self):
         """Without explain, no breakdown in response."""
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
         from memos.core import MemOS
 
         mem = MemOS(backend="memory")

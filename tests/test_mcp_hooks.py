@@ -1,18 +1,14 @@
 """Tests for MCP pre/post hooks — P4."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from memos.mcp_hooks import (
     MCPHookRegistry,
     _extract_and_store_facts,
-    hook_auto_capture_kg,
-    hook_prepend_context,
     create_default_registry,
+    hook_auto_capture_kg,
 )
-
 
 # ---------------------------------------------------------------------------
 # MCPHookRegistry unit tests
@@ -114,7 +110,7 @@ class TestExtractFacts:
         from memos.knowledge_graph import KnowledgeGraph
         kg = KnowledgeGraph(":memory:")
         content = "ServiceA depends on ServiceB for authentication."
-        ids = _extract_and_store_facts(content, kg)
+        _extract_and_store_facts(content, kg)
         facts = kg.query("ServiceA")
         predicates = {f["predicate"] for f in facts}
         assert "depends-on" in predicates
@@ -204,8 +200,8 @@ class TestDispatchWithHooks:
         assert result == {"short": "circuit"}
 
     def test_post_hook_augments_result(self):
-        from memos.mcp_server import _dispatch
         from memos.core import MemOS
+        from memos.mcp_server import _dispatch
         memos = MemOS(backend="memory")
 
         registry = MCPHookRegistry()
@@ -219,8 +215,8 @@ class TestDispatchWithHooks:
         assert result.get("augmented") is True
 
     def test_no_hooks_normal_dispatch(self):
-        from memos.mcp_server import _dispatch
         from memos.core import MemOS
+        from memos.mcp_server import _dispatch
         memos = MemOS(backend="memory")
         result = _dispatch(memos, "memory_save", {"content": "no hooks"})
         assert result is not None

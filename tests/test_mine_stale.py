@@ -1,7 +1,6 @@
 """Tests for MinerCache.staleness_report() — P5 staleness detection."""
 import hashlib
 import time
-from pathlib import Path
 
 import pytest
 
@@ -95,6 +94,7 @@ class TestStalenessReport:
 class TestCLI:
     def test_mine_stale_empty_cache(self, tmp_path, capsys):
         import argparse
+
         from memos.cli import cmd_mine_stale
 
         ns = argparse.Namespace(
@@ -107,6 +107,7 @@ class TestCLI:
 
     def test_mine_stale_fresh(self, tmp_path, capsys):
         import argparse
+
         from memos.cli import cmd_mine_stale
 
         cache = MinerCache(str(tmp_path / "mine-cache.db"))
@@ -125,6 +126,7 @@ class TestCLI:
 
     def test_mine_stale_with_changed_file(self, tmp_path, capsys):
         import argparse
+
         from memos.cli import cmd_mine_stale
 
         cache = MinerCache(str(tmp_path / "mine-cache.db"))
@@ -145,6 +147,7 @@ class TestCLI:
 
     def test_mine_stale_only_stale_hides_fresh(self, tmp_path, capsys):
         import argparse
+
         from memos.cli import cmd_mine_stale
 
         cache = MinerCache(str(tmp_path / "mine-cache.db"))

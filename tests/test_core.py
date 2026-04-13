@@ -1,9 +1,11 @@
 """Core tests for MemOS — zero external dependencies needed."""
 
 import time
+
 import pytest
+
 from memos.core import MemOS
-from memos.models import MemoryItem, RecallResult, generate_id
+from memos.models import MemoryItem, generate_id
 
 
 class TestMemoryItem:

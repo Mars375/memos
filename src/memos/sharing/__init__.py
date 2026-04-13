@@ -1,7 +1,7 @@
 """Multi-agent memory sharing protocol for MemOS."""
 
-from .models import ShareRequest, ShareStatus, SharePermission, ShareScope, MemoryEnvelope
 from .engine import SharingEngine
+from .models import MemoryEnvelope, SharePermission, ShareRequest, ShareScope, ShareStatus
 
 __all__ = [
     "ShareRequest",

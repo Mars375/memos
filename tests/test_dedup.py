@@ -1,8 +1,9 @@
 """Tests for DedupEngine — P29 Memory Deduplication."""
 
 import pytest
+
 from memos.core import MemOS
-from memos.dedup import DedupEngine, DedupCheckResult, DedupScanResult
+from memos.dedup import DedupEngine
 from memos.models import MemoryItem
 from memos.storage.memory_backend import InMemoryBackend
 
@@ -227,7 +228,6 @@ class TestMemOSDedupIntegration:
     def test_dedup_scan_removes_duplicates(self):
         m = MemOS(backend="memory")
         # Use _store directly to insert items with same content but different IDs
-        from memos.models import generate_id
         m._store.upsert(MemoryItem(id="dup-a", content="Memory A"))
         m._store.upsert(MemoryItem(id="dup-b", content="Memory A"))
         m._store.upsert(MemoryItem(id="unique-c", content="Memory B"))

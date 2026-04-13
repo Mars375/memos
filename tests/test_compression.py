@@ -77,6 +77,7 @@ def test_cli_compress(capsys):
 @pytest.mark.anyio
 async def test_rest_compress_endpoint():
     from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     mem = MemOS(backend="memory")

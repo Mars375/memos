@@ -6,8 +6,8 @@ import json
 import time
 from typing import Optional
 
-from .base import StorageBackend
 from ..models import MemoryItem
+from .base import StorageBackend
 
 
 class QdrantBackend(StorageBackend):
@@ -272,8 +272,8 @@ class QdrantBackend(StorageBackend):
         # Keyword results (BM25-like)
         all_items = self.list_all(namespace=namespace)
         keyword_scores: dict[str, float] = {}
-        import re
         import math
+        import re
         query_tokens = set(re.findall(r"\w+", query.lower()))
         for item in all_items:
             content_tokens = set(re.findall(r"\w+", item.content.lower()))

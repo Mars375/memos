@@ -1,12 +1,10 @@
 """Tests for the consolidation engine — semantic dedup."""
 
-import time
 
-import pytest
 
+from memos.consolidation.engine import ConsolidationEngine
 from memos.models import MemoryItem
 from memos.storage.memory_backend import InMemoryBackend
-from memos.consolidation.engine import ConsolidationEngine, DuplicateGroup
 
 
 def _item(content: str, *, tags: list[str] | None = None, importance: float = 0.5) -> MemoryItem:
@@ -139,7 +137,7 @@ class TestMerge:
         item_a.access_count = 5
         item_b = _make_item("Shared memory")
         item_b.access_count = 3
-        
+
         groups = engine.find_duplicates([item_a, item_b])
         # The keep item should have summed access counts after merge
         assert len(groups) == 1
@@ -150,10 +148,10 @@ class TestConsolidate:
         store = InMemoryBackend()
         store.upsert(_make_item("Hello world"))
         store.upsert(_make_item("Hello world"))
-        
+
         engine = ConsolidationEngine()
         result = engine.consolidate(store, dry_run=True)
-        
+
         assert result.groups_found == 1
         assert result.space_freed == 0  # Nothing actually removed
         assert len(store.list_all()) == 2  # Still 2 items
@@ -162,10 +160,10 @@ class TestConsolidate:
         store = InMemoryBackend()
         store.upsert(_make_item("Hello world"))
         store.upsert(_make_item("Hello world"))
-        
+
         engine = ConsolidationEngine()
         result = engine.consolidate(store)
-        
+
         assert result.groups_found == 1
         assert result.space_freed == 1
         assert len(store.list_all()) == 1
@@ -176,10 +174,10 @@ class TestConsolidate:
         item_b = _make_item("Important note", tags=["note", "review"])
         store.upsert(item_a)
         store.upsert(item_b)
-        
+
         engine = ConsolidationEngine()
-        result = engine.consolidate(store)
-        
+        engine.consolidate(store)
+
         remaining = store.list_all()
         assert len(remaining) == 1
         assert set(remaining[0].tags) == {"important", "note", "review"}
@@ -209,6 +207,6 @@ class TestEdgeCases:
         for i in range(20):
             items.append(_make_item(f"Duplicate number {i % 5}"))
             items.append(_make_item(f"Duplicate number {i % 5}"))
-        
+
         groups = engine.find_duplicates(items, max_groups=3)
         assert len(groups) <= 3

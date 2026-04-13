@@ -83,6 +83,7 @@ def test_link_fact_to_memory_creates_bridge_fact():
 
 def test_api_recall_enriched_endpoint(tmp_path):
     from fastapi.testclient import TestClient
+
     from memos.api import create_fastapi_app
 
     kg_path = tmp_path / "kg.db"

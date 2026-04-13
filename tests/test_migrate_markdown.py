@@ -10,9 +10,9 @@ import pytest
 TOOLS_DIR = Path(__file__).parent.parent / "tools"
 sys.path.insert(0, str(TOOLS_DIR))
 
-from migrate_markdown import parse_markdown_file, collect_files, migrate, _tags_from_filename
-from memos.core import MemOS
+from migrate_markdown import _tags_from_filename, collect_files, migrate, parse_markdown_file  # noqa: E402
 
+from memos.core import MemOS  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures

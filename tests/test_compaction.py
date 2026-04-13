@@ -4,9 +4,9 @@ import time
 
 import pytest
 
+from memos.compaction.engine import CompactionConfig, CompactionEngine
 from memos.models import MemoryItem, generate_id
 from memos.storage.memory_backend import InMemoryBackend
-from memos.compaction.engine import CompactionEngine, CompactionConfig, CompactionReport
 
 
 def _make_item(content: str, *, importance: float = 0.5, tags: list = None,
@@ -268,7 +268,7 @@ class TestCompactionIntegration:
         store.upsert(_make_item("old low", importance=0.1, age_days=200))
         store.upsert(_make_item("old low 2", importance=0.1, age_days=200))
 
-        report1 = engine.compact(store)
+        engine.compact(store)
         report2 = engine.compact(store)
 
         # Second run should find nothing new

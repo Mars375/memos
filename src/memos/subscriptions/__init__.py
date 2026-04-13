@@ -1,6 +1,6 @@
 """Subscription primitives for MemOS event streams."""
 
-from .models import SubscriptionFilter, SubscriptionRecord
 from .engine import SubscriptionRegistry
+from .models import SubscriptionFilter, SubscriptionRecord
 
 __all__ = ["SubscriptionFilter", "SubscriptionRecord", "SubscriptionRegistry"]

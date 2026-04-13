@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from memos.core import MemOS
+
 from memos.api import create_fastapi_app
 from memos.web import DASHBOARD_HTML
 
@@ -21,7 +21,7 @@ def test_dashboard_html_contains_title():
 @pytest.mark.asyncio
 async def test_dashboard_route():
     app = create_fastapi_app(backend="memory")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.get("/")
@@ -33,7 +33,7 @@ async def test_dashboard_route():
 @pytest.mark.asyncio
 async def test_dashboard_learn_and_recall():
     app = create_fastapi_app(backend="memory")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Learn

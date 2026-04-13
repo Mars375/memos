@@ -336,7 +336,7 @@ class GraphWikiEngine:
             "## Navigation",
             "",
             f"- [[god-nodes.md|God Nodes]] — {len(god_nodes)} entities spanning 3+ communities",
-            f"- [[log.md|Activity Log]] — build history",
+            "- [[log.md|Activity Log]] — build history",
         ])
         return "\n".join(lines) + "\n"
 

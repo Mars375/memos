@@ -2,9 +2,11 @@
 
 import json
 import time
-import pytest
 from unittest.mock import patch
-from memos.cli import main, _parse_timestamp, _fmt_ts
+
+import pytest
+
+from memos.cli import _fmt_ts, _parse_timestamp, main
 from memos.core import MemOS
 
 

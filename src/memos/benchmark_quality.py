@@ -16,7 +16,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import math
 import random
 import statistics
@@ -25,8 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .core import MemOS
-from .models import MemoryItem, RecallResult
-
+from .models import RecallResult
 
 # ── Synthetic Dataset ─────────────────────────────────────────────────────────
 
@@ -191,7 +189,7 @@ class QualityReport:
         """Human-readable quality benchmark report."""
         lines = [
             f"{'='*60}",
-            f"  MemOS Recall Quality Benchmark",
+            "  MemOS Recall Quality Benchmark",
             f"{'='*60}",
             f"  Version:     {self.version}",
             f"  Backend:     {self.backend}",
@@ -214,7 +212,7 @@ class QualityReport:
             lines.append(f"  Decay impact: {self.decay_impact_score:.4f}")
         if self.scalability_results:
             lines.append("")
-            lines.append(f"  Scalability:")
+            lines.append("  Scalability:")
             for sr in self.scalability_results:
                 lines.append(
                     f"    {sr['memories']} memories → "
@@ -340,8 +338,9 @@ def run_quality_benchmark(
     Returns:
         QualityReport with detailed metrics.
     """
-    from . import __version__
     from datetime import datetime, timezone
+
+    from . import __version__
 
     started = datetime.now(timezone.utc).isoformat()
 
@@ -495,7 +494,7 @@ def _run_decay_benchmark(
     # Run decay on actual items with aggressive params
     try:
         all_items = memos._store.list_all(namespace=memos._namespace)
-        report = memos._decay.run_decay(
+        memos._decay.run_decay(
             items=all_items,
             min_age_days=0,
             floor=0.01,

@@ -1,9 +1,10 @@
 """Tests for API key authentication and rate limiting."""
 
 import time
+
 import pytest
 
-from memos.api.auth import APIKeyManager, RateLimiter, create_auth_middleware
+from memos.api.auth import APIKeyManager, RateLimiter
 
 
 class TestAPIKeyManager:

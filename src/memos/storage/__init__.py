@@ -1,10 +1,10 @@
 """Storage backends."""
 
-from .base import StorageBackend
 from .async_base import AsyncStorageBackend
 from .async_wrapper import AsyncWrapper
-from .memory_backend import InMemoryBackend
+from .base import StorageBackend
 from .json_backend import JsonFileBackend
+from .memory_backend import InMemoryBackend
 
 __all__ = [
     "StorageBackend",

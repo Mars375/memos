@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 import hashlib
-import time
 from pathlib import Path
 
 import pytest
 
 from memos.ingest.cache import MinerCache
 from memos.ingest.miner import Miner, MineResult
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -160,8 +158,7 @@ def test_mine_file_skips_cached(tmp_file: Path, cache: MinerCache) -> None:
 def test_mine_file_update_replaces_memories(tmp_file: Path, cache: MinerCache) -> None:
     memos = _FakeMemos()
     miner = Miner(memos, cache=cache)
-    r1 = miner.mine_file(tmp_file)
-    count_after_first = memos.count
+    miner.mine_file(tmp_file)
 
     # Modify the file so sha256 changes
     tmp_file.write_text("Completely different content about kubernetes and helm.")
@@ -178,12 +175,12 @@ def test_mine_file_update_replaces_memories(tmp_file: Path, cache: MinerCache) -
 def test_mine_file_diff_skips_known_chunks(tmp_file: Path, cache: MinerCache) -> None:
     memos = _FakeMemos()
     miner = Miner(memos, cache=cache)
-    r1 = miner.mine_file(tmp_file)
+    miner.mine_file(tmp_file)
     first_count = memos.count
 
     # diff mode on same file with same sha256 → all chunks known → nothing new
     miner2 = Miner(memos, cache=cache)
-    r2 = miner2.mine_file(tmp_file, diff=True)
+    miner2.mine_file(tmp_file, diff=True)
     # Should not import anything since all chunks are already cached
     assert memos.count == first_count
 
@@ -192,7 +189,7 @@ def test_mine_file_no_cache_does_not_skip(tmp_file: Path) -> None:
     memos = _FakeMemos()
     miner = Miner(memos)  # no cache
     r1 = miner.mine_file(tmp_file)
-    r2 = miner.mine_file(tmp_file)
+    miner.mine_file(tmp_file)
     # Without cache, second run only skips in-memory deduplication (same session)
     # Both runs happen but second is a dupe in-memory
     assert r1.imported >= 1

@@ -13,12 +13,12 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
 from typing import Generator
 
-from memos.palace import PalaceIndex, PalaceRecall
-from memos.core import MemOS
+import pytest
 
+from memos.core import MemOS
+from memos.palace import PalaceIndex, PalaceRecall
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -357,7 +357,7 @@ def _make_app():
 @pytest.mark.anyio
 async def test_rest_create_wing() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/palace/wings", json={"name": "rest-wing-a"})
@@ -370,7 +370,7 @@ async def test_rest_create_wing() -> None:
 @pytest.mark.anyio
 async def test_rest_list_wings() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-wing-list-test"})
@@ -384,7 +384,7 @@ async def test_rest_list_wings() -> None:
 @pytest.mark.anyio
 async def test_rest_create_room() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-wing-room-test"})
@@ -401,7 +401,7 @@ async def test_rest_create_room() -> None:
 @pytest.mark.anyio
 async def test_rest_list_rooms() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-room-list-wing"})
@@ -418,7 +418,7 @@ async def test_rest_list_rooms() -> None:
 @pytest.mark.anyio
 async def test_rest_assign_and_unassign() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/palace/wings", json={"name": "rest-assign-wing"})
@@ -436,7 +436,7 @@ async def test_rest_assign_and_unassign() -> None:
 @pytest.mark.anyio
 async def test_rest_palace_stats() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.get("/api/v1/palace/stats")
@@ -449,7 +449,7 @@ async def test_rest_palace_stats() -> None:
 @pytest.mark.anyio
 async def test_rest_palace_recall() -> None:
     pytest.importorskip("httpx")
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = _make_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/learn", json={"content": "rest palace recall test memory"})
@@ -542,8 +542,8 @@ def test_palace_db_colocated_with_kg_db(tmp_path) -> None:
     It must NOT fall back to ~/.memos/palace.db, which would leak state between
     isolated instances (tests, tenants).
     """
-    import tempfile
     from pathlib import Path
+
     from memos.api import create_fastapi_app
 
     kg_db = str(tmp_path / "kg.db")
@@ -571,6 +571,7 @@ def test_palace_db_colocated_with_kg_db(tmp_path) -> None:
 def test_palace_db_memory_when_kg_is_memory() -> None:
     """When kg_db_path=':memory:', palace must also use ':memory:' (no file leakage)."""
     from pathlib import Path
+
     from memos.api import create_fastapi_app
 
     # Snapshot of home palace before

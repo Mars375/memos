@@ -1,11 +1,8 @@
 """Tests for recall CLI filters: --tags, --after, --before."""
 
-import os
-import json
 import tempfile
 import time
 import unittest
-from datetime import datetime, timedelta
 
 from memos.core import MemOS
 

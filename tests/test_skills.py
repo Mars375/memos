@@ -2,12 +2,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
-from unittest.mock import patch
 
-import pytest
-
-from memos.skills import SkillsExporter, SkillsExportResult, _SKILL_TEMPLATES
+from memos.skills import _SKILL_TEMPLATES, SkillsExporter, SkillsExportResult
 
 
 class TestSkillsExporter:
@@ -32,7 +28,7 @@ class TestSkillsExporter:
     def test_export_creates_output_dir(self, tmp_path):
         out = tmp_path / "nested" / "commands"
         exporter = SkillsExporter()
-        result = exporter.export(str(out))
+        exporter.export(str(out))
         assert out.is_dir()
 
     def test_export_skips_existing_by_default(self, tmp_path):
@@ -68,7 +64,7 @@ class TestSkillsExporter:
 
     def test_claude_code_format_replaces_query(self, tmp_path):
         exporter = SkillsExporter()
-        result = exporter.export(str(tmp_path), format="claude-code")
+        exporter.export(str(tmp_path), format="claude-code")
         recall_content = (tmp_path / "memos-recall.md").read_text()
         # $QUERY should be replaced with $ARGUMENTS for Claude Code
         assert "$ARGUMENTS" in recall_content or "$QUERY" not in recall_content

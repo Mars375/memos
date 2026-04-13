@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-
 # ── Type tag definitions ──────────────────────────────────────────────
 
 _TAG_PATTERNS: dict[str, list[re.Pattern[str]]] = {

@@ -76,6 +76,7 @@ def test_markdown_export_cli(tmp_path: Path, capsys):
 
 def test_markdown_export_api_returns_zip(tmp_path: Path):
     from fastapi.testclient import TestClient
+
     from memos.api import create_fastapi_app
 
     memos, kg, wiki_root = _build_env(tmp_path)

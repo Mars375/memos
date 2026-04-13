@@ -1,5 +1,6 @@
 """Tests for KG Path Queries — multi-hop graph traversal."""
 import pytest
+
 from memos.knowledge_graph import KnowledgeGraph
 
 
@@ -177,6 +178,7 @@ class TestCLI:
 
     def test_kg_path_cli(self, kg, monkeypatch, capsys):
         import argparse
+
         from memos.cli import cmd_kg_path
 
         ns = argparse.Namespace(
@@ -199,6 +201,7 @@ class TestCLI:
 
     def test_kg_neighbors_cli(self, kg, monkeypatch, capsys):
         import argparse
+
         from memos.cli import cmd_kg_neighbors
 
         ns = argparse.Namespace(
@@ -216,6 +219,7 @@ class TestCLI:
 
     def test_kg_path_cli_no_path(self, kg, capsys):
         import argparse
+
         from memos.cli import cmd_kg_path
 
         ns = argparse.Namespace(

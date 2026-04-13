@@ -7,8 +7,8 @@ import re
 import time
 from typing import Optional
 
-from .base import StorageBackend
 from ..models import MemoryItem
+from .base import StorageBackend
 
 
 class PineconeBackend(StorageBackend):
@@ -77,7 +77,7 @@ class PineconeBackend(StorageBackend):
         self._index = self._pc.Index(self._index_name)
 
     def _create_index(self):
-        from pinecone import ServerlessSpec, PodSpec
+        from pinecone import PodSpec, ServerlessSpec
 
         if self._serverless:
             spec = ServerlessSpec(cloud=self._cloud, region=self._region)

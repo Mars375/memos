@@ -6,8 +6,9 @@ import time
 import pytest
 
 from memos.consolidation.async_engine import AsyncConsolidationEngine, AsyncConsolidationHandle
-from memos.storage.memory_backend import InMemoryBackend
+from memos.core import MemOS
 from memos.models import MemoryItem
+from memos.storage.memory_backend import InMemoryBackend
 
 
 def _make_item(content: str, **kw) -> MemoryItem:
@@ -216,5 +217,4 @@ class TestMemOSAsyncConsolidation:
         assert mem.consolidation_tasks() == []
 
 
-# Import MemOS for the integration tests
-from memos.core import MemOS
+

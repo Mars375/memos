@@ -3,18 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
-import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .. import __version__
-from ..config import config_path, load_config, resolve, write_config, DEFAULTS, ENV_MAP
+from ..config import resolve
 from ..core import MemOS
-from ..models import parse_ttl
 
 
 def _get_memos(ns: argparse.Namespace) -> MemOS:

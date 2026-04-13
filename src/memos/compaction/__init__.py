@@ -11,6 +11,6 @@ Compaction is designed to run periodically (e.g., daily cron) and keep
 the memory store healthy as it grows.
 """
 
-from .engine import CompactionEngine, CompactionConfig, CompactionReport
+from .engine import CompactionConfig, CompactionEngine, CompactionReport
 
 __all__ = ["CompactionEngine", "CompactionConfig", "CompactionReport"]

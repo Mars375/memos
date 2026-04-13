@@ -1,6 +1,6 @@
 """Tests for WebSocket event subscriptions."""
-import asyncio
 import pytest
+
 from memos import MemOS
 from memos.events import EventBus, MemoryEvent
 
@@ -60,7 +60,7 @@ class TestEventBus:
 
     def test_ws_queue_overflow_drops_client(self):
         bus = EventBus()
-        q = bus.add_ws_client()  # maxsize=500
+        bus.add_ws_client()  # maxsize=500
         for i in range(501):
             bus.emit_sync("learned", {"id": str(i)})
         assert bus.client_count == 0
@@ -142,6 +142,7 @@ class TestMemOSEvents:
     def test_prune_emits_event(self):
         mem = MemOS(sanitize=False)
         import time
+
         from memos.models import MemoryItem
         old_time = time.time() - 100 * 86400
         item = MemoryItem(

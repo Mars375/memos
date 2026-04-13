@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 
-from memos.core import MemOS
 from memos.cli import build_parser, cmd_migrate
+from memos.core import MemOS
 
 
 class TestMigrationEngine:

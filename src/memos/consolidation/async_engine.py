@@ -10,10 +10,10 @@ import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
-from .engine import ConsolidationEngine, ConsolidationResult
 from ..storage.base import StorageBackend
+from .engine import ConsolidationEngine, ConsolidationResult
 
 
 @dataclass

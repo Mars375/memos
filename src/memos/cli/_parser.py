@@ -241,7 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
     cfg_sub = cfg_p.add_subparsers(dest="config_action")
     cfg_show = cfg_sub.add_parser("show", help="Show current resolved config")
     cfg_show.add_argument("--json", action="store_true", help="JSON output")
-    cfg_path_cmd = cfg_sub.add_parser("path", help="Show config file path")
+    cfg_sub.add_parser("path", help="Show config file path")
     cfg_set = cfg_sub.add_parser("set", help="Set a config value")
     cfg_set.add_argument("key_value", nargs="+", help="key=value pairs")
     cfg_init = cfg_sub.add_parser("init", help="Create default config file")

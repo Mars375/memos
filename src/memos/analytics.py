@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-import statistics
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

@@ -1,6 +1,6 @@
 """Tests for memos get command — retrieve single memory by ID."""
 import json
-import pytest
+
 from memos.core import MemOS
 from memos.models import MemoryItem
 

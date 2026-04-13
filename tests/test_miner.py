@@ -1,15 +1,24 @@
 """Tests for smart memory miner (P8)."""
 from __future__ import annotations
+
 import json
+
 import pytest
+
 from memos.core import MemOS
 from memos.ingest.miner import (
-    Miner, MineResult,
-    chunk_text, content_hash, detect_room, iter_files,
-    _parse_claude_export, _parse_chatgpt_export, _parse_slack_jsonl,
-    _parse_discord_export, _parse_telegram_export, _parse_openclaw_session,
+    Miner,
+    MineResult,
+    _parse_chatgpt_export,
+    _parse_claude_export,
+    _parse_discord_export,
+    _parse_openclaw_session,
+    _parse_slack_jsonl,
+    _parse_telegram_export,
+    chunk_text,
+    content_hash,
+    detect_room,
 )
-
 
 # ---------------------------------------------------------------------------
 # chunk_text

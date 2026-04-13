@@ -7,10 +7,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from ..consolidation.engine import ConsolidationEngine
+from ..decay.engine import DecayEngine
 from ..models import MemoryItem, generate_id
 from ..storage.base import StorageBackend
-from ..decay.engine import DecayEngine
-from ..consolidation.engine import ConsolidationEngine, DuplicateGroup
 
 
 @dataclass
@@ -315,7 +315,7 @@ class CompactionEngine:
         """Phase 3: Merge groups of stale, semantically related memories."""
         groups = self.find_stale_groups(items)
         budget_used = report.archived + report.dedup_merged + report.stale_merged
-        remaining_budget = self._config.max_compact_per_run - budget_used
+        self._config.max_compact_per_run - budget_used
 
         for group in groups:
             if budget_used >= self._config.max_compact_per_run:

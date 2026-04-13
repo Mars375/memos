@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -52,7 +51,7 @@ class APIKeyManager:
 
     def __init__(self, keys: Optional[list[str]] = None):
         """Initialize with optional list of valid API keys.
-        
+
         If no keys provided, authentication is disabled.
         """
         self._hashed_keys: set[str] = set()
@@ -101,7 +100,7 @@ class APIKeyManager:
 
 def create_auth_middleware(key_manager: APIKeyManager):
     """Create ASGI middleware for API key auth and rate limiting.
-    
+
     Usage with FastAPI:
         from memos.api.auth import APIKeyManager, create_auth_middleware
         key_mgr = APIKeyManager(keys=["sk-test-123"])

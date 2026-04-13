@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 
 from ._common import _get_memos
 
@@ -68,7 +67,7 @@ def cmd_ns_stats(ns: argparse.Namespace) -> None:
 
 def cmd_share_offer(ns: argparse.Namespace) -> None:
     """Offer to share memories with another agent."""
-    from ..sharing.models import ShareScope, SharePermission
+    from ..sharing.models import SharePermission, ShareScope
     memos = _get_memos(ns)
     import time as _time
     expires = ns.expires
@@ -185,7 +184,7 @@ def cmd_sync_check(ns: argparse.Namespace) -> None:
 
     envelope = MemoryEnvelope.from_dict(data)
     if not envelope.validate():
-        print(f"✗ Envelope checksum validation failed — data may be corrupted")
+        print("✗ Envelope checksum validation failed — data may be corrupted")
         return
 
     detector = ConflictDetector()
@@ -232,7 +231,7 @@ def cmd_sync_apply(ns: argparse.Namespace) -> None:
 
     envelope = MemoryEnvelope.from_dict(data)
     if not envelope.validate():
-        print(f"✗ Envelope checksum validation failed — aborting")
+        print("✗ Envelope checksum validation failed — aborting")
         return
 
     detector = ConflictDetector()

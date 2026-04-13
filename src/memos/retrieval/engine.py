@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 from ..models import MemoryItem, RecallResult, ScoreBreakdown
 from ..storage.base import StorageBackend
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..cache.embedding_cache import EmbeddingCache

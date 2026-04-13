@@ -2,11 +2,11 @@
 
 __version__ = "1.0.0"
 
-from .core import MemOS
-from .migration import MigrationEngine, MigrationReport
-from .models import MemoryItem, RecallResult, MemoryStats
 from .brain import BrainSearch, BrainSearchResult
+from .core import MemOS
 from .export_markdown import MarkdownExporter, MarkdownExportResult
+from .migration import MigrationEngine, MigrationReport
+from .models import MemoryItem, MemoryStats, RecallResult
 
 __all__ = [
     "MemOS",

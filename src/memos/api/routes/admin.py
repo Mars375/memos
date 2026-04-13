@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import json
-import time
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 
 def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: str, DASHBOARD_HTML: str) -> APIRouter:
@@ -82,8 +80,10 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.post("/api/v1/mine/conversation")
     async def api_mine_conversation(body: dict):
         """Mine a conversation transcript. Accepts text or server-side path."""
-        import tempfile, os
-        from ...ingest.conversation import ConversationMiner, parse_transcript
+        import os
+        import tempfile
+
+        from ...ingest.conversation import ConversationMiner
 
         text_body = body.get("text", "") or body.get("content", "")
         path_body = body.get("path", "")
@@ -177,8 +177,9 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.get("/api/v1/events/stream")
     async def event_stream(event_types: str | None = None, tags: str | None = None, namespace: str | None = None):
         """Stream memory events as SSE with optional filters."""
-        from ..sse import SSEEvent
         import asyncio as _asyncio
+
+        from ..sse import SSEEvent
 
         event_type_list = [t.strip() for t in event_types.split(",") if t.strip()] if event_types else None
         tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
@@ -269,7 +270,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
 
     @router.post("/api/v1/share/offer")
     async def api_share_offer(body: dict):
-        from ...sharing.models import ShareScope, SharePermission
+        from ...sharing.models import SharePermission, ShareScope
         try:
             scope = ShareScope(body.get("scope", "items"))
             permission = SharePermission(body.get("permission", "read"))

@@ -14,8 +14,8 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from .base import StorageBackend
 from ..models import MemoryItem
+from .base import StorageBackend
 
 _DEFAULT = ""  # global namespace key
 

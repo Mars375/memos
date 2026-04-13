@@ -1,8 +1,10 @@
 """Tests for MCP server (JSON-RPC 2.0)."""
 from __future__ import annotations
+
 import pytest
+
 from memos.core import MemOS
-from memos.mcp_server import create_mcp_app, TOOLS, _dispatch
+from memos.mcp_server import TOOLS, _dispatch, create_mcp_app
 
 
 @pytest.fixture
@@ -79,7 +81,7 @@ def test_dispatch_save_empty(mem):
 
 @pytest.mark.asyncio
 async def test_http_initialize(mem):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}})
@@ -90,7 +92,7 @@ async def test_http_initialize(mem):
 
 @pytest.mark.asyncio
 async def test_http_tools_list(mem):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
@@ -99,7 +101,7 @@ async def test_http_tools_list(mem):
 
 @pytest.mark.asyncio
 async def test_http_tool_call(mem):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/mcp", json={
@@ -112,7 +114,7 @@ async def test_http_tool_call(mem):
 
 @pytest.mark.asyncio
 async def test_http_health(mem):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     app = create_mcp_app(mem)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/health")

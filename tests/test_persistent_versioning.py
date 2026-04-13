@@ -4,13 +4,10 @@ import os
 import tempfile
 import time
 
-import pytest
-
 from memos import MemOS
 from memos.models import MemoryItem, generate_id
-from memos.versioning.persistent_store import SqliteVersionStore, PersistentVersionStore
 from memos.versioning.engine import VersioningEngine
-from memos.versioning.models import MemoryVersion
+from memos.versioning.persistent_store import SqliteVersionStore
 
 
 class TestSqliteVersionStore:
@@ -83,7 +80,7 @@ class TestSqliteVersionStore:
 
     def test_version_at(self):
         item = self._make_item("time travel")
-        v1 = self.store.record(item)
+        self.store.record(item)
         t_after_v1 = time.time()
 
         time.sleep(0.05)

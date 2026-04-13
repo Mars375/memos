@@ -63,7 +63,7 @@ class MemorySanitizer:
     @classmethod
     def check(cls, content: str) -> list[SanitizeIssue]:
         """Check content for injection patterns and safety issues.
-        
+
         Returns:
             List of issues found. Empty list means content is safe.
         """

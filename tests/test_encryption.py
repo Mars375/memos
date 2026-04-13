@@ -2,11 +2,11 @@
 
 import pytest
 
+from memos import MemOS
 from memos.crypto import MemoryCrypto, NoOpCrypto
 from memos.models import MemoryItem
-from memos.storage.memory_backend import InMemoryBackend
 from memos.storage.encrypted_backend import EncryptedStorageBackend
-from memos import MemOS
+from memos.storage.memory_backend import InMemoryBackend
 
 
 class TestMemoryCrypto:

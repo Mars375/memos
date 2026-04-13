@@ -27,7 +27,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-
 # ---------------------------------------------------------------------------
 # Entity extraction — simple heuristic (no LLM required)
 # ---------------------------------------------------------------------------
@@ -511,7 +510,7 @@ class LivingWikiEngine:
                     content = page_path.read_text(encoding="utf-8")
                     # Replace or append backlinks section
                     link_lines = "\n## Backlinks\n\n" + "\n".join(
-                        f"- [[{self._safe_slug(l)}|{l}]]" for l in links
+                        f"- [[{self._safe_slug(line)}|{line}]]" for line in links
                     ) + "\n"
                     if "## Backlinks" in content:
                         content = re.sub(
@@ -718,11 +717,11 @@ class LivingWikiEngine:
                 content = page_path.read_text(encoding="utf-8")
                 # Count non-template lines (not comments, not frontmatter)
                 real_lines = [
-                    l for l in content.splitlines()
-                    if l.strip() and not l.strip().startswith("<!--")
-                    and not l.strip().startswith("---")
-                    and not l.startswith("# ")
-                    and not l.startswith("## ")
+                    line for line in content.splitlines()
+                    if line.strip() and not line.strip().startswith("<!--")
+                    and not line.strip().startswith("---")
+                    and not line.startswith("# ")
+                    and not line.startswith("## ")
                 ]
                 if len(real_lines) < 3:
                     report.empty_pages.append(ename)

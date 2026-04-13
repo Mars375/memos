@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 from ..models import MemoryItem, generate_id
 from ..storage.base import StorageBackend
@@ -31,12 +30,12 @@ class ConsolidationResult:
 
 class ConsolidationEngine:
     """Find and merge semantically similar memories.
-    
+
     Two-phase approach:
     1. **Exact dedup** — normalize + compare (fast, no embeddings)
     2. **Semantic dedup** — token overlap / Jaccard similarity (no embeddings needed,
        works offline; can optionally use embeddings via the retrieval engine)
-    
+
     Merge strategy:
     - Keep the item with highest (importance * recency_weight)
     - Merge tags from all duplicates
@@ -64,7 +63,7 @@ class ConsolidationEngine:
         max_groups: int = 50,
     ) -> list[DuplicateGroup]:
         """Find groups of duplicate/near-duplicate memories.
-        
+
         Returns groups sorted by similarity (most similar first).
         """
         if len(items) < 2:
@@ -72,7 +71,7 @@ class ConsolidationEngine:
 
         # Phase 1: exact dedup via normalized content
         exact_groups = self._find_exact_duplicates(items)
-        
+
         # Phase 2: semantic dedup via token similarity
         remaining = self._items_not_in_groups(items, exact_groups)
         semantic_groups = self._find_semantic_duplicates(remaining)
@@ -89,18 +88,18 @@ class ConsolidationEngine:
         dry_run: bool = False,
     ) -> ConsolidationResult:
         """Find and merge duplicate memories in the store.
-        
+
         Args:
             store: The storage backend to operate on.
             merge_content: If True, concatenate unique content from duplicates.
             dry_run: If True, don't actually modify anything — just report.
-        
+
         Returns:
             ConsolidationResult with counts and details.
         """
         items = store.list_all()
         groups = self.find_duplicates(items)
-        
+
         if not groups:
             return ConsolidationResult(groups_found=0)
 
@@ -190,7 +189,7 @@ class ConsolidationEngine:
         """Find near-duplicates using token overlap (Jaccard similarity)."""
         # Pre-tokenize
         tokenized = [(item, self._tokenize(item.content)) for item in items]
-        
+
         # Pairwise comparison with early termination
         groups = []
         used: set[str] = set()
@@ -280,14 +279,14 @@ class ConsolidationEngine:
         """Extract unique content parts from duplicate contents."""
         parts = [primary]
         primary_tokens = self._tokenize(primary)
-        
+
         for other in others:
             other_tokens = self._tokenize(other)
             # If >40% of tokens are new, include as additional content
             new_tokens = other_tokens - primary_tokens
             if new_tokens and len(new_tokens) / max(len(other_tokens), 1) > 0.4:
                 parts.append(other)
-        
+
         return parts
 
     @staticmethod

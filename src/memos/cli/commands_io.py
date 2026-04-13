@@ -291,8 +291,9 @@ def cmd_mine_conversation(ns: argparse.Namespace) -> None:
 
 def cmd_mine_status(ns: argparse.Namespace) -> None:
     """Show the incremental mine cache."""
-    from ..ingest.cache import MinerCache
     import datetime as _dt
+
+    from ..ingest.cache import MinerCache
 
     cache_db = getattr(ns, "cache_db", str(Path.home() / ".memos" / "mine-cache.db"))
     with MinerCache(cache_db) as cache:
@@ -319,8 +320,9 @@ def cmd_mine_status(ns: argparse.Namespace) -> None:
 
 def cmd_mine_stale(ns: argparse.Namespace) -> None:
     """Report sources that have changed since last mine (staleness detection)."""
-    from ..ingest.cache import MinerCache
     import datetime as _dt
+
+    from ..ingest.cache import MinerCache
 
     cache_db = getattr(ns, "cache_db", str(Path.home() / ".memos" / "mine-cache.db"))
     only_stale = getattr(ns, "only_stale", False)

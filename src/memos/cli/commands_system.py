@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
+from ..config import DEFAULTS, ENV_MAP, config_path, load_config, resolve, write_config
 from ._common import _get_memos
-from .. import __version__
-from ..config import config_path, load_config, resolve, write_config, DEFAULTS, ENV_MAP
 
 
 def cmd_serve(ns: argparse.Namespace) -> None:

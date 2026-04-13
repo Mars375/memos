@@ -77,6 +77,7 @@ def test_brain_entity_subgraph_returns_neighbors(brain_env):
 @pytest.mark.asyncio
 async def test_brain_search_api(brain_env):
     from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     memos, _kg, wiki_root, kg_path = brain_env
@@ -100,6 +101,7 @@ async def test_brain_search_api(brain_env):
 @pytest.mark.asyncio
 async def test_brain_entity_detail_api(brain_env):
     from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     memos, _kg, wiki_root, kg_path = brain_env
@@ -151,6 +153,7 @@ def test_brain_search_rebinds_stale_bridge_to_explicit_kg(tmp_path: Path):
 @pytest.mark.asyncio
 async def test_brain_entity_subgraph_api(brain_env):
     from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     memos, _kg, wiki_root, kg_path = brain_env

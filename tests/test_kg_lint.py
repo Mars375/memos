@@ -1,5 +1,6 @@
 """Tests for KnowledgeGraph.lint() — P2: quality linting."""
 import pytest
+
 from memos.knowledge_graph import KnowledgeGraph
 
 
@@ -115,8 +116,9 @@ class TestSparse:
 class TestCLI:
     def test_kg_lint_cli_clean(self, kg, capsys):
         import argparse
-        from memos.cli import cmd_kg_lint
         from unittest.mock import patch
+
+        from memos.cli import cmd_kg_lint
 
         kg.add_fact("Alice", "works_at", "CompanyA")
         kg.add_fact("Alice", "leads", "TeamA")
@@ -132,8 +134,9 @@ class TestCLI:
 
     def test_kg_lint_cli_with_issues(self, kg, capsys):
         import argparse
-        from memos.cli import cmd_kg_lint
         from unittest.mock import patch
+
+        from memos.cli import cmd_kg_lint
 
         kg.add_fact("Alice", "works_at", "CompanyA")
         kg.add_fact("Alice", "works_at", "CompanyB")

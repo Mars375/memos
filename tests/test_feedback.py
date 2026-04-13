@@ -1,7 +1,7 @@
 """Tests for relevance feedback feature."""
 
-import json
 import pytest
+
 from memos.core import MemOS
 from memos.models import FeedbackEntry, FeedbackStats
 
@@ -143,7 +143,7 @@ class TestGetFeedback:
         assert entries == []
 
 
-class TestFeedbackStats:
+class TestFeedbackStatsIntegration:
     def test_stats_empty(self, memos):
         stats = memos.feedback_stats()
         assert stats.total_feedback == 0
@@ -176,7 +176,7 @@ class TestFeedbackPersistence:
         m1 = MemOS(backend="memory", persist_path=store_path)
         item = m1.learn("persistent test", tags=["test"])
         m1.record_feedback(item.id, "relevant", query="test")
-        
+
         # Simulate restart
         m2 = MemOS(backend="memory", persist_path=store_path)
         entries = m2.get_feedback(item_id=item.id)
@@ -188,7 +188,7 @@ class TestFeedbackPersistence:
         m1 = MemOS(backend="memory", persist_path=store_path)
         item = m1.learn("test", tags=["test"], importance=0.5)
         m1.record_feedback(item.id, "relevant")
-        
+
         m2 = MemOS(backend="memory", persist_path=store_path)
         updated = m2._store.get(item.id, namespace="")
         assert updated.importance == pytest.approx(0.6)

@@ -1,13 +1,12 @@
 """Tests for the rate limiting module."""
 
 import time
-import pytest
 
 from memos.api.ratelimit import (
-    TokenBucket,
+    DEFAULT_RULES,
     EndpointRule,
     RateLimiter,
-    DEFAULT_RULES,
+    TokenBucket,
     create_rate_limit_middleware,
 )
 

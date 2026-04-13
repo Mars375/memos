@@ -1,14 +1,9 @@
 """Tests for Parquet export/import functionality."""
 
-import json
-import time
 
 import pytest
 
 from memos.core import MemOS
-from memos.models import MemoryItem, generate_id
-from memos.storage.memory_backend import InMemoryBackend
-
 
 # ── Fixtures ──────────────────────────────────────────────
 
@@ -66,7 +61,7 @@ class TestExportParquet:
 
     def test_export_creates_parent_dirs(self, mem, tmp_path):
         path = tmp_path / "sub" / "dir" / "export.parquet"
-        result = mem.export_parquet(str(path))
+        mem.export_parquet(str(path))
         assert path.exists()
 
     def test_export_preserves_all_fields(self, mem, tmp_path):

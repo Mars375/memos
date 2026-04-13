@@ -8,8 +8,8 @@ import uuid
 import pytest
 
 from memos.models import MemoryItem
-from memos.storage.memory_backend import InMemoryBackend
 from memos.storage.async_wrapper import AsyncWrapper
+from memos.storage.memory_backend import InMemoryBackend
 
 
 def _item(content: str, **kw) -> MemoryItem:

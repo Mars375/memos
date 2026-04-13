@@ -12,14 +12,13 @@ Supports both in-memory and persistent (SQLite) version stores.
 
 from __future__ import annotations
 
-import time
 from typing import Any, Optional, Union
 
-from ..models import MemoryItem, RecallResult, generate_id
+from ..models import MemoryItem
 from ..storage.base import StorageBackend
 from .models import MemoryVersion, VersionDiff
-from .store import VersionStore
 from .persistent_store import PersistentVersionStore, SqliteVersionStore
+from .store import VersionStore
 
 
 class VersioningEngine:

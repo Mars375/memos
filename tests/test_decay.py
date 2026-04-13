@@ -11,14 +11,12 @@ Covers:
 from __future__ import annotations
 
 import time
-from typing import Generator
 
 import pytest
 
 from memos.core import MemOS
-from memos.decay.engine import DecayEngine, DecayConfig, DecayReport
+from memos.decay.engine import DecayConfig, DecayEngine
 from memos.models import MemoryItem
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -138,7 +136,7 @@ def test_run_decay_applies(engine: DecayEngine):
 
 def test_run_decay_respects_floor(engine: DecayEngine):
     items = [_make_item("very-old", age_days=365, importance=0.3)]
-    report = engine.run_decay(items, min_age_days=0, floor=0.2, dry_run=False)
+    engine.run_decay(items, min_age_days=0, floor=0.2, dry_run=False)
     assert items[0].importance >= 0.2
 
 
@@ -199,7 +197,7 @@ def test_find_prune_candidates(engine: DecayEngine):
     candidates = engine.find_prune_candidates(items, threshold=0.3, max_age_days=365)
     # old-low should be a candidate, new-low too recent, old-high too important
     ids = {c.id for c in candidates}
-    assert f"test-old-low" in ids
+    assert "test-old-low" in ids
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +221,7 @@ def test_decay_config_defaults():
 
 def test_cli_decay_dry_run(mem: MemOS, capsys):
     import argparse
+
     from memos.cli import cmd_decay
 
     mem.learn("test memory for decay", importance=0.5)
@@ -248,6 +247,7 @@ def test_cli_decay_dry_run(mem: MemOS, capsys):
 
 def test_cli_decay_apply(mem: MemOS, capsys):
     import argparse
+
     from memos.cli import cmd_decay
 
     mem.learn("old decay test", importance=0.8)
@@ -272,6 +272,7 @@ def test_cli_decay_apply(mem: MemOS, capsys):
 
 def test_cli_reinforce(mem: MemOS, capsys):
     import argparse
+
     from memos.cli import cmd_reinforce
 
     item = mem.learn("reinforce target", importance=0.5)
@@ -296,7 +297,7 @@ def test_cli_reinforce(mem: MemOS, capsys):
 
 def test_cli_reinforce_not_found(mem: MemOS):
     import argparse
-    import sys
+
     from memos.cli import cmd_reinforce
 
     ns = argparse.Namespace(
@@ -328,7 +329,7 @@ def app(mem: MemOS):
 
 @pytest.mark.anyio
 async def test_rest_decay_run(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/decay/run", json={"dry_run": True, "min_age_days": 0})
@@ -341,7 +342,7 @@ async def test_rest_decay_run(app):
 
 @pytest.mark.anyio
 async def test_rest_decay_apply(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # First add a memory
@@ -355,7 +356,8 @@ async def test_rest_decay_apply(app):
 
 @pytest.mark.anyio
 async def test_rest_reinforce(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     # We need the actual MemOS instance to get the item ID
@@ -373,7 +375,7 @@ async def test_rest_reinforce(app):
 
 @pytest.mark.anyio
 async def test_rest_reinforce_not_found(app):
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/memories/nonexistent/reinforce", json={})

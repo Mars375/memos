@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 from uuid import uuid4
-import time
 
 
 def _normalize(values: Optional[Iterable[str]]) -> tuple[str, ...]:

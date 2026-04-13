@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from memos.retrieval import BM25, HybridRetriever, _tokenize, _normalize, keyword_score
-
+from memos.retrieval import BM25, HybridRetriever, _normalize, _tokenize, keyword_score
 
 # ---------------------------------------------------------------------------
 # Tokenizer

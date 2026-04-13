@@ -8,7 +8,6 @@ Commands:
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -83,18 +82,18 @@ class WikiEngine:
 
             lines = [
                 f"# {tag}",
-                f"",
+                "",
                 f"> Compiled from {len(items)} memories · {time.strftime('%Y-%m-%d %H:%M')}",
-                f"",
+                "",
             ]
             for item in items:
                 importance_bar = "★" * max(1, round(item.importance * 5))
                 other_tags = [t for t in (item.tags or []) if t != tag]
                 tag_str = f" · tags: {', '.join(other_tags)}" if other_tags else ""
                 lines.append(f"## {importance_bar}{tag_str}")
-                lines.append(f"")
+                lines.append("")
                 lines.append(item.content)
-                lines.append(f"")
+                lines.append("")
 
             content = "\n".join(lines)
             path = self._wiki_dir / f"{self._safe_filename(tag)}.md"

@@ -1,10 +1,7 @@
 """Tests for compounding ingest (P8) — auto-update wiki on learn()."""
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import MagicMock
 
 from memos.core import MemOS
 from memos.models import MemoryItem
@@ -71,7 +68,7 @@ class TestUpdateForItem:
         wiki = LivingWikiEngine(m, wiki_dir=str(tmp_path / "wiki"))
 
         item = MemoryItem(id="test1", content="Alice works at CompanyX", tags=["work"])
-        result = wiki.update_for_item(item)
+        wiki.update_for_item(item)
 
         # wiki_dir is resolved to wiki/living/pages/ by LivingWikiEngine
         pages_dir = wiki._wiki_dir / "pages"
@@ -85,7 +82,7 @@ class TestUpdateForItem:
         wiki = LivingWikiEngine(m, wiki_dir=str(tmp_path / "wiki"))
 
         item = MemoryItem(id="test2", content="Generic content", tags=["python", "devops"])
-        result = wiki.update_for_item(item)
+        wiki.update_for_item(item)
 
         pages_dir = wiki._wiki_dir / "pages"
         md_files = {f.stem for f in pages_dir.glob("*.md")}

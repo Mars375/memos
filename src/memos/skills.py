@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 _SKILL_TEMPLATES: dict[str, str] = {
     "memos-recall": """\
 # /memos-recall

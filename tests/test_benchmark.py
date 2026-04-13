@@ -1,9 +1,8 @@
 """Tests for the benchmark module."""
 
 import json
-import pytest
 
-from memos.benchmark import run_benchmark, BenchmarkReport, BenchmarkResult, _percentile
+from memos.benchmark import BenchmarkReport, BenchmarkResult, _percentile, run_benchmark
 from memos.core import MemOS
 
 

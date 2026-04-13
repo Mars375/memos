@@ -2,9 +2,10 @@
 
 import json
 import time
-import math
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+
 from memos.models import MemoryItem
 from memos.storage.qdrant_backend import QdrantBackend
 

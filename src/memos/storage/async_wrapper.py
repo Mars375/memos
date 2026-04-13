@@ -7,9 +7,9 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Optional
 
-from .base import StorageBackend
-from .async_base import AsyncStorageBackend
 from ..models import MemoryItem
+from .async_base import AsyncStorageBackend
+from .base import StorageBackend
 
 _default_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="memos-async")
 

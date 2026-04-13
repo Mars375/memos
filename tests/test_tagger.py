@@ -1,8 +1,8 @@
 """Tests for the AutoTagger — zero-LLM memory type classification."""
 
 import pytest
-from memos.tagger import AutoTagger, TYPE_TAGS
 
+from memos.tagger import TYPE_TAGS, AutoTagger
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
@@ -368,8 +367,9 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     @router.get("/api/v1/recall/at/stream")
     async def api_recall_at_stream(q: str, at: float, top: int = 5, min_score: float = 0.0):
         """Stream time-travel recall results as SSE events."""
-        from ..sse import sse_stream
         import asyncio as _asyncio
+
+        from ..sse import sse_stream
         results = memos.recall_at(q, at, top=top, min_score=min_score)
 
         async def _gen():
@@ -498,7 +498,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         try:
             strategy = ResolutionStrategy(body.get("strategy", "merge"))
         except ValueError:
-            return {"status": "error", "message": f"Invalid strategy. Use: local_wins, remote_wins, merge, manual"}
+            return {"status": "error", "message": "Invalid strategy. Use: local_wins, remote_wins, merge, manual"}
         detector = ConflictDetector()
         report = detector.detect(memos, envelope)
         if body.get("dry_run", False):
@@ -514,7 +514,9 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         import tempfile
         import zipfile
         from pathlib import Path
+
         from fastapi.responses import FileResponse
+
         from ...export_markdown import MarkdownExporter
 
         export_root = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="memos-markdown-export-"))
@@ -530,6 +532,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd"):
         """Export all memories as a downloadable Parquet file."""
         import tempfile
+
         from fastapi.responses import FileResponse
         with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
             result = memos.export_parquet(tmp.name, include_metadata=include_metadata, compression=compression)

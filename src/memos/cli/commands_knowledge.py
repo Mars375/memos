@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from datetime import datetime
 
-from ._common import _get_memos, _get_kg, _get_kg_bridge, _ts
+from ._common import _get_kg, _get_memos, _ts
 
 
 def cmd_kg_add(ns: argparse.Namespace) -> None:
@@ -234,7 +233,7 @@ def cmd_kg_neighbors(ns: argparse.Namespace) -> None:
                 if entities:
                     print(f"  Hop {hop}: {', '.join(entities)}")
         if result["edges"]:
-            print(f"\n  Edges:")
+            print("\n  Edges:")
             for triple in result["edges"]:
                 print(f"    {triple['subject']} -[{triple['predicate']}]-> {triple['object']}")
     finally:
@@ -389,7 +388,7 @@ def cmd_wiki_living(ns: argparse.Namespace) -> None:
         print(f"  Types: {s['type_distribution']}")
 
     else:
-        wl_sp.print_help()
+        print("No wiki-living action specified. Use: init, update, lint, index, log, read, search, list, stats")
 
 
 def cmd_wiki_graph(ns: argparse.Namespace) -> None:

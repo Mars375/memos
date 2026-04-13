@@ -4,22 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
-from typing import AsyncIterator
-
-import pytest
 
 from memos import MemOS
-from memos.core import RecallResult
-from memos.models import MemoryItem, generate_id
 from memos.api.sse import (
     SSEEvent,
-    format_recall_event,
     format_done_event,
     format_error_event,
+    format_recall_event,
     sse_stream,
 )
-
+from memos.core import RecallResult
+from memos.models import MemoryItem
 
 # ── SSEEvent unit tests ─────────────────────────────────────────
 
@@ -372,9 +367,9 @@ class TestSSEStreamWrapper:
         assert recall_chunk.endswith("\n\n")
         # Lines separated properly
         lines = recall_chunk.strip().split("\n")
-        assert any(l.startswith("event: recall") for l in lines)
-        assert any(l.startswith("data: ") for l in lines)
-        assert any(l.startswith("id: ") for l in lines)
+        assert any(line.startswith("event: recall") for line in lines)
+        assert any(line.startswith("data: ") for line in lines)
+        assert any(line.startswith("id: ") for line in lines)
 
     def test_sse_stream_elapsed_ms_in_done(self):
         items = [
@@ -422,7 +417,7 @@ class TestIntegrationStreaming:
         # All recall chunks have valid JSON data
         recall_chunks = [c for c in chunks if "event: recall" in c]
         for chunk in recall_chunks:
-            data_line = [l for l in chunk.split("\n") if l.startswith("data: ")][0]
+            data_line = [line for line in chunk.split("\n") if line.startswith("data: ")][0]
             payload = json.loads(data_line[6:])
             assert "id" in payload
             assert "content" in payload
@@ -452,7 +447,7 @@ class TestIntegrationStreaming:
         chunks = asyncio.run(_run())
         recall_chunks = [c for c in chunks if "event: recall" in c]
         for chunk in recall_chunks:
-            data_line = [l for l in chunk.split("\n") if l.startswith("data: ")][0]
+            data_line = [line for line in chunk.split("\n") if line.startswith("data: ")][0]
             payload = json.loads(data_line[6:])
             assert "agent-b" in payload["tags"]
 
@@ -479,7 +474,7 @@ class TestIntegrationStreaming:
         # Scores should be in descending order
         scores = []
         for chunk in recall_chunks:
-            data_line = [l for l in chunk.split("\n") if l.startswith("data: ")][0]
+            data_line = [line for line in chunk.split("\n") if line.startswith("data: ")][0]
             payload = json.loads(data_line[6:])
             scores.append(payload["score"])
         assert scores == sorted(scores, reverse=True)
@@ -515,7 +510,7 @@ class TestStreamingEdgeCases:
         chunks = asyncio.run(_run_sse())
         recall_chunks = [c for c in chunks if "event: recall" in c]
         for chunk in recall_chunks:
-            data_line = [l for l in chunk.split("\n") if l.startswith("data: ")][0]
+            data_line = [line for line in chunk.split("\n") if line.startswith("data: ")][0]
             # Should parse as valid JSON
             payload = json.loads(data_line[6:])
             assert "quotes" in payload["content"]

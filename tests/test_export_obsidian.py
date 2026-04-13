@@ -1,14 +1,9 @@
 """Tests for ObsidianExporter — P6 Obsidian-compatible export."""
 from __future__ import annotations
 
-import re
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from memos.export_obsidian import ObsidianExporter, ObsidianExportResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -135,7 +130,7 @@ class TestObsidianExport:
 
         # Patch out the heavy LivingWikiEngine calls
         with patch("memos.export_markdown.LivingWikiEngine") as MockWiki, \
-             patch("memos.export_markdown.GraphWikiEngine") as MockGraph:
+             patch("memos.export_markdown.GraphWikiEngine"):
             MockWiki.return_value.update.return_value = MagicMock(
                 pages_created=0, pages_updated=0, entities_found=0,
                 memories_indexed=0, backlinks_added=0,
@@ -156,7 +151,7 @@ class TestObsidianExport:
         kg = _make_kg()
 
         with patch("memos.export_markdown.LivingWikiEngine") as MockWiki, \
-             patch("memos.export_markdown.GraphWikiEngine") as MockGraph:
+             patch("memos.export_markdown.GraphWikiEngine"):
             MockWiki.return_value.update.return_value = MagicMock(
                 pages_created=0, pages_updated=0, entities_found=0,
                 memories_indexed=0, backlinks_added=0,
@@ -192,7 +187,7 @@ class TestObsidianExport:
         )
 
         with patch("memos.export_markdown.LivingWikiEngine") as MockWiki, \
-             patch("memos.export_markdown.GraphWikiEngine") as MockGraph:
+             patch("memos.export_markdown.GraphWikiEngine"):
             MockWiki.return_value.update.return_value = MagicMock(
                 pages_created=0, pages_updated=0, entities_found=0,
                 memories_indexed=0, backlinks_added=0,

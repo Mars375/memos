@@ -14,13 +14,11 @@ Covers:
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
 from typing import Generator
 
 import pytest
 
 from memos.knowledge_graph import KnowledgeGraph, _parse_date
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -522,7 +520,7 @@ def test_infer_transitive_idempotent(kg: KnowledgeGraph) -> None:
     """Running infer_transitive twice should not create duplicate facts."""
     kg.add_fact("A", "rel", "B")
     kg.add_fact("B", "rel", "C")
-    ids1 = kg.infer_transitive("rel")
+    kg.infer_transitive("rel")
     ids2 = kg.infer_transitive("rel")
     assert len(ids2) == 0, "Second run should not create new facts"
 
@@ -534,6 +532,7 @@ def test_infer_transitive_idempotent(kg: KnowledgeGraph) -> None:
 
 def test_cli_kg_add_basic(tmp_path) -> None:
     import argparse
+
     from memos.cli import cmd_kg_add, cmd_kg_stats
 
     db = str(tmp_path / "test.db")
@@ -558,6 +557,7 @@ def test_cli_kg_add_basic(tmp_path) -> None:
 
 def test_cli_kg_query(tmp_path, capsys) -> None:
     import argparse
+
     from memos.cli import cmd_kg_add, cmd_kg_query
 
     db = str(tmp_path / "test.db")
@@ -578,6 +578,7 @@ def test_cli_kg_query(tmp_path, capsys) -> None:
 
 def test_cli_kg_timeline(tmp_path, capsys) -> None:
     import argparse
+
     from memos.cli import cmd_kg_add, cmd_kg_timeline
 
     db = str(tmp_path / "test.db")
@@ -596,7 +597,8 @@ def test_cli_kg_timeline(tmp_path, capsys) -> None:
 
 def test_cli_kg_invalidate(tmp_path, capsys) -> None:
     import argparse
-    from memos.cli import cmd_kg_add, cmd_kg_query, cmd_kg_invalidate
+
+    from memos.cli import cmd_kg_add, cmd_kg_invalidate
 
     db = str(tmp_path / "test.db")
 
@@ -622,6 +624,7 @@ def test_cli_kg_invalidate(tmp_path, capsys) -> None:
 
 def test_cli_kg_stats_empty(tmp_path, capsys) -> None:
     import argparse
+
     from memos.cli import cmd_kg_stats
 
     db = str(tmp_path / "test.db")
@@ -644,8 +647,8 @@ def kg_db_path(tmp_path):
 @pytest.fixture()
 def app(kg_db_path):
     """Create a FastAPI test app backed by a temp KG db."""
-    from memos.core import MemOS
     from memos.api import create_fastapi_app
+    from memos.core import MemOS
 
     memos_instance = MemOS(backend="memory")
     return create_fastapi_app(memos=memos_instance, kg_db_path=kg_db_path)
@@ -653,7 +656,7 @@ def app(kg_db_path):
 
 @pytest.mark.anyio
 async def test_rest_kg_add_fact(app) -> None:
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/kg/facts", json={
@@ -669,7 +672,7 @@ async def test_rest_kg_add_fact(app) -> None:
 
 @pytest.mark.anyio
 async def test_rest_kg_query(app) -> None:
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/kg/facts", json={
@@ -686,7 +689,7 @@ async def test_rest_kg_query(app) -> None:
 
 @pytest.mark.anyio
 async def test_rest_kg_timeline(app) -> None:
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/kg/facts", json={
@@ -702,7 +705,7 @@ async def test_rest_kg_timeline(app) -> None:
 
 @pytest.mark.anyio
 async def test_rest_kg_invalidate(app) -> None:
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         add_resp = await client.post("/api/v1/kg/facts", json={
@@ -720,7 +723,7 @@ async def test_rest_kg_invalidate(app) -> None:
 
 @pytest.mark.anyio
 async def test_rest_kg_stats(app) -> None:
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         await client.post("/api/v1/kg/facts", json={
@@ -736,7 +739,7 @@ async def test_rest_kg_stats(app) -> None:
 
 @pytest.mark.anyio
 async def test_rest_kg_add_missing_fields(app) -> None:
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/kg/facts", json={"subject": "Alice"})

@@ -734,7 +734,7 @@ def create_mcp_app(memos: Any) -> Any:
                 {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
                 status_code=400,
             )
-        sid = str(uuid.uuid4())
+        str(uuid.uuid4())
         # inline minimal dispatch for legacy path
         req_id = body.get("id")
         method = body.get("method", "")

@@ -2,8 +2,12 @@
 
 import json
 import time
+
 import pytest
 
+from memos.core import MemOS
+from memos.models import MemoryItem
+from memos.sharing.engine import SharingEngine
 from memos.sharing.models import (
     MemoryEnvelope,
     SharePermission,
@@ -11,10 +15,6 @@ from memos.sharing.models import (
     ShareScope,
     ShareStatus,
 )
-from memos.sharing.engine import SharingEngine
-from memos.core import MemOS
-from memos.models import MemoryItem
-
 
 # ── ShareRequest model tests ────────────────────────────────
 

@@ -1,5 +1,6 @@
 """Tests for KnowledgeGraph.backlinks() — P7: backlinks as first-class queries."""
 import pytest
+
 from memos.knowledge_graph import KnowledgeGraph
 
 
@@ -72,8 +73,9 @@ class TestBacklinks:
 class TestCLI:
     def test_backlinks_cli(self, kg, capsys):
         import argparse
-        from memos.cli import cmd_kg_backlinks
         from unittest.mock import patch
+
+        from memos.cli import cmd_kg_backlinks
 
         ns = argparse.Namespace(entity="ProjectX", predicate=None, show_all=False, kg_db=None)
         with patch("memos.cli.commands_knowledge._get_kg", return_value=kg):
@@ -87,8 +89,9 @@ class TestCLI:
 
     def test_backlinks_cli_predicate_filter(self, kg, capsys):
         import argparse
-        from memos.cli import cmd_kg_backlinks
         from unittest.mock import patch
+
+        from memos.cli import cmd_kg_backlinks
 
         ns = argparse.Namespace(entity="ProjectX", predicate="works_on", show_all=False, kg_db=None)
         with patch("memos.cli.commands_knowledge._get_kg", return_value=kg):
@@ -98,8 +101,9 @@ class TestCLI:
 
     def test_backlinks_cli_no_results(self, kg, capsys):
         import argparse
-        from memos.cli import cmd_kg_backlinks
         from unittest.mock import patch
+
+        from memos.cli import cmd_kg_backlinks
 
         ns = argparse.Namespace(entity="Alice", predicate=None, show_all=False, kg_db=None)
         with patch("memos.cli.commands_knowledge._get_kg", return_value=kg):

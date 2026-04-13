@@ -17,17 +17,13 @@ Covers:
 
 from __future__ import annotations
 
-import sys
-from io import StringIO
 from pathlib import Path
-from typing import Generator
 from unittest.mock import patch
 
 import pytest
 
 from memos.context import ContextStack
 from memos.core import MemOS
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -164,7 +160,7 @@ def test_wake_up_memory_line_format(cs_with_memories: ContextStack) -> None:
     output = cs_with_memories.wake_up()
     # Check that at least one line has the [X.XX] prefix
     lines = output.splitlines()
-    mem_lines = [l for l in lines if l.startswith("[")]
+    mem_lines = [line for line in lines if line.startswith("[")]
     assert len(mem_lines) > 0
     # Score format: [0.XX] or [1.00]
     import re
@@ -249,7 +245,8 @@ def test_context_for_no_identity_still_works(cs_with_memories: ContextStack) -> 
 @pytest.mark.anyio
 async def test_rest_wake_up_returns_context() -> None:
     """GET /api/v1/context/wake-up returns context string."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     m = MemOS(backend="memory")
@@ -268,7 +265,8 @@ async def test_rest_wake_up_returns_context() -> None:
 @pytest.mark.anyio
 async def test_rest_identity_get_empty() -> None:
     """GET /api/v1/context/identity returns empty when no identity file set."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     m = MemOS(backend="memory")
@@ -284,7 +282,8 @@ async def test_rest_identity_get_empty() -> None:
 @pytest.mark.anyio
 async def test_rest_identity_set_and_get() -> None:
     """POST /api/v1/context/identity stores identity and returns char count."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     m = MemOS(backend="memory")
@@ -304,7 +303,8 @@ async def test_rest_identity_set_and_get() -> None:
 @pytest.mark.anyio
 async def test_rest_identity_set_missing_content() -> None:
     """POST /api/v1/context/identity without content returns error."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     m = MemOS(backend="memory")
@@ -320,7 +320,8 @@ async def test_rest_identity_set_missing_content() -> None:
 @pytest.mark.anyio
 async def test_rest_context_for_returns_context() -> None:
     """GET /api/v1/context/for returns context for a query."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
+
     from memos.api import create_fastapi_app
 
     m = MemOS(backend="memory")
@@ -449,8 +450,6 @@ def test_cli_identity_show_empty(tmp_path: Path, capsys) -> None:
 
 def test_cli_identity_set_and_show(tmp_path: Path, capsys) -> None:
     """memos identity set <text> then show round-trips correctly."""
-    from memos.cli import cmd_identity
-    import argparse
 
     identity_file = tmp_path / "identity.txt"
 
@@ -553,8 +552,9 @@ def test_wake_up_compact_no_identity(tmp_path):
 def test_wake_up_compact_cli_flag(tmp_path, capsys):
     """--compact flag wires through to compact=True in CLI."""
     import argparse
+    from unittest.mock import MagicMock
+
     from memos.cli import cmd_wake_up
-    from unittest.mock import patch, MagicMock
     from memos.models import MemoryItem, MemoryStats
 
     fake_memos = MagicMock()

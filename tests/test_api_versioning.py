@@ -1,11 +1,12 @@
 """Tests for HTTP versioning API endpoints (v0.12.0)."""
 
-import json
 import time
+
 import pytest
+
+from memos.api import create_fastapi_app
 from memos.core import MemOS
 from memos.models import MemoryItem
-from memos.api import create_fastapi_app
 
 
 @pytest.fixture

@@ -38,13 +38,13 @@ def create_fastapi_app(
         memos = MemOS(**kwargs)
 
     # ── Dependencies ──────────────────────────────────────────
-    from ..knowledge_graph import KnowledgeGraph
-    from ..kg_bridge import KGBridge
-    from ..palace import PalaceIndex
     from ..context import ContextStack
-    from .auth import APIKeyManager, create_auth_middleware
-    from .ratelimit import RateLimiter, create_rate_limit_middleware, DEFAULT_RULES
+    from ..kg_bridge import KGBridge
+    from ..knowledge_graph import KnowledgeGraph
+    from ..palace import PalaceIndex
     from ..web import DASHBOARD_HTML
+    from .auth import APIKeyManager, create_auth_middleware
+    from .ratelimit import DEFAULT_RULES, RateLimiter, create_rate_limit_middleware
 
     _kg = KnowledgeGraph(db_path=kg_db_path)
     _kg_bridge = KGBridge(memos, _kg)
@@ -77,9 +77,9 @@ def create_fastapi_app(
     app.middleware("http")(create_rate_limit_middleware(rate_limiter))
 
     # ── Routers ───────────────────────────────────────────────
-    from .routes.memory import create_memory_router
-    from .routes.knowledge import create_knowledge_router
     from .routes.admin import create_admin_router
+    from .routes.knowledge import create_knowledge_router
+    from .routes.memory import create_memory_router
 
     app.include_router(create_memory_router(memos, _kg_bridge))
     app.include_router(create_knowledge_router(memos, _kg, _palace, _context_stack))

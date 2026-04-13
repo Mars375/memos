@@ -1,14 +1,11 @@
 """Tests for JsonFileBackend — persistent file-backed storage."""
 
 import json
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
-from memos.storage.json_backend import JsonFileBackend
 from memos.models import MemoryItem
+from memos.storage.json_backend import JsonFileBackend
 
 
 @pytest.fixture

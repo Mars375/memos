@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
-import pytest
-
+from memos.core import MemOS as MemOSCore
 from memos.models import MemoryItem
 from memos.storage.pinecone_backend import PineconeBackend
-from memos.core import MemOS as MemOSCore
 
 
 def _make_item(content: str = "test content", item_id: str = "abc123") -> MemoryItem:
@@ -221,7 +219,6 @@ class TestPineconeBackendInit:
     def test_import_error_without_pinecone(self):
         """Verify the import guard in _ensure_client gives a helpful message."""
         import memos.storage.pinecone_backend as pb
-        original = pb.PineconeBackend._ensure_client
         # The actual ImportError is raised inside _ensure_client when pinecone is missing
         # We test the error message pattern directly
         assert "pinecone-client" in pb.PineconeBackend.__doc__ or True  # doc mentions requirement
@@ -236,7 +233,7 @@ class TestPineconeInMemOS:
 
     def test_memos_pinecone_init(self):
         """MemOS can be initialized with pinecone backend (mocked)."""
-        with patch("memos.storage.pinecone_backend.PineconeBackend") as MockPB:
+        with patch("memos.storage.pinecone_backend.PineconeBackend"):
             mem = MemOSCore(
                 backend="pinecone",
                 pinecone_api_key="test-key",
@@ -246,7 +243,7 @@ class TestPineconeInMemOS:
 
     def test_memos_pinecone_batch_learn(self):
         """Batch learn works with Pinecone backend (mocked)."""
-        with patch("memos.storage.pinecone_backend.PineconeBackend") as MockPB:
+        with patch("memos.storage.pinecone_backend.PineconeBackend"):
             mem = MemOSCore(
                 backend="pinecone",
                 pinecone_api_key="test-key",

@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from ._common import _get_memos, _parse_timestamp, _fmt_ts
+from ._common import _fmt_ts, _get_memos, _parse_timestamp
 
 
 def cmd_history(ns: argparse.Namespace) -> None:

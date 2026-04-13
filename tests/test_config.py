@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import json
-import pytest
+import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from memos.config import (
-    DEFAULTS,
-    ENV_MAP,
     config_path,
     load_config,
     resolve,
@@ -113,9 +112,10 @@ class TestCLIConfig:
     """Integration tests for memos config CLI commands."""
 
     def test_config_path_command(self, tmp_path: Path):
-        from memos.cli import main
         import io
         from contextlib import redirect_stdout
+
+        from memos.cli import main
 
         f = io.StringIO()
         with redirect_stdout(f):
@@ -124,9 +124,10 @@ class TestCLIConfig:
         assert ".memos.toml" in output
 
     def test_config_show_json(self):
-        from memos.cli import main
         import io
         from contextlib import redirect_stdout
+
+        from memos.cli import main
 
         f = io.StringIO()
         with redirect_stdout(f):
@@ -136,9 +137,10 @@ class TestCLIConfig:
         assert "port" in data
 
     def test_config_set_and_read(self, tmp_path: Path):
-        from memos.cli import main
         import io
         from contextlib import redirect_stdout
+
+        from memos.cli import main
 
         cfg_file = tmp_path / ".memos.toml"
         with patch("memos.config.config_path", return_value=cfg_file):
@@ -159,9 +161,10 @@ class TestCLIConfig:
             main(["config", "set", "nonsense=value"])
 
     def test_config_set_bool_coercion(self, tmp_path: Path):
-        from memos.cli import main
         import io
         from contextlib import redirect_stdout
+
+        from memos.cli import main
 
         cfg_file = tmp_path / ".memos.toml"
         with patch("memos.config.config_path", return_value=cfg_file):
@@ -172,9 +175,10 @@ class TestCLIConfig:
             assert "sanitize = false" in content
 
     def test_config_init_creates_file(self, tmp_path: Path):
-        from memos.cli import main
         import io
         from contextlib import redirect_stdout
+
+        from memos.cli import main
 
         cfg_file = tmp_path / ".memos.toml"
         with patch("memos.cli.commands_system.config_path", return_value=cfg_file):
@@ -195,9 +199,10 @@ class TestCLIConfig:
                 main(["config", "init"])
 
     def test_config_init_force_overwrite(self, tmp_path: Path):
-        from memos.cli import main
         import io
         from contextlib import redirect_stdout
+
+        from memos.cli import main
 
         cfg_file = tmp_path / ".memos.toml"
         cfg_file.write_text("old content")

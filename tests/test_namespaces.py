@@ -1,6 +1,5 @@
 """Tests for multi-agent namespace isolation."""
 
-import pytest
 from memos import MemOS
 
 

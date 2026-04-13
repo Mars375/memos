@@ -4,48 +4,108 @@ from __future__ import annotations
 
 import sys
 
-from ._common import (
-    _get_memos, _get_kg, _get_kg_bridge, _get_palace,
-    _ts, _parse_timestamp, _fmt_ts,
-    _coerce_cli_value, _parse_kv_options,
-)
+from ._common import _coerce_cli_value, _fmt_ts, _get_kg, _get_kg_bridge, _get_memos, _get_palace, _parse_timestamp  # noqa: F401
 from ._parser import build_parser
-from .commands_memory import (
-    cmd_init, cmd_learn, cmd_batch_learn, cmd_recall, cmd_search,
-    cmd_stats, cmd_analytics, cmd_forget, cmd_get, cmd_prune, cmd_prune_expired,
-    cmd_consolidate, cmd_watch, cmd_subscribe, cmd_feedback, cmd_feedback_list,
-    cmd_feedback_stats, cmd_compact, cmd_benchmark, cmd_benchmark_quality,
-    cmd_cache_stats, cmd_tags, cmd_wake_up, cmd_identity, cmd_context_for,
-    cmd_classify, cmd_decay, cmd_reinforce, cmd_compress, cmd_dedup_check, cmd_dedup_scan,
-)
 from .commands_io import (
-    cmd_export, cmd_import, cmd_ingest, cmd_ingest_url, cmd_migrate,
-    cmd_mine, cmd_mine_conversation, cmd_mine_status, cmd_mine_stale,
+    cmd_export,
+    cmd_import,
+    cmd_ingest,
+    cmd_ingest_url,
+    cmd_migrate,
+    cmd_mine,
+    cmd_mine_conversation,
+    cmd_mine_stale,
+    cmd_mine_status,
     cmd_skills_export,
 )
 from .commands_knowledge import (
-    cmd_kg_add, cmd_kg_query, cmd_kg_timeline, cmd_kg_invalidate, cmd_kg_stats,
-    cmd_kg_infer, cmd_kg_labels, cmd_kg_path, cmd_kg_neighbors, cmd_kg_lint,
+    cmd_brain_search,
+    cmd_kg_add,
     cmd_kg_backlinks,
-    cmd_wiki_compile, cmd_wiki_list, cmd_wiki_read, cmd_wiki_living,
-    cmd_wiki_graph, cmd_brain_search,
+    cmd_kg_infer,
+    cmd_kg_invalidate,
+    cmd_kg_labels,
+    cmd_kg_lint,
+    cmd_kg_neighbors,
+    cmd_kg_path,
+    cmd_kg_query,
+    cmd_kg_stats,
+    cmd_kg_timeline,
+    cmd_wiki_compile,
+    cmd_wiki_graph,
+    cmd_wiki_list,
+    cmd_wiki_living,
+    cmd_wiki_read,
 )
-from .commands_versioning import (
-    cmd_history, cmd_diff, cmd_rollback, cmd_snapshot_at, cmd_recall_at,
-    cmd_version_stats, cmd_version_gc,
+from .commands_memory import (
+    cmd_analytics,
+    cmd_batch_learn,
+    cmd_benchmark,
+    cmd_benchmark_quality,
+    cmd_cache_stats,
+    cmd_classify,
+    cmd_compact,
+    cmd_compress,
+    cmd_consolidate,
+    cmd_context_for,
+    cmd_decay,
+    cmd_dedup_check,
+    cmd_dedup_scan,
+    cmd_feedback,
+    cmd_feedback_list,
+    cmd_feedback_stats,
+    cmd_forget,
+    cmd_get,
+    cmd_identity,
+    cmd_init,
+    cmd_learn,
+    cmd_prune,
+    cmd_prune_expired,
+    cmd_recall,
+    cmd_reinforce,
+    cmd_search,
+    cmd_stats,
+    cmd_subscribe,
+    cmd_tags,
+    cmd_wake_up,
+    cmd_watch,
 )
 from .commands_namespace import (
-    cmd_ns_grant, cmd_ns_revoke, cmd_ns_policies, cmd_ns_stats,
-    cmd_share_offer, cmd_share_accept, cmd_share_reject, cmd_share_revoke,
-    cmd_share_export, cmd_share_import, cmd_share_list, cmd_share_stats,
-    cmd_sync_check, cmd_sync_apply,
+    cmd_ns_grant,
+    cmd_ns_policies,
+    cmd_ns_revoke,
+    cmd_ns_stats,
+    cmd_share_accept,
+    cmd_share_export,
+    cmd_share_import,
+    cmd_share_list,
+    cmd_share_offer,
+    cmd_share_reject,
+    cmd_share_revoke,
+    cmd_share_stats,
+    cmd_sync_apply,
+    cmd_sync_check,
 )
 from .commands_palace import (
-    cmd_palace_init, cmd_palace_wing_create, cmd_palace_wing_list,
-    cmd_palace_room_create, cmd_palace_room_list, cmd_palace_assign,
-    cmd_palace_recall, cmd_palace_stats,
+    cmd_palace_assign,
+    cmd_palace_init,
+    cmd_palace_recall,
+    cmd_palace_room_create,
+    cmd_palace_room_list,
+    cmd_palace_stats,
+    cmd_palace_wing_create,
+    cmd_palace_wing_list,
 )
-from .commands_system import cmd_serve, cmd_mcp_serve, cmd_mcp_stdio, cmd_config
+from .commands_system import cmd_config, cmd_mcp_serve, cmd_mcp_stdio, cmd_serve
+from .commands_versioning import (
+    cmd_diff,
+    cmd_history,
+    cmd_recall_at,
+    cmd_rollback,
+    cmd_snapshot_at,
+    cmd_version_gc,
+    cmd_version_stats,
+)
 
 
 def main(argv: list[str] | None = None) -> None:

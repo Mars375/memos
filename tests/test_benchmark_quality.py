@@ -14,7 +14,6 @@ from memos.benchmark_quality import (
     generate_dataset,
     run_quality_benchmark,
 )
-from memos.core import MemOS
 
 
 class TestDatasetGeneration(unittest.TestCase):

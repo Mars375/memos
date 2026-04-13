@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from memos.cli import build_parser, main
 from memos.core import MemOS
 from memos.storage.memory_backend import InMemoryBackend
-
 
 # ── Core tests ──────────────────────────────────────────────────────────────
 
@@ -113,7 +110,7 @@ class TestTagsCLI:
         capsys.readouterr()  # clear init+learn output
         main(["tags", "list", "--limit", "2"])
         captured = capsys.readouterr()
-        lines = [l.strip() for l in captured.out.strip().split("\n") if l.strip()]
+        lines = [line.strip() for line in captured.out.strip().split("\n") if line.strip()]
         assert len(lines) == 2
 
 
@@ -122,8 +119,9 @@ class TestTagsCLI:
 
 class TestTagsAPI:
     def test_api_tags_endpoint(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         m.learn("api test a", tags=["api-foo", "api-bar"])
@@ -141,8 +139,9 @@ class TestTagsAPI:
         assert tag_map["api-bar"] == 1
 
     def test_api_tags_sort_name(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         m.learn("test", tags=["z-tag", "a-tag"])
@@ -156,8 +155,9 @@ class TestTagsAPI:
         assert names == sorted(names)
 
     def test_api_tags_limit(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         for i in range(10):
@@ -171,8 +171,9 @@ class TestTagsAPI:
         assert len(data) == 3
 
     def test_api_tags_empty(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         app = create_fastapi_app(memos=m)
@@ -290,8 +291,9 @@ class TestRenameTagCLI:
 
 class TestRenameTagAPI:
     def test_api_rename(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         m.learn("api test a", tags=["old-tag", "keep"])
@@ -315,8 +317,9 @@ class TestRenameTagAPI:
         assert "old-tag" not in tag_map
 
     def test_api_rename_missing_params(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         app = create_fastapi_app(memos=m)
@@ -327,8 +330,9 @@ class TestRenameTagAPI:
         assert "error" in resp.json()
 
     def test_api_rename_nonexistent(self):
-        from memos.api import create_fastapi_app
         from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         m = MemOS(backend=InMemoryBackend())
         app = create_fastapi_app(memos=m)
@@ -400,14 +404,15 @@ class TestDeleteTagCore:
 
 class TestDeleteTagCLI:
     def test_cli_delete_tag(self, capsys):
+        import sys
+
         from memos.core import MemOS
         from memos.storage.memory_backend import InMemoryBackend
-        import sys
 
         m = MemOS(backend=InMemoryBackend())
         m.learn("test item", tags=["remove-me", "keep"])
 
-        parser = build_parser()
+        build_parser()
         sys.argv = ["memos", "tags", "delete", "remove-me"]
         import unittest.mock
         with unittest.mock.patch("memos.cli.commands_memory._get_memos", return_value=m):
@@ -421,15 +426,16 @@ class TestDeleteTagCLI:
         assert "keep" in tag_names
 
     def test_cli_delete_missing_tag(self, capsys):
-        from memos.core import MemOS
-        from memos.storage.memory_backend import InMemoryBackend
         import sys
         import unittest.mock
+
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
 
         m = MemOS(backend=InMemoryBackend())
         m.learn("hello", tags=["stay"])
 
-        parser = build_parser()
+        build_parser()
         sys.argv = ["memos", "tags", "delete", "ghost"]
         with unittest.mock.patch("memos.cli.commands_memory._get_memos", return_value=m):
             main()
@@ -440,6 +446,7 @@ class TestDeleteTagCLI:
 class TestDeleteTagAPI:
     def test_api_delete_tag(self):
         from fastapi.testclient import TestClient
+
         from memos.api import create_fastapi_app
         from memos.core import MemOS
         from memos.storage.memory_backend import InMemoryBackend
@@ -462,6 +469,7 @@ class TestDeleteTagAPI:
 
     def test_api_delete_tag_missing_tag_in_body(self):
         from fastapi.testclient import TestClient
+
         from memos.api import create_fastapi_app
         from memos.core import MemOS
         from memos.storage.memory_backend import InMemoryBackend

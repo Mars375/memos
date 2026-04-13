@@ -16,7 +16,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import os
-from typing import Optional
 
 
 def _derive_key(passphrase: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
@@ -75,7 +74,7 @@ class MemoryCrypto:
         if not encoded:
             return ""
         payload = base64.b64decode(encoded)
-        salt = payload[:16]
+        payload[:16]
         mac = payload[16:32]
         nonce = payload[32:48]
         cipher = payload[48:]
