@@ -23,7 +23,7 @@ dependencies = [
 [project.optional-dependencies]
 local = ["sentence-transformers>=2.7"]
 chroma = ["chromadb>=0.4"]
-qdrant = ["qdrant-client>=1.7"]
+qdrant = ["qdrant-client>=1.17.1"]
 pinecone = ["pinecone-client>=3.0"]
 parquet = ["pyarrow>=12.0"]
 server = ["fastapi>=0.104", "uvicorn>=0.24"]
