@@ -33,7 +33,7 @@ dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff>
 memos = "memos.cli:main"
 
 [tool.setuptools.package-data]
-"memos.web" = ["*.html"]
+"memos.web" = ["*.html", "*.css", "js/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

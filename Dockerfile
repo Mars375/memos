@@ -12,10 +12,10 @@ COPY src/ src/
 COPY tests/ tests/
 COPY tools/ tools/
 
-RUN pip install --no-cache-dir ".[server,chroma,dev]"
+RUN pip install --no-cache-dir ".[server,chroma,local,dev]"
 
-# Default: inmemory backend on port 8000
-ENV MEMOS_BACKEND=memory
+# Default: local backend (JSON + sentence-transformers, zero external deps)
+ENV MEMOS_BACKEND=local
 ENV MEMOS_HOST=0.0.0.0
 ENV MEMOS_PORT=8000
 ENV MEMOS_CHROMA_URL=http://chroma:8000
