@@ -9,10 +9,10 @@
 
 ### Maintenance
 
-- [ ] **MAINT-01**: La version dans `pyproject.toml` est synchronisée avec `__init__.__version__`
-- [ ] **MAINT-02**: Les images Docker tierces (`chromadb/chroma`, `qdrant/qdrant`) sont épinglées à une version concrète dans `docker-compose.yml`
-- [ ] **MAINT-03**: `docker-compose.yml` inclut des log limits JSON (`max-size: 10m, max-file: 3`) sur tous les services
-- [ ] **MAINT-04**: La CI GitHub Actions teste Python 3.11, 3.12 et 3.13
+- [x] **MAINT-01**: La version dans `pyproject.toml` est synchronisée avec `__init__.__version__`
+- [x] **MAINT-02**: Les images Docker tierces (`chromadb/chroma`, `qdrant/qdrant`) sont épinglées à une version concrète dans `docker-compose.yml`
+- [x] **MAINT-03**: `docker-compose.yml` inclut des log limits JSON (`max-size: 10m, max-file: 3`) sur tous les services
+- [x] **MAINT-04**: La CI GitHub Actions teste Python 3.11, 3.12 et 3.13
 - [ ] **MAINT-05**: `ACTIVE.md` reflète l'état réel du projet (commits du 11-13 avril intégrés)
 - [ ] **MAINT-06**: `src/memos/miner/` est soit supprimé, soit ses fonctions uniques migrées dans `src/memos/ingest/`
 
@@ -95,10 +95,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAINT-01 | Phase 1 | Pending |
-| MAINT-02 | Phase 1 | Pending |
-| MAINT-03 | Phase 1 | Pending |
-| MAINT-04 | Phase 1 | Pending |
+| MAINT-01 | Phase 1 | Complete |
+| MAINT-02 | Phase 1 | Complete |
+| MAINT-03 | Phase 1 | Complete |
+| MAINT-04 | Phase 1 | Complete |
 | MAINT-05 | Phase 1 | Pending |
 | MAINT-06 | Phase 1 | Pending |
 | DASH-01 | Phase 2 | Pending |

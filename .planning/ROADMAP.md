@@ -23,9 +23,9 @@ MemOS v2.2.0 is in production with 1534 passing tests. This roadmap covers three
   4. CI matrix passes on Python 3.11, 3.12, and 3.13 — no green-but-missing-version illusion
   5. `ACTIVE.md` reflects commits through April 13, 2026 — no stale state
   6. `src/memos/miner/` is either removed or its unique logic migrated to `src/memos/ingest/` — no orphaned dead code in the repo
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
-- [ ] 01-01-PLAN.md — Version sync, Docker pinning, log limits, CI matrix expansion
+- [x] 01-01-PLAN.md — Version sync, Docker pinning, log limits, CI matrix expansion
 - [ ] 01-02-PLAN.md — ACTIVE.md update and orphaned miner/ removal
 
 ### Phase 2: Dashboard P1
@@ -58,6 +58,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Maintenance | 0/2 | Planning complete | - |
+| 1. Maintenance | 1/2 | In Progress|  |
 | 2. Dashboard P1 | 0/? | Not started | - |
 | 3. Documentation Polish | 0/? | Not started | - |
