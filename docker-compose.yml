@@ -23,6 +23,11 @@ services:
     environment:
       - MEMOS_BACKEND=local
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Single command: docker compose up memos-standalone
 
   # ── ChromaDB profile (production) ────────────────────────────
@@ -45,9 +50,14 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   chroma:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:1.5.7
     profiles: ["chroma"]
     ports:
       - "8001:8000"
@@ -60,6 +70,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ── Qdrant profile ──────────────────────────────────────────
   memos-qdrant:
@@ -78,9 +93,14 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.17.1
     profiles: ["qdrant"]
     ports:
       - "6333:6333"
@@ -94,6 +114,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   chroma-data:
