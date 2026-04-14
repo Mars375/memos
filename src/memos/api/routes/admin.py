@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 
 def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: str, DASHBOARD_HTML: str) -> APIRouter:
@@ -121,6 +124,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                 try:
                     os.unlink(tmp_path)
                 except Exception:
+                    logger.debug("Temp file cleanup failed for %s", tmp_path, exc_info=True)
                     pass
         else:
             result = miner.mine_conversation(
@@ -162,6 +166,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                     event = await queue.get()
                     await websocket.send_text(event.to_json())
             except Exception:
+                logger.debug("WebSocket sender loop ended", exc_info=True)
                 pass
 
         sender_task = asyncio.create_task(sender())

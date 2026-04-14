@@ -2,11 +2,42 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
+import zipfile
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+
+from ...sanitizer import MemorySanitizer
+from ...utils import parse_date as _parse_date
+from ..errors import error_response, handle_exception, not_found
+from ..schemas import (
+    BatchLearnRequest,
+    CompressRequest,
+    ConsolidateRequest,
+    DecayRunRequest,
+    DedupCheckRequest,
+    DedupScanRequest,
+    FeedbackRequest,
+    LearnExtractRequest,
+    LearnRequest,
+    PruneRequest,
+    RecallRequest,
+    ReinforceRequest,
+    RollbackRequest,
+    SyncApplyRequest,
+    SyncCheckRequest,
+    TagDeleteRequest,
+    TagRenameRequest,
+    VersioningGCRequest,
+)
+
+_ENFORCE_SANITIZATION = os.environ.get("MEMOS_ENFORCE_SANITIZATION", "true").lower() in ("true", "1", "yes")
 
 
 def create_memory_router(memos, _kg_bridge) -> APIRouter:
@@ -15,66 +46,61 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
 
     # ── Learn ────────────────────────────────────────────────
 
-    @router.post("/api/v1/learn")
-    async def api_learn(body: dict):
+    @router.post("/api/v1/learn", response_model=None)
+    async def api_learn(req: LearnRequest) -> dict | JSONResponse:
+        if _ENFORCE_SANITIZATION and not MemorySanitizer.is_safe(req.content):
+            return error_response("Content failed safety checks", code="UNSAFE_CONTENT", status_code=400)
         try:
             item = memos.learn(
-                content=body["content"],
-                tags=body.get("tags"),
-                importance=body.get("importance", 0.5),
-                metadata=body.get("metadata"),
+                content=req.content,
+                tags=req.tags,
+                importance=req.importance,
+                metadata=req.metadata,
             )
             return {"status": "ok", "id": item.id, "tags": item.tags}
         except ValueError as e:
-            return {"status": "error", "message": str(e)}
+            return error_response(str(e), status_code=400)
 
-    @router.post("/api/v1/learn/extract")
-    async def api_learn_extract(body: dict):
+    @router.post("/api/v1/learn/extract", response_model=None)
+    async def api_learn_extract(req: LearnExtractRequest) -> dict | JSONResponse:
         """Learn a memory and extract simple KG facts."""
-        content = body.get("content", "").strip()
-        if not content:
-            return {"status": "error", "message": "content is required"}
+        if _ENFORCE_SANITIZATION and not MemorySanitizer.is_safe(req.content):
+            return error_response("Content failed safety checks", code="UNSAFE_CONTENT", status_code=400)
         try:
             payload = _kg_bridge.learn_and_extract(
-                content,
-                tags=body.get("tags"),
-                importance=float(body.get("importance", 0.5)),
-                metadata=body.get("metadata"),
+                req.content,
+                tags=req.tags,
+                importance=req.importance,
+                metadata=req.metadata,
             )
             return {"status": "ok", **payload}
         except Exception as exc:
-            return {"status": "error", "message": str(exc)}
+            return handle_exception(exc, context="api_learn_extract")
 
-    @router.post("/api/v1/learn/batch")
-    async def api_batch_learn(body: dict):
+    @router.post("/api/v1/learn/batch", response_model=None)
+    async def api_batch_learn(req: BatchLearnRequest) -> dict | JSONResponse:
         """Batch learn — store multiple memories in one call."""
-        items = body.get("items", [])
-        if not items:
-            return {"status": "error", "message": "No items provided"}
-        if len(items) > 1000:
-            return {"status": "error", "message": "Batch size exceeds 1000 items"}
+        if _ENFORCE_SANITIZATION:
+            unsafe = [i for i, item in enumerate(req.items) if not MemorySanitizer.is_safe(item.content)]
+            if unsafe:
+                return error_response(
+                    f"Items failed safety checks: indexes {unsafe[:10]}",
+                    code="UNSAFE_CONTENT",
+                    status_code=400,
+                )
         try:
             result = memos.batch_learn(
-                items=items,
-                continue_on_error=body.get("continue_on_error", True),
+                items=[item.model_dump() for item in req.items],
+                continue_on_error=req.continue_on_error,
             )
             return {"status": "ok", **result}
         except ValueError as e:
-            return {"status": "error", "message": str(e)}
+            return error_response(str(e), status_code=400)
 
     # ── Recall ───────────────────────────────────────────────
 
     @router.post("/api/v1/recall")
-    async def api_recall(body: dict):
-        from datetime import datetime as _dt
-
-        def _parse_date(value: Any) -> float | None:
-            if not value:
-                return None
-            if isinstance(value, (int, float)):
-                return float(value)
-            return _dt.fromisoformat(str(value)).timestamp()
-
+    async def api_recall(req: RecallRequest) -> dict:
         def _as_list(value: Any) -> list[str]:
             if not value:
                 return []
@@ -82,8 +108,8 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
                 return [value]
             return [str(item) for item in value if item]
 
-        tags_payload = body.get("tags")
-        filter_tags = body.get("filter_tags")
+        tags_payload = req.tags
+        filter_tags = req.filter_tags
         tag_filter = None
         if isinstance(tags_payload, dict):
             tag_filter = {
@@ -96,20 +122,17 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         elif isinstance(tags_payload, list):
             filter_tags = tags_payload
 
-        importance_payload = body.get("importance") or {}
-        retrieval_mode = body.get("retrieval_mode", "semantic")
-        if retrieval_mode not in ("semantic", "keyword", "hybrid"):
-            return {"status": "error", "message": "Invalid retrieval_mode. Must be semantic, keyword, or hybrid."}
+        importance_payload = req.importance.model_dump()
 
-        explain = body.get("explain", False)
+        explain = req.explain
         results = memos.recall(
-            query=body["query"],
-            top=body.get("top_k", body.get("top", 5)),
+            query=req.query,
+            top=req.top_k,
             filter_tags=filter_tags,
-            min_score=body.get("min_score", 0.0),
-            filter_after=_parse_date(body.get("created_after") or body.get("filter_after")),
-            filter_before=_parse_date(body.get("created_before") or body.get("filter_before")),
-            retrieval_mode=retrieval_mode,
+            min_score=req.min_score,
+            filter_after=_parse_date(req.created_after or req.filter_after),
+            filter_before=_parse_date(req.created_before or req.filter_before),
+            retrieval_mode=req.retrieval_mode,
             tag_filter=tag_filter,
             min_importance=importance_payload.get("min"),
             max_importance=importance_payload.get("max"),
@@ -142,11 +165,9 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         before: str | None = None,
         sort: str = "created_at",
         limit: int = 50,
-    ):
-        from datetime import datetime as _dt
-
-        after_ts = _dt.fromisoformat(after).timestamp() if after else None
-        before_ts = _dt.fromisoformat(before).timestamp() if before else None
+    ) -> dict:
+        after_ts = datetime.fromisoformat(after).timestamp() if after else None
+        before_ts = datetime.fromisoformat(before).timestamp() if before else None
         items = memos.list_memories(
             tags=tag,
             require_tags=require_tag,
@@ -182,13 +203,11 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         min_score: float = 0.0,
         filter_after: str | None = None,
         filter_before: str | None = None,
-    ):
+    ) -> dict:
         """Recall memories and augment them with KG facts."""
-        from datetime import datetime as _dt
-
         tags = [t.strip() for t in filter_tags.split(",") if t.strip()] if filter_tags else None
-        after_ts = _dt.fromisoformat(filter_after).timestamp() if filter_after else None
-        before_ts = _dt.fromisoformat(filter_before).timestamp() if filter_before else None
+        after_ts = datetime.fromisoformat(filter_after).timestamp() if filter_after else None
+        before_ts = datetime.fromisoformat(filter_before).timestamp() if filter_before else None
         payload = _kg_bridge.recall_enriched(
             q,
             top=top,
@@ -199,13 +218,13 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         )
         return {"status": "ok", **payload}
 
-    @router.get("/api/v1/recall/stream")
+    @router.get("/api/v1/recall/stream", response_model=None)
     async def api_recall_stream(
         q: str,
         top: int = 5,
         filter_tags: str | None = None,
         min_score: float = 0.0,
-    ):
+    ) -> StreamingResponse:
         """Stream recall results as Server-Sent Events (SSE)."""
         from ..sse import sse_stream
 
@@ -220,7 +239,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     # ── Search / Get / Delete ─────────────────────────────────
 
     @router.get("/api/v1/search")
-    async def api_search(q: str, limit: int = 20):
+    async def api_search(q: str, limit: int = 20) -> dict:
         items = memos.search(q=q, limit=limit)
         return {
             "status": "ok",
@@ -230,16 +249,18 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
             ],
         }
 
-    @router.delete("/api/v1/memory/{item_id}")
-    async def api_delete(item_id: str):
+    @router.delete("/api/v1/memory/{item_id}", response_model=None)
+    async def api_delete(item_id: str) -> dict | JSONResponse:
         success = memos.forget(item_id)
-        return {"status": "deleted" if success else "not_found"}
+        if success:
+            return {"status": "deleted"}
+        return not_found(f"Memory {item_id} not found")
 
     @router.get("/api/v1/memory/{item_id}")
-    async def api_get_memory(item_id: str):
+    async def api_get_memory(item_id: str) -> dict:
         item = memos.get(item_id)
         if item is None:
-            return {"status": "not_found", "message": f"Memory {item_id} not found"}
+            return not_found(f"Memory {item_id} not found")
         result = {
             "id": item.id,
             "content": item.content,
@@ -261,54 +282,58 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     # ── Prune ─────────────────────────────────────────────────
 
     @router.post("/api/v1/prune")
-    async def api_prune(body: dict):
+    async def api_prune(req: PruneRequest) -> dict:
         pruned = memos.prune(
-            threshold=body.get("threshold", 0.1),
-            max_age_days=body.get("max_age_days", 90.0),
-            dry_run=body.get("dry_run", False),
+            threshold=req.threshold,
+            max_age_days=req.max_age_days,
+            dry_run=req.dry_run,
         )
         return {"status": "ok", "pruned_count": len(pruned), "pruned_ids": [item.id for item in pruned]}
 
     # ── Tags & Classify ───────────────────────────────────────
 
     @router.get("/api/v1/classify")
-    async def api_classify(text: str):
+    async def api_classify(text: str) -> dict:
         """Classify text into memory type tags (zero-LLM)."""
         from ...tagger import AutoTagger
 
         tagger = AutoTagger()
         return {"status": "ok", "tags": tagger.tag(text), "matches": tagger.tag_detailed(text)}
 
-    @router.get("/api/v1/tags")
-    async def api_tags(sort: str = "count", limit: int = 0):
+    @router.get("/api/v1/tags", response_model=None)
+    async def api_tags(sort: str = "count", limit: int = 0) -> list[dict]:
         tags = memos.list_tags(sort=sort, limit=limit)
         return [{"tag": t, "count": c} for t, c in tags]
 
     @router.post("/api/v1/tags/rename")
-    async def api_tags_rename(body: dict):
-        old_tag, new_tag = body.get("old"), body.get("new")
-        if not old_tag or not new_tag:
-            return {"error": "Both 'old' and 'new' tag names are required"}
-        return {"status": "ok", "renamed": memos.rename_tag(old_tag, new_tag), "old_tag": old_tag, "new_tag": new_tag}
+    async def api_tags_rename(req: TagRenameRequest) -> dict:
+        return {
+            "status": "ok",
+            "renamed": memos.rename_tag(req.old, req.new),
+            "old_tag": req.old,
+            "new_tag": req.new,
+        }
 
     @router.post("/api/v1/tags/delete")
-    async def api_tags_delete(body: dict):
-        tag = body.get("tag")
-        if not tag:
-            return {"error": "Tag name is required"}
-        return {"status": "ok", "deleted": memos.delete_tag(tag), "tag": tag}
+    async def api_tags_delete(req: TagDeleteRequest) -> dict:
+        return {"status": "ok", "deleted": memos.delete_tag(req.tag), "tag": req.tag}
 
     # ── Consolidation ─────────────────────────────────────────
 
     @router.post("/api/v1/consolidate")
-    async def api_consolidate(body: dict):
-        threshold = body.get("similarity_threshold", 0.75)
-        merge = body.get("merge_content", False)
-        dry = body.get("dry_run", False)
-        if body.get("async", False):
-            handle = await memos.consolidate_async(similarity_threshold=threshold, merge_content=merge, dry_run=dry)
+    async def api_consolidate(req: ConsolidateRequest) -> dict:
+        if req.async_:
+            handle = await memos.consolidate_async(
+                similarity_threshold=req.similarity_threshold,
+                merge_content=req.merge_content,
+                dry_run=req.dry_run,
+            )
             return {"status": "started", "task_id": handle.task_id}
-        result = memos.consolidate(similarity_threshold=threshold, merge_content=merge, dry_run=dry)
+        result = memos.consolidate(
+            similarity_threshold=req.similarity_threshold,
+            merge_content=req.merge_content,
+            dry_run=req.dry_run,
+        )
         return {
             "status": "completed",
             "groups_found": result.groups_found,
@@ -316,64 +341,65 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
             "space_freed": result.space_freed,
         }
 
-    @router.get("/api/v1/consolidate/{task_id}")
-    async def api_consolidate_status(task_id: str):
+    @router.get("/api/v1/consolidate/{task_id}", response_model=None)
+    async def api_consolidate_status(task_id: str) -> dict | JSONResponse:
         status = memos.consolidation_status(task_id)
-        return status if status else {"status": "not_found", "task_id": task_id}
+        if status:
+            return status
+        return not_found(f"Consolidation task {task_id} not found")
 
     @router.get("/api/v1/consolidate")
-    async def api_consolidate_list():
+    async def api_consolidate_list() -> dict:
         return {"tasks": memos.consolidation_tasks()}
 
     # ── Versioning ────────────────────────────────────────────
 
     @router.get("/api/v1/memory/{item_id}/history")
-    async def api_version_history(item_id: str):
+    async def api_version_history(item_id: str) -> dict:
         versions = memos.history(item_id)
         return {"item_id": item_id, "versions": [v.to_dict() for v in versions], "total": len(versions)}
 
-    @router.get("/api/v1/memory/{item_id}/version/{version_number}")
-    async def api_version_get(item_id: str, version_number: int):
+    @router.get("/api/v1/memory/{item_id}/version/{version_number}", response_model=None)
+    async def api_version_get(item_id: str, version_number: int) -> dict | JSONResponse:
         v = memos.get_version(item_id, version_number)
         if v is None:
-            return {"status": "not_found", "item_id": item_id, "version": version_number}
+            return not_found(f"Version {version_number} of memory {item_id} not found")
         return {"status": "ok", "version": v.to_dict()}
 
-    @router.get("/api/v1/memory/{item_id}/diff")
-    async def api_version_diff(item_id: str, v1: int, v2: int | None = None, latest: bool = False):
+    @router.get("/api/v1/memory/{item_id}/diff", response_model=None)
+    async def api_version_diff(
+        item_id: str, v1: int, v2: int | None = None, latest: bool = False
+    ) -> dict | JSONResponse:
         if latest:
             result = memos.diff_latest(item_id)
         else:
             if v2 is None:
-                return {"status": "error", "message": "Provide v2 or use ?latest=true"}
+                return error_response("Provide v2 or use ?latest=true", status_code=400)
             result = memos.diff(item_id, v1, v2)
         if result is None:
-            return {"status": "not_found", "item_id": item_id}
+            return not_found(f"Memory {item_id} not found")
         return {"status": "ok", "diff": result.to_dict()}
 
-    @router.post("/api/v1/memory/{item_id}/rollback")
-    async def api_version_rollback(item_id: str, body: dict):
-        version = body.get("version")
-        if version is None:
-            return {"status": "error", "message": "version is required"}
-        result = memos.rollback(item_id, version)
+    @router.post("/api/v1/memory/{item_id}/rollback", response_model=None)
+    async def api_version_rollback(item_id: str, req: RollbackRequest) -> dict | JSONResponse:
+        result = memos.rollback(item_id, req.version)
         if result is None:
-            return {"status": "not_found", "item_id": item_id, "version": version}
+            return not_found(f"Memory {item_id} version {req.version} not found")
         return {
             "status": "ok",
             "item_id": result.id,
             "content": result.content[:200],
             "tags": result.tags,
-            "rolled_back_to": version,
+            "rolled_back_to": req.version,
         }
 
     @router.get("/api/v1/snapshot")
-    async def api_snapshot(at: float):
+    async def api_snapshot(at: float) -> dict:
         versions = memos.snapshot_at(at)
         return {"timestamp": at, "total": len(versions), "memories": [v.to_dict() for v in versions[:200]]}
 
     @router.get("/api/v1/recall/at")
-    async def api_recall_at(q: str, at: float, top: int = 5, min_score: float = 0.0):
+    async def api_recall_at(q: str, at: float, top: int = 5, min_score: float = 0.0) -> dict:
         results = memos.recall_at(q, at, top=top, min_score=min_score)
         return {
             "query": q,
@@ -392,19 +418,20 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         }
 
     @router.get("/api/v1/versioning/stats")
-    async def api_versioning_stats():
+    async def api_versioning_stats() -> dict:
         return memos.versioning_stats()
 
     @router.post("/api/v1/versioning/gc")
-    async def api_versioning_gc(body: dict = None):
-        body = body or {}
+    async def api_versioning_gc(req: VersioningGCRequest | None = None) -> dict:
+        req = req or VersioningGCRequest()
         removed = memos.versioning_gc(
-            max_age_days=body.get("max_age_days", 90.0), keep_latest=body.get("keep_latest", 3)
+            max_age_days=req.max_age_days,
+            keep_latest=req.keep_latest,
         )
         return {"status": "ok", "removed": removed}
 
-    @router.get("/api/v1/recall/at/stream")
-    async def api_recall_at_stream(q: str, at: float, top: int = 5, min_score: float = 0.0):
+    @router.get("/api/v1/recall/at/stream", response_model=None)
+    async def api_recall_at_stream(q: str, at: float, top: int = 5, min_score: float = 0.0) -> StreamingResponse:
         """Stream time-travel recall results as SSE events."""
         import asyncio as _asyncio
 
@@ -425,42 +452,37 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
 
     # ── Feedback ─────────────────────────────────────────────
 
-    @router.post("/api/v1/feedback")
-    async def api_record_feedback(body: dict):
-        item_id, feedback = body.get("item_id"), body.get("feedback")
-        if not item_id or not feedback:
-            return {"status": "error", "message": "item_id and feedback are required"}
+    @router.post("/api/v1/feedback", response_model=None)
+    async def api_record_feedback(req: FeedbackRequest) -> dict | JSONResponse:
         try:
             entry = memos.record_feedback(
-                item_id=item_id,
-                feedback=feedback,
-                query=body.get("query", ""),
-                score_at_recall=body.get("score_at_recall", 0.0),
-                agent_id=body.get("agent_id", ""),
+                item_id=req.item_id,
+                feedback=req.feedback,
+                query=req.query,
+                score_at_recall=req.score_at_recall,
+                agent_id=req.agent_id,
             )
             return {"status": "ok", "feedback": entry.to_dict()}
         except ValueError as e:
-            return {"status": "error", "message": str(e)}
+            return error_response(str(e), status_code=400)
 
     @router.get("/api/v1/feedback")
-    async def api_list_feedback(item_id: str | None = None, limit: int = 100):
+    async def api_list_feedback(item_id: str | None = None, limit: int = 100) -> dict:
         entries = memos.get_feedback(item_id=item_id, limit=limit)
         return {"feedback": [e.to_dict() for e in entries], "total": len(entries)}
 
     @router.get("/api/v1/feedback/stats")
-    async def api_feedback_stats():
+    async def api_feedback_stats() -> dict:
         return memos.feedback_stats().to_dict()
 
     # ── Decay & Reinforce ─────────────────────────────────────
 
     @router.post("/api/v1/decay/run")
-    async def api_decay_run(body: dict = None):
-        body = body or {}
+    async def api_decay_run(req: DecayRunRequest | None = None) -> dict:
+        req = req or DecayRunRequest()
         items = memos._store.list_all(namespace=memos._namespace)
-        report = memos._decay.run_decay(
-            items, min_age_days=body.get("min_age_days"), floor=body.get("floor"), dry_run=body.get("dry_run", True)
-        )
-        if not body.get("dry_run", True):
+        report = memos._decay.run_decay(items, min_age_days=req.min_age_days, floor=req.floor, dry_run=req.dry_run)
+        if not req.dry_run:
             for item in items:
                 memos._store.upsert(item, namespace=memos._namespace)
         return {
@@ -472,14 +494,14 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
             "details": report.details[:50],
         }
 
-    @router.post("/api/v1/memories/{memory_id}/reinforce")
-    async def api_reinforce(memory_id: str, body: dict = None):
-        body = body or {}
+    @router.post("/api/v1/memories/{memory_id}/reinforce", response_model=None)
+    async def api_reinforce(memory_id: str, req: ReinforceRequest | None = None) -> dict | JSONResponse:
+        req = req or ReinforceRequest()
         item = memos._store.get(memory_id, namespace=memos._namespace)
         if item is None:
-            return {"status": "error", "message": f"Memory not found: {memory_id}"}
+            return not_found(f"Memory {memory_id} not found")
         old_imp = item.importance
-        new_imp = memos._decay.reinforce(item, strength=body.get("strength"))
+        new_imp = memos._decay.reinforce(item, strength=req.strength)
         memos._store.upsert(item, namespace=memos._namespace)
         return {
             "status": "ok",
@@ -491,9 +513,9 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     # ── Compress ──────────────────────────────────────────────
 
     @router.post("/api/v1/compress")
-    async def api_compress(body: dict = None):
-        body = body or {}
-        result = memos.compress(threshold=float(body.get("threshold", 0.1)), dry_run=bool(body.get("dry_run", True)))
+    async def api_compress(req: CompressRequest | None = None) -> dict:
+        req = req or CompressRequest()
+        result = memos.compress(threshold=req.threshold, dry_run=req.dry_run)
         return {
             "status": "ok",
             "compressed_count": result.compressed_count,
@@ -506,11 +528,8 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     # ── Dedup ─────────────────────────────────────────────────
 
     @router.post("/api/v1/dedup/check")
-    async def api_dedup_check(body: dict):
-        content_text = body.get("content", "")
-        if not content_text:
-            return {"status": "error", "message": "content is required"}
-        result = memos.dedup_check(content_text, threshold=body.get("threshold"))
+    async def api_dedup_check(req: DedupCheckRequest) -> dict:
+        result = memos.dedup_check(req.content, threshold=req.threshold)
         resp = {"is_duplicate": result.is_duplicate, "reason": result.reason, "similarity": result.similarity}
         if result.match:
             resp["match"] = {
@@ -522,8 +541,8 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         return resp
 
     @router.post("/api/v1/dedup/scan")
-    async def api_dedup_scan(body: dict):
-        result = memos.dedup_scan(fix=body.get("fix", False), threshold=body.get("threshold"))
+    async def api_dedup_scan(req: DedupScanRequest) -> dict:
+        result = memos.dedup_scan(fix=req.fix, threshold=req.threshold)
         return {
             "total_scanned": result.total_scanned,
             "exact_duplicates": result.exact_duplicates,
@@ -535,53 +554,49 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
 
     # ── Sync & Conflict ───────────────────────────────────────
 
-    @router.post("/api/v1/sync/check")
-    async def api_sync_check(body: dict):
+    @router.post("/api/v1/sync/check", response_model=None)
+    async def api_sync_check(req: SyncCheckRequest) -> dict | JSONResponse:
         from ...conflict import ConflictDetector
         from ...sharing.models import MemoryEnvelope
 
         try:
-            envelope = MemoryEnvelope.from_dict(body["envelope"])
-        except (KeyError, ValueError) as exc:
-            return {"status": "error", "message": f"Invalid envelope: {exc}"}
+            envelope = MemoryEnvelope.from_dict(req.envelope)
+        except (KeyError, ValueError):
+            return error_response("Invalid envelope format", status_code=400)
         if not envelope.validate():
-            return {"status": "error", "message": "Envelope checksum validation failed"}
+            return error_response("Envelope checksum validation failed", status_code=400)
         detector = ConflictDetector()
         return {"status": "ok", **detector.detect(memos, envelope).to_dict()}
 
-    @router.post("/api/v1/sync/apply")
-    async def api_sync_apply(body: dict):
+    @router.post("/api/v1/sync/apply", response_model=None)
+    async def api_sync_apply(req: SyncApplyRequest) -> dict | JSONResponse:
         from ...conflict import ConflictDetector, ResolutionStrategy
         from ...sharing.models import MemoryEnvelope
 
         try:
-            envelope = MemoryEnvelope.from_dict(body["envelope"])
-        except (KeyError, ValueError) as exc:
-            return {"status": "error", "message": f"Invalid envelope: {exc}"}
+            envelope = MemoryEnvelope.from_dict(req.envelope)
+        except (KeyError, ValueError):
+            return error_response("Invalid envelope format", status_code=400)
         if not envelope.validate():
-            return {"status": "error", "message": "Envelope checksum validation failed"}
+            return error_response("Envelope checksum validation failed", status_code=400)
         try:
-            strategy = ResolutionStrategy(body.get("strategy", "merge"))
+            strategy = ResolutionStrategy(req.strategy)
         except ValueError:
-            return {"status": "error", "message": "Invalid strategy. Use: local_wins, remote_wins, merge, manual"}
+            return error_response("Invalid strategy. Use: local_wins, remote_wins, merge, manual", status_code=400)
         detector = ConflictDetector()
         report = detector.detect(memos, envelope)
-        if body.get("dry_run", False):
+        if req.dry_run:
             detector.resolve(report.conflicts, strategy)
             return {"status": "ok", "dry_run": True, **report.to_dict()}
         return {"status": "ok", **detector.apply(memos, report, strategy).to_dict()}
 
     # ── Export ────────────────────────────────────────────────
 
-    @router.get("/api/v1/export/markdown")
-    async def api_export_markdown(output_dir: str | None = None, update: bool = False, wiki_dir: str | None = None):
+    @router.get("/api/v1/export/markdown", response_model=None)
+    async def api_export_markdown(
+        output_dir: str | None = None, update: bool = False, wiki_dir: str | None = None
+    ) -> FileResponse:
         """Export MemOS knowledge as a downloadable markdown ZIP."""
-        import tempfile
-        import zipfile
-        from pathlib import Path
-
-        from fastapi.responses import FileResponse
-
         from ...export_markdown import MarkdownExporter
 
         export_root = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="memos-markdown-export-"))
@@ -597,13 +612,9 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
             str(zip_path), media_type="application/zip", filename=f"memos-markdown-export-{int(time.time())}.zip"
         )
 
-    @router.get("/api/v1/export/parquet")
-    async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd"):
+    @router.get("/api/v1/export/parquet", response_model=None)
+    async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd") -> FileResponse:
         """Export all memories as a downloadable Parquet file."""
-        import tempfile
-
-        from fastapi.responses import FileResponse
-
         with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
             result = memos.export_parquet(tmp.name, include_metadata=include_metadata, compression=compression)
             return FileResponse(

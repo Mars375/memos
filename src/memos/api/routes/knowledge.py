@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from fastapi import APIRouter
@@ -312,10 +313,8 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
 
         created_before: optional Unix timestamp — only include memories created before this time.
         """
-        import time as _time
-
         items = memos._store.list_all(namespace=memos._namespace)
-        now = _time.time()
+        now = time.time()
         nodes = []
         for item in items[:limit]:
             if item.is_expired:
