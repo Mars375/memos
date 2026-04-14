@@ -212,6 +212,7 @@ class EventBus:
             for handler in self._subscribers.get("*", []):
                 loop.create_task(handler(event))
         except RuntimeError:
+            logger.debug("No running event loop for async handler dispatch", exc_info=True)
             pass  # No running loop — WS clients still got the event
 
     async def emit(

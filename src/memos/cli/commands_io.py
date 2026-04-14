@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
 from ._common import _get_memos, _parse_kv_options
+
+logger = logging.getLogger(__name__)
 
 
 def cmd_export(ns: argparse.Namespace) -> None:
@@ -385,6 +388,7 @@ def cmd_skills_export(ns: argparse.Namespace) -> None:
 
             memos = _get_memos(ns)  # type: ignore[name-defined]
         except Exception:
+            logger.debug("get_memos failed for skills export", exc_info=True)
             pass
 
     exporter = SkillsExporter(memos)

@@ -30,8 +30,11 @@ Usage::
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -77,6 +80,7 @@ class MCPHookRegistry:
                 if result is not None:
                     return result
             except Exception:
+                logger.warning("Pre-hook failed for tool %s", tool, exc_info=True)
                 pass
         return None
 
@@ -88,6 +92,7 @@ class MCPHookRegistry:
                 if new_result is not None:
                     result = new_result
             except Exception:
+                logger.warning("Post-hook failed for tool %s", tool, exc_info=True)
                 pass
         return result
 
@@ -162,6 +167,7 @@ def hook_auto_capture_kg(tool: str, args: dict, result: dict, memos: Any) -> dic
 
         _extract_and_store_facts(content, kg)
     except Exception:
+        logger.warning("KG auto-capture hook failed", exc_info=True)
         pass
     return result
 
@@ -211,6 +217,7 @@ def _extract_and_store_facts(content: str, kg: Any) -> list[str]:
                 )
                 fact_ids.append(fid)
             except Exception:
+                logger.warning("Failed to store extracted fact %s %s %s", subject, predicate, obj, exc_info=True)
                 pass
     return fact_ids
 

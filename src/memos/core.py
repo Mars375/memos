@@ -3,9 +3,36 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Optional
 
+from ._constants import (
+    DEFAULT_ANALYTICS_RETENTION_DAYS,
+    DEFAULT_ARCHIVE_AGE_DAYS,
+    DEFAULT_ARCHIVE_IMPORTANCE_FLOOR,
+    DEFAULT_CACHE_MAX_SIZE,
+    DEFAULT_CLUSTER_MIN_SIZE,
+    DEFAULT_CONSOLIDATION_THRESHOLD,
+    DEFAULT_DECAY_RATE,
+    DEFAULT_DEDUP_THRESHOLD,
+    DEFAULT_EMBED_TIMEOUT,
+    DEFAULT_IMPORTANCE,
+    DEFAULT_MAX_CHUNK_SIZE,
+    DEFAULT_MAX_COMPACT_PER_RUN,
+    DEFAULT_MAX_MEMORIES,
+    DEFAULT_MAX_VERSIONS_PER_ITEM,
+    DEFAULT_MERGE_SIMILARITY_THRESHOLD,
+    DEFAULT_PRUNE_MAX_AGE_DAYS,
+    DEFAULT_PRUNE_THRESHOLD,
+    DEFAULT_SEMANTIC_WEIGHT,
+    DEFAULT_STALE_SCORE_THRESHOLD,
+    DEFAULT_VECTOR_SIZE,
+    FEEDBACK_IMPORTANCE_DELTA,
+    IMPORTANCE_EQUALITY_TOLERANCE,
+    SECONDS_PER_DAY,
+    STATS_DECAY_THRESHOLD,
+)
 from .analytics import RecallAnalytics
 from .cache.embedding_cache import EmbeddingCache
 from .compression import CompressionResult, MemoryCompressor
@@ -55,22 +82,20 @@ class MemOS:
         chroma_host: str = "localhost",
         chroma_port: int = 8000,
         sanitize: bool = True,
-        decay_rate: float = 0.01,
-        max_memories: int = 10_000,
+        decay_rate: float = DEFAULT_DECAY_RATE,
+        max_memories: int = DEFAULT_MAX_MEMORIES,
         encryption_key: Optional[str] = None,
         **kwargs,
     ) -> None:
         self._backend_name = backend
         # Storage
         if backend == "chroma":
-            import os as _os
-
             from .storage.chroma_backend import ChromaBackend
 
             # Only enable client-side Ollama embeddings when MEMOS_EMBED_HOST is
             # explicitly configured. When unset, Chroma uses its built-in ONNX
             # embedder (backward compatible with existing collections).
-            _chroma_embed_host = _os.environ.get("MEMOS_EMBED_HOST", "")
+            _chroma_embed_host = os.environ.get("MEMOS_EMBED_HOST", "")
             store: StorageBackend = ChromaBackend(
                 host=chroma_host,
                 port=chroma_port,
@@ -87,7 +112,7 @@ class MemOS:
                 path=kwargs.get("qdrant_path"),
                 embed_host=embed_host,
                 embed_model=embed_model,
-                vector_size=kwargs.get("vector_size", 768),
+                vector_size=kwargs.get("vector_size", DEFAULT_VECTOR_SIZE),
             )
         elif backend == "pinecone":
             from .storage.pinecone_backend import PineconeBackend
@@ -98,7 +123,7 @@ class MemOS:
                 index_name=kwargs.get("pinecone_index_name", "memos"),
                 embed_host=embed_host,
                 embed_model=embed_model,
-                vector_size=kwargs.get("vector_size", 768),
+                vector_size=kwargs.get("vector_size", DEFAULT_VECTOR_SIZE),
                 cloud=kwargs.get("pinecone_cloud", "aws"),
                 region=kwargs.get("pinecone_region", "us-east-1"),
                 serverless=kwargs.get("pinecone_serverless", True),
@@ -143,9 +168,9 @@ class MemOS:
             store=self._store,
             embed_host=embed_host,
             embed_model=retrieval_model,
-            semantic_weight=kwargs.get("semantic_weight", 0.6),
+            semantic_weight=kwargs.get("semantic_weight", DEFAULT_SEMANTIC_WEIGHT),
             embedder=retrieval_embedder,
-            embed_timeout=kwargs.get("embed_timeout", 30),
+            embed_timeout=kwargs.get("embed_timeout", DEFAULT_EMBED_TIMEOUT),
         )
 
         # Decay
@@ -168,7 +193,7 @@ class MemOS:
 
         # Versioning (time-travel)
         self._versioning = VersioningEngine(
-            max_versions_per_item=kwargs.get("max_versions_per_item", 100),
+            max_versions_per_item=kwargs.get("max_versions_per_item", DEFAULT_MAX_VERSIONS_PER_ITEM),
             persistent_path=kwargs.get("versioning_path"),
         )
 
@@ -179,7 +204,7 @@ class MemOS:
         if cache_enabled:
             self._embedding_cache = EmbeddingCache(
                 path=kwargs.get("cache_path", "~/.memos/embeddings.db"),
-                max_size=kwargs.get("cache_max_size", 50_000),
+                max_size=kwargs.get("cache_max_size", DEFAULT_CACHE_MAX_SIZE),
                 ttl_seconds=kwargs.get("cache_ttl", 0),
             )
             self._retrieval.set_cache(self._embedding_cache)
@@ -193,12 +218,12 @@ class MemOS:
         self._analytics = RecallAnalytics(
             path=kwargs.get("analytics_path"),
             enabled=kwargs.get("analytics_enabled", True),
-            retention_days=kwargs.get("analytics_retention_days", 90),
+            retention_days=kwargs.get("analytics_retention_days", DEFAULT_ANALYTICS_RETENTION_DAYS),
         )
 
         # Dedup engine (prevent duplicate memories at write time)
         self._dedup_enabled: bool = kwargs.get("dedup_enabled", True)
-        self._dedup_threshold: float = kwargs.get("dedup_threshold", 0.95)
+        self._dedup_threshold: float = kwargs.get("dedup_threshold", DEFAULT_DEDUP_THRESHOLD)
         self._dedup_engine: Optional[DedupEngine] = None
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
@@ -309,7 +334,7 @@ class MemOS:
         self,
         content: str,
         tags: Optional[list[str]] = None,
-        importance: float = 0.5,
+        importance: float = DEFAULT_IMPORTANCE,
         metadata: Optional[dict[str, Any]] = None,
         ttl: Optional[float] = None,
         allow_duplicate: bool = False,
@@ -343,7 +368,7 @@ class MemOS:
                 existing = dedup_result.match
                 final_tags_check = list(tags) if tags else []
                 same_tags = set(existing.tags) == set(final_tags_check)
-                same_importance = abs(existing.importance - importance) < 0.01
+                same_importance = abs(existing.importance - importance) < IMPORTANCE_EQUALITY_TOLERANCE
                 if same_tags and same_importance:
                     logger.info(
                         "Skipping duplicate memory (reason=%s, similarity=%.3f, original=%s)",
@@ -396,6 +421,7 @@ class MemOS:
             try:
                 self._compounding_wiki.update_for_item(item)
             except Exception:
+                logger.warning("Wiki update failed during learn()", exc_info=True)
                 pass  # Never let wiki update break learn()
 
         return item
@@ -407,7 +433,7 @@ class MemOS:
         """Whether dedup checking is enabled."""
         return self._dedup_enabled
 
-    def dedup_set_enabled(self, enabled: bool = True, threshold: float = 0.95) -> None:
+    def dedup_set_enabled(self, enabled: bool = True, threshold: float = DEFAULT_DEDUP_THRESHOLD) -> None:
         """Enable or disable dedup checking at write time.
 
         Args:
@@ -519,7 +545,7 @@ class MemOS:
                 id=generate_id(content),
                 content=content,
                 tags=entry.get("tags", []),
-                importance=max(0.0, min(1.0, entry.get("importance", 0.5))),
+                importance=max(0.0, min(1.0, entry.get("importance", DEFAULT_IMPORTANCE))),
                 metadata=entry.get("metadata", {}),
             )
             valid_items.append(item)
@@ -645,7 +671,7 @@ class MemOS:
             try:
                 self._analytics.track_recall(query, final_results, (time.perf_counter() - started) * 1000.0)
             except Exception:
-                pass
+                logger.warning("Analytics tracking failed during recall()", exc_info=True)
 
         return final_results
 
@@ -726,8 +752,8 @@ class MemOS:
 
     def prune(
         self,
-        threshold: float = 0.1,
-        max_age_days: float = 90.0,
+        threshold: float = DEFAULT_PRUNE_THRESHOLD,
+        max_age_days: float = DEFAULT_PRUNE_MAX_AGE_DAYS,
         dry_run: bool = False,
     ) -> list[MemoryItem]:
         """Remove decayed memories."""
@@ -843,14 +869,14 @@ class MemOS:
             return MemoryStats()
 
         now = time.time()
-        scores = [self._decay.adjusted_score(0.5, item) for item in items]
+        scores = [self._decay.adjusted_score(DEFAULT_IMPORTANCE, item) for item in items]
         tags: dict[str, int] = {}
         for item in items:
             for tag in item.tags:
                 tags[tag] = tags.get(tag, 0) + 1
 
         top_tags = sorted(tags, key=tags.get, reverse=True)[:10]
-        decay_candidate_items = self._decay.find_prune_candidates(items, threshold=0.2)
+        decay_candidate_items = self._decay.find_prune_candidates(items, threshold=STATS_DECAY_THRESHOLD)
         decay_candidates = len(decay_candidate_items)
         expired_items = [i for i in items if i.is_expired]
 
@@ -863,8 +889,8 @@ class MemOS:
             total_tags=len(tags),
             avg_relevance=sum(scores) / len(scores),
             avg_importance=sum(i.importance for i in items) / len(items),
-            oldest_memory_days=(now - min(i.created_at for i in items)) / 86400,
-            newest_memory_days=(now - max(i.created_at for i in items)) / 86400,
+            oldest_memory_days=(now - min(i.created_at for i in items)) / SECONDS_PER_DAY,
+            newest_memory_days=(now - max(i.created_at for i in items)) / SECONDS_PER_DAY,
             decay_candidates=decay_candidates,
             expired_memories=len(expired_items),
             top_tags=top_tags,
@@ -1064,7 +1090,7 @@ class MemOS:
     def consolidate(
         self,
         *,
-        similarity_threshold: float = 0.75,
+        similarity_threshold: float = DEFAULT_CONSOLIDATION_THRESHOLD,
         merge_content: bool = False,
         dry_run: bool = False,
     ) -> "ConsolidationResult":
@@ -1091,8 +1117,8 @@ class MemOS:
         path: str,
         *,
         tags: list[str] | None = None,
-        importance: float = 0.5,
-        max_chunk: int = 2000,
+        importance: float = DEFAULT_IMPORTANCE,
+        max_chunk: int = DEFAULT_MAX_CHUNK_SIZE,
         dry_run: bool = False,
     ) -> "IngestResult":
         """Parse and store memories from a file (markdown, JSON, txt)."""
@@ -1119,8 +1145,8 @@ class MemOS:
         url: str,
         *,
         tags: list[str] | None = None,
-        importance: float = 0.5,
-        max_chunk: int = 2000,
+        importance: float = DEFAULT_IMPORTANCE,
+        max_chunk: int = DEFAULT_MAX_CHUNK_SIZE,
         dry_run: bool = False,
     ) -> "IngestResult":
         """Fetch a URL, extract its contents, and store it as memories."""
@@ -1203,7 +1229,7 @@ class MemOS:
                         id=mem_id,
                         content=entry["content"].strip(),
                         tags=tags,
-                        importance=max(0.0, min(1.0, entry.get("importance", 0.5))),
+                        importance=max(0.0, min(1.0, entry.get("importance", DEFAULT_IMPORTANCE))),
                         created_at=entry.get("created_at", time.time()),
                         accessed_at=entry.get("accessed_at", time.time()),
                         access_count=entry.get("access_count", 0),
@@ -1357,7 +1383,7 @@ class MemOS:
     async def consolidate_async(
         self,
         *,
-        similarity_threshold: float = 0.75,
+        similarity_threshold: float = DEFAULT_CONSOLIDATION_THRESHOLD,
         merge_content: bool = False,
         dry_run: bool = False,
     ) -> "AsyncConsolidationHandle":
@@ -1408,13 +1434,13 @@ class MemOS:
     def compact(
         self,
         *,
-        archive_age_days: float = 90.0,
-        archive_importance_floor: float = 0.3,
-        stale_score_threshold: float = 0.25,
-        merge_similarity_threshold: float = 0.6,
-        cluster_min_size: int = 3,
+        archive_age_days: float = DEFAULT_ARCHIVE_AGE_DAYS,
+        archive_importance_floor: float = DEFAULT_ARCHIVE_IMPORTANCE_FLOOR,
+        stale_score_threshold: float = DEFAULT_STALE_SCORE_THRESHOLD,
+        merge_similarity_threshold: float = DEFAULT_MERGE_SIMILARITY_THRESHOLD,
+        cluster_min_size: int = DEFAULT_CLUSTER_MIN_SIZE,
         dry_run: bool = False,
-        max_compact_per_run: int = 200,
+        max_compact_per_run: int = DEFAULT_MAX_COMPACT_PER_RUN,
     ) -> dict[str, Any]:
         """Run memory compaction: dedup + archive + merge stale + compress clusters.
 
@@ -1781,7 +1807,7 @@ class MemOS:
             tags = md.get("tags", [])
             if isinstance(tags, str):
                 tags = [t.strip() for t in tags.split(",") if t.strip()]
-            importance = md.get("importance", 0.5)
+            importance = md.get("importance", DEFAULT_IMPORTANCE)
             item = self.learn(
                 md.get("content", ""),
                 tags=tags,
@@ -1842,7 +1868,7 @@ class MemOS:
             item.metadata["_feedback"] = fb_list
 
             # Adjust item importance based on feedback
-            delta = 0.1 if feedback == "relevant" else -0.1
+            delta = FEEDBACK_IMPORTANCE_DELTA if feedback == "relevant" else -FEEDBACK_IMPORTANCE_DELTA
             item.importance = max(0.0, min(1.0, item.importance + delta))
             self._store.upsert(item, namespace=self._namespace)
 

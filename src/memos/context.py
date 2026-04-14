@@ -20,6 +20,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional
 
+from ._constants import (
+    CONTEXT_FOR_MAX_CHARS,
+    WAKE_UP_COMPACT_L1_TOP,
+    WAKE_UP_COMPACT_MAX_CHARS,
+    WAKE_UP_L1_TOP,
+    WAKE_UP_MAX_CHARS,
+)
+
 if TYPE_CHECKING:
     from .core import MemOS
     from .models import RecallResult
@@ -72,8 +80,8 @@ class ContextStack:
 
     def wake_up(
         self,
-        max_chars: int = 2000,
-        l1_top: int = 15,
+        max_chars: int = WAKE_UP_MAX_CHARS,
+        l1_top: int = WAKE_UP_L1_TOP,
         include_stats: bool = True,
         compact: bool = False,
     ) -> str:
@@ -162,7 +170,7 @@ class ContextStack:
 
         return output
 
-    def _wake_up_compact(self, max_chars: int = 800, l1_top: int = 5) -> str:
+    def _wake_up_compact(self, max_chars: int = WAKE_UP_COMPACT_MAX_CHARS, l1_top: int = WAKE_UP_COMPACT_L1_TOP) -> str:
         """Produce a ~200-token compressed context injection.
 
         Format (header-free, semicolon-separated)::
@@ -258,7 +266,7 @@ class ContextStack:
     def context_for(
         self,
         query: str,
-        max_chars: int = 1500,
+        max_chars: int = CONTEXT_FOR_MAX_CHARS,
         top: int = 10,
     ) -> str:
         """Return the most relevant context for *query*.

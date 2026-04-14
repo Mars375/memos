@@ -9,14 +9,22 @@ import json
 import sqlite3
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from ._constants import (
+    DEFAULT_FIND_PATHS_MAX,
+    DEFAULT_INFERENCE_MAX_DEPTH,
+    DEFAULT_SHORTEST_PATH_MAX_HOPS,
+    KG_SHORT_ID_LENGTH,
+)
+
 
 def _short_id() -> str:
     """Generate an 8-char UUID fragment."""
-    return uuid.uuid4().hex[:8]
+    return uuid.uuid4().hex[:KG_SHORT_ID_LENGTH]
 
 
 def _parse_date(value: str | float | None) -> Optional[float]:
@@ -289,7 +297,7 @@ class KnowledgeGraph:
         self,
         predicate: str,
         inferred_predicate: str | None = None,
-        max_depth: int = 3,
+        max_depth: int = DEFAULT_INFERENCE_MAX_DEPTH,
     ) -> list[str]:
         """Create INFERRED facts for transitive chains.
 
@@ -427,8 +435,6 @@ class KnowledgeGraph:
         facts = [_row_to_dict(r) for r in rows]
 
         # --- Contradictions: same (subject, predicate) → multiple objects ---
-        from collections import defaultdict
-
         sp_to_objects: dict[tuple, set] = defaultdict(set)
         for f in facts:
             sp_to_objects[(f["subject"], f["predicate"])].add(f["object"])
@@ -554,7 +560,7 @@ class KnowledgeGraph:
         entity_a: str,
         entity_b: str,
         max_hops: int = 3,
-        max_paths: int = 10,
+        max_paths: int = DEFAULT_FIND_PATHS_MAX,
     ) -> List[List[dict]]:
         """Find all paths between entity_a and entity_b up to *max_hops*.
 
@@ -623,7 +629,7 @@ class KnowledgeGraph:
         self,
         entity_a: str,
         entity_b: str,
-        max_hops: int = 5,
+        max_hops: int = DEFAULT_SHORTEST_PATH_MAX_HOPS,
     ) -> Optional[List[dict]]:
         """Find the shortest path between entity_a and entity_b.
 

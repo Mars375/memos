@@ -6,6 +6,15 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ._constants import (
+    DEFAULT_SNIPPET_WINDOW,
+    KG_DIRECT_MATCH_BONUS,
+    KG_WEIGHT_AMBIGUOUS,
+    KG_WEIGHT_DEFAULT,
+    KG_WEIGHT_EXTRACTED,
+    KG_WEIGHT_INFERRED,
+    WIKI_ENTITY_IN_QUERY_BONUS,
+)
 from .kg_bridge import KGBridge
 from .knowledge_graph import KnowledgeGraph
 from .wiki_graph import GraphWikiEngine
@@ -440,7 +449,7 @@ class BrainSearch:
         for hit in raw_hits:
             entity = str(hit.get("entity", ""))
             matches = int(hit.get("matches", 0))
-            bonus = 0.15 if entity.lower() in query_lower else 0.0
+            bonus = WIKI_ENTITY_IN_QUERY_BONUS if entity.lower() in query_lower else 0.0
             score = min(1.0, (matches / max_matches) + bonus)
             scored.append(
                 WikiHit(
@@ -458,17 +467,19 @@ class BrainSearch:
         query_lower = query.lower()
         raw_facts = self._bridge._collect_facts(entities)
         label_weight = {
-            "EXTRACTED": 1.0,
-            "INFERRED": 0.85,
-            "AMBIGUOUS": 0.65,
+            "EXTRACTED": KG_WEIGHT_EXTRACTED,
+            "INFERRED": KG_WEIGHT_INFERRED,
+            "AMBIGUOUS": KG_WEIGHT_AMBIGUOUS,
         }
         scored: list[KGFact] = []
         for fact in raw_facts:
             subject = str(fact.get("subject", ""))
             obj = str(fact.get("object", ""))
             label = str(fact.get("confidence_label", "EXTRACTED"))
-            direct_match = 0.2 if subject.lower() in query_lower or obj.lower() in query_lower else 0.0
-            score = min(1.0, label_weight.get(label, 0.7) + direct_match)
+            direct_match = (
+                KG_DIRECT_MATCH_BONUS if subject.lower() in query_lower or obj.lower() in query_lower else 0.0
+            )
+            score = min(1.0, label_weight.get(label, KG_WEIGHT_DEFAULT) + direct_match)
             scored.append(
                 KGFact(
                     id=str(fact.get("id", "")),
@@ -529,7 +540,7 @@ class BrainSearch:
         return "\n".join(lines)
 
     @staticmethod
-    def _snippet(content: str, query: str, window: int = 80) -> str:
+    def _snippet(content: str, query: str, window: int = DEFAULT_SNIPPET_WINDOW) -> str:
         lowered = content.lower()
         query_lower = query.lower()
         idx = lowered.find(query_lower)

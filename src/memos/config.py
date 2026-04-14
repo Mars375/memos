@@ -13,6 +13,16 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ._constants import (
+    DEFAULT_CONSOLIDATION_THRESHOLD,
+    DEFAULT_DECAY_RATE,
+    DEFAULT_EMBED_TIMEOUT,
+    DEFAULT_IMPORTANCE,
+    DEFAULT_MAX_CHUNK_SIZE,
+    DEFAULT_SEMANTIC_WEIGHT,
+    DEFAULT_VECTOR_SIZE,
+)
+
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -29,12 +39,12 @@ DEFAULTS: dict[str, Any] = {
     "qdrant_port": 6333,
     "qdrant_api_key": "",
     "qdrant_path": "",
-    "vector_size": 768,
-    "semantic_weight": 0.6,
+    "vector_size": DEFAULT_VECTOR_SIZE,
+    "semantic_weight": DEFAULT_SEMANTIC_WEIGHT,
     "embed_host": "localhost",
     "embed_model": "nomic-embed-text",
     "embed_port": 11434,
-    "embed_timeout": 30,
+    "embed_timeout": DEFAULT_EMBED_TIMEOUT,
     "persist_path": "",
     "pinecone_api_key": "",
     "pinecone_environment": "",
@@ -45,10 +55,10 @@ DEFAULTS: dict[str, Any] = {
     "host": "127.0.0.1",
     "port": 8000,
     "sanitize": True,
-    "decay_rate": 0.01,
-    "default_importance": 0.5,
-    "consolidation_threshold": 0.75,
-    "max_chunk_size": 2000,
+    "decay_rate": DEFAULT_DECAY_RATE,
+    "default_importance": DEFAULT_IMPORTANCE,
+    "consolidation_threshold": DEFAULT_CONSOLIDATION_THRESHOLD,
+    "max_chunk_size": DEFAULT_MAX_CHUNK_SIZE,
     "api_key": "",
 }
 

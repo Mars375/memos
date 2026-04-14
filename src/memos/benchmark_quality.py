@@ -21,6 +21,7 @@ import random
 import statistics
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .core import MemOS
@@ -424,8 +425,6 @@ def run_quality_benchmark(
     Returns:
         QualityReport with detailed metrics.
     """
-    from datetime import datetime, timezone
-
     from . import __version__
 
     started = datetime.now(timezone.utc).isoformat()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from ._constants import DEFAULT_IMPORTANCE, DEFAULT_INFERENCE_MAX_DEPTH
 from .knowledge_graph import KnowledgeGraph
 
 _ENTITY_PATTERN = re.compile(r"\b(?:[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)+|[A-Z]{2,})\b")
@@ -78,7 +79,7 @@ class KGBridge:
         self,
         content: str,
         tags: list[str] | None = None,
-        importance: float = 0.5,
+        importance: float = DEFAULT_IMPORTANCE,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Learn a memory and extract simple KG facts from the content."""
@@ -117,7 +118,7 @@ class KGBridge:
         self,
         predicate: str,
         inferred_predicate: str | None = None,
-        max_depth: int = 3,
+        max_depth: int = DEFAULT_INFERENCE_MAX_DEPTH,
     ) -> list[str]:
         """Run transitive inference on *predicate* and return new fact IDs.
 
