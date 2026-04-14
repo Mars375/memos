@@ -5,8 +5,24 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v1.0.0-purple.svg)](https://github.com/Mars375/memos/releases)
-[![Tests](https://img.shields.io/badge/tests-1434_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![Version](https://img.shields.io/badge/version-v1.1.0-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Tests](https://img.shields.io/badge/tests-1710_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
+[![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
+[![PyPI](https://img.shields.io/pypi/v/memos-agent.svg)](https://pypi.org/project/memos-agent/)
+
+---
+
+## What's new in v1.1.0
+
+- **Security hardening** — WebSocket auth, CORS defaults, Pydantic request schemas on all endpoints
+- **Canvas force-graph dashboard** — clustering, depth filter, time-lapse slider, KG edges
+- **Modular frontend** — monolithic 1768L split into 12 JS modules
+- **1710 tests** — modernized with shared fixtures, freezegun, tmp_path
+- **Zero ruff errors** — 506 lint errors fixed, full formatting pass
+- **CI: Python 3.11 / 3.12 / 3.13** + coverage via Codecov
+
+See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ---
 
@@ -193,7 +209,7 @@ MEMOS_QDRANT_HOST=localhost
 MEMOS_QDRANT_PORT=6333
 
 # Pinecone
-MEMOS_PINECONE_API_KEY=pc-...
+MEMOS_PINECONE_API_KEY=***
 MEMOS_PINECONE_INDEX=agent-memories
 ```
 
@@ -215,12 +231,6 @@ git clone https://github.com/Mars375/memos
 cd memos
 docker compose up -d
 ```
-
-Services started:
-- `http://localhost:8100` — MemOS API + dashboard (ChromaDB backend)
-- `http://localhost:8000` — MemOS (Qdrant backend, secondary)
-- `http://localhost:8001` — ChromaDB
-- `http://localhost:6333` — Qdrant
 
 ---
 
@@ -250,7 +260,6 @@ from memos.ingest.miner import Miner
 
 miner = Miner(mem, chunk_size=800, chunk_overlap=100)
 result = miner.mine_auto("conversations/")   # auto-detect
-result = miner.mine_claude_export("~/.claude/projects/.../export.json")
 # MineResult(imported=127, dupes=12, empty=3, errors=0)
 ```
 
@@ -288,8 +297,6 @@ memos wiki-living update          # scan memories, create/update entity pages
 memos wiki-living read Alice      # print Alice's page
 memos wiki-living search "python" # search across all pages
 memos wiki-living lint            # find orphans, contradictions, empty pages
-
-memos wiki-compile --tags python  # static tag-based pages (simpler alternative)
 ```
 
 ---
@@ -302,12 +309,6 @@ Memories age automatically. Important ones persist; stale ones fade.
 memos decay --dry-run      # preview what would decay
 memos decay --apply        # apply decay
 memos prune --threshold 0.1  # delete memories below importance threshold
-```
-
-```python
-mem.prune(threshold=0.15)
-report = mem._decay.run_decay(items, dry_run=True)
-# DecayReport(total=142, decayed=23, avg_importance_before=0.51, after=0.47)
 ```
 
 ---
@@ -336,11 +337,6 @@ memos --namespace agent-bob learn "Bob's memory"
 memos --namespace agent-alice recall "what do I know?"
 ```
 
-```python
-mem_alice = MemOS(backend="chroma", namespace="agent-alice")
-mem_bob   = MemOS(backend="chroma", namespace="agent-bob")
-```
-
 ---
 
 ## Development
@@ -349,21 +345,27 @@ mem_bob   = MemOS(backend="chroma", namespace="agent-bob")
 git clone https://github.com/Mars375/memos
 cd memos
 pip install -e ".[dev]"
-pytest -q --tb=no          # 1402 tests
-pytest tests/test_core.py  # specific module
+
+# Lint
+ruff check src/ tests/
+ruff format src/ tests/
+
+# Tests (Python 3.11 / 3.12 / 3.13)
+pytest -q --tb=short          # 1710 tests
+pytest tests/test_core.py     # specific module
 ```
 
 ---
 
 ## Architecture
 
-MemOS is built around three core layers (see [PRD.md](PRD.md)):
+MemOS is built around three core layers:
 
-- **Capture** — Mine conversations and events into structured memory units via the CLI (`memos mine`), SDK, or MCP.
+- **Capture** — Mine conversations and events into structured memory units via the CLI, SDK, or MCP.
 - **Engine** — Storage, recall, decay, reinforcement, versioning, and knowledge graph. Pluggable backends (in-memory, JSON, ChromaDB, Qdrant, Pinecone).
 - **Knowledge Surface** — Living wiki, graph view, and context packs (`wake_up`, `context_for`, `recall_enriched`) that serve the right context at the right time.
 
-See [ROADMAP.md](ROADMAP.md) for planned features and current status.
+See [ROADMAP.md](ROADMAP.md) for planned features and [PRD.md](PRD.md) for product requirements.
 
 ---
 
