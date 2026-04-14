@@ -7,6 +7,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from ._constants import DEFAULT_IMPORTANCE, MEMORY_ID_LENGTH
+
 
 @dataclass
 class MemoryItem:
@@ -15,7 +17,7 @@ class MemoryItem:
     id: str
     content: str
     tags: list[str] = field(default_factory=list)
-    importance: float = 0.5  # 0.0 = ephemeral, 1.0 = permanent
+    importance: float = DEFAULT_IMPORTANCE  # 0.0 = ephemeral, 1.0 = permanent
     created_at: float = field(default_factory=time.time)
     accessed_at: float = field(default_factory=time.time)
     access_count: int = 0
@@ -99,7 +101,7 @@ class MemoryStats:
 
 def generate_id(content: str) -> str:
     """Generate a deterministic ID from content."""
-    return hashlib.sha256(content.encode()).hexdigest()[:16]
+    return hashlib.sha256(content.encode()).hexdigest()[:MEMORY_ID_LENGTH]
 
 
 def parse_ttl(value: str) -> float:
