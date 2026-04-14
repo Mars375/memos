@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from freezegun import freeze_time
 
 from memos.api.auth import APIKeyManager, RateLimiter
 
@@ -73,12 +74,13 @@ class TestRateLimiter:
         assert limiter.check("key-b")[0] is True
 
     def test_window_reset(self):
-        limiter = RateLimiter(max_requests=2, window_seconds=0.1)
-        limiter.check("key-1")
-        limiter.check("key-1")
-        assert limiter.check("key-1")[0] is False
-        time.sleep(0.15)
-        assert limiter.check("key-1")[0] is True
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            limiter = RateLimiter(max_requests=2, window_seconds=0.1)
+            limiter.check("key-1")
+            limiter.check("key-1")
+            assert limiter.check("key-1")[0] is False
+            frozen.tick(1)  # Advance past 0.1s window
+            assert limiter.check("key-1")[0] is True
 
     def test_headers_format(self):
         limiter = RateLimiter(max_requests=10, window_seconds=60.0)

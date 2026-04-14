@@ -1,16 +1,5 @@
 """Tests for KnowledgeGraph.lint() — P2: quality linting."""
 
-import pytest
-
-from memos.knowledge_graph import KnowledgeGraph
-
-
-@pytest.fixture
-def kg():
-    kg = KnowledgeGraph(db_path=":memory:")
-    yield kg
-    kg.close()
-
 
 class TestLintClean:
     def test_empty_graph(self, kg):

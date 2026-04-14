@@ -103,9 +103,10 @@ class TestConfigPath:
             p = config_path()
         assert p.name == ".memos.toml"
 
-    def test_env_override(self):
-        with patch.dict(os.environ, {"MEMOS_CONFIG": "/tmp/my.toml"}, clear=True):
-            assert config_path() == Path("/tmp/my.toml")
+    def test_env_override(self, tmp_path):
+        config_file = str(tmp_path / "my.toml")
+        with patch.dict(os.environ, {"MEMOS_CONFIG": config_file}, clear=True):
+            assert config_path() == Path(config_file)
 
 
 class TestCLIConfig:

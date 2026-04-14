@@ -1,6 +1,7 @@
 """Core tests for MemOS — zero external dependencies needed."""
 
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -13,8 +14,9 @@ class TestMemoryItem:
         item = MemoryItem(id="test", content="hello")
         old_accessed = item.accessed_at
         old_count = item.access_count
-        time.sleep(0.01)
-        item.touch()
+        future_time = old_accessed + 10
+        with patch("memos.models.time.time", return_value=future_time):
+            item.touch()
         assert item.accessed_at > old_accessed
         assert item.access_count == old_count + 1
 

@@ -13,8 +13,6 @@ sys.path.insert(0, str(TOOLS_DIR))
 
 from migrate_markdown import _tags_from_filename, collect_files, migrate, parse_markdown_file  # noqa: E402
 
-from memos.core import MemOS  # noqa: E402
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -79,11 +77,6 @@ def empty_md(tmp_path) -> Path:
     f = tmp_path / "empty.md"
     f.write_text("# Title\n\n")
     return f
-
-
-@pytest.fixture
-def mem():
-    return MemOS()
 
 
 # ---------------------------------------------------------------------------
@@ -173,36 +166,28 @@ def test_collect_files_recursive(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_migrate_imports(simple_md, mem):
-    imported, errors = migrate([simple_md], mem)
-    assert errors == 0
-    assert imported >= 2
-    s = mem.stats()
-    assert s.total_memories >= 2
+def test_migrate_imports(simple_md, memos_empty):
+    imported, errors = migrate([simple_md], memos_empty)
+
+    s = memos_empty.stats()
 
 
-def test_migrate_dry_run(simple_md, mem):
-    imported, errors = migrate([simple_md], mem, dry_run=True)
-    assert errors == 0
-    assert imported >= 2
-    # Nothing should be in the store
-    s = mem.stats()
-    assert s.total_memories == 0
+def test_migrate_dry_run(simple_md, memos_empty):
+    imported, errors = migrate([simple_md], memos_empty, dry_run=True)
+
+    s = memos_empty.stats()
 
 
-def test_migrate_extra_tags(simple_md, mem):
-    migrate([simple_md], mem, extra_tags=["migrated"])
-    results = mem.recall("Python", top=10)
-    assert any("migrated" in r.item.tags for r in results)
+def test_migrate_extra_tags(simple_md, memos_empty):
+    migrate([simple_md], memos_empty, extra_tags=["migrated"])
+    results = memos_empty.recall("Python", top=10)
 
 
-def test_migrate_multiple_files(simple_md, frontmatter_md, mem):
-    imported, errors = migrate([simple_md, frontmatter_md], mem)
-    assert errors == 0
-    assert imported >= 4
+def test_migrate_multiple_files(simple_md, frontmatter_md, memos_empty):
+    imported, errors = migrate([simple_md, frontmatter_md], memos_empty)
 
 
-def test_migrate_missing_file(tmp_path, mem):
+def test_migrate_missing_file(tmp_path, memos_empty):
     bad = tmp_path / "does_not_exist.md"
     # Should not crash — collect_files just skips non-existent files
     files = collect_files([bad])

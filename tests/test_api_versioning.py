@@ -3,6 +3,7 @@
 import time
 
 import pytest
+from freezegun import freeze_time
 
 from memos.api import create_fastapi_app
 from memos.core import MemOS
@@ -10,52 +11,33 @@ from memos.models import MemoryItem
 
 
 @pytest.fixture
-def app():
-    """Create a FastAPI test app."""
-    memos = MemOS(backend="memory")
-    return create_fastapi_app(memos=memos)
-
-
-@pytest.fixture
-def client(app):
-    """Create a test client."""
-    from starlette.testclient import TestClient
-
-    return TestClient(app)
-
-
-@pytest.fixture
 def client_with_versions(client):
     """Create a client with versioned memories using direct storage upsert."""
-    # Access the underlying MemOS from the app
-    # We need to learn first, then update via storage
     resp = client.post("/api/v1/learn", json={"content": "API v1 about AI", "tags": ["ai"], "importance": 0.5})
     item1_id = resp.json()["id"]
-    # Get the memos instance from the app's closure
-    # Instead, use the learn API to create, then we can check history
-    # But learn always creates new items... so we test with what we have
     return client, item1_id
 
 
 @pytest.fixture
 def mem_app():
     """Create MemOS + FastAPI app with full version history."""
-    memos = MemOS(backend="memory")
-    # Create item and update it 3 times
-    item = memos.learn("API v1 about AI", tags=["ai"], importance=0.5)
-    time.sleep(0.01)
+    from freezegun import freeze_time as _ft
 
-    v2 = MemoryItem(id=item.id, content="API v2 about AI and ML", tags=["ai", "ml"], importance=0.7)
-    memos._store.upsert(v2)
-    memos.versioning.record_version(v2, source="upsert")
-    time.sleep(0.01)
+    with _ft("2024-01-01 12:00:00") as frozen:
+        memos = MemOS(backend="memory")
+        item = memos.learn("API v1 about AI", tags=["ai"], importance=0.5)
+        frozen.tick(1)
 
-    v3 = MemoryItem(id=item.id, content="API v3 about AI, ML, DL", tags=["ai", "ml", "dl"], importance=0.9)
-    memos._store.upsert(v3)
-    memos.versioning.record_version(v3, source="upsert")
+        v2 = MemoryItem(id=item.id, content="API v2 about AI and ML", tags=["ai", "ml"], importance=0.7)
+        memos._store.upsert(v2)
+        memos.versioning.record_version(v2, source="upsert")
+        frozen.tick(1)
 
-    # Also create a second independent item
-    item2 = memos.learn("Cooking is fun", tags=["food"], importance=0.3)
+        v3 = MemoryItem(id=item.id, content="API v3 about AI, ML, DL", tags=["ai", "ml", "dl"], importance=0.9)
+        memos._store.upsert(v3)
+        memos.versioning.record_version(v3, source="upsert")
+
+        item2 = memos.learn("Cooking is fun", tags=["food"], importance=0.3)
 
     app = create_fastapi_app(memos=memos)
     return app, item.id, item2.id
@@ -104,9 +86,10 @@ class TestVersionGetEndpoint:
     def test_get_version_not_found(self, mem_client):
         client, item1_id, _ = mem_client
         resp = client.get(f"/api/v1/memory/{item1_id}/version/999")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
-        assert data["status"] == "not_found"
+        assert data["status"] == "error"
+        assert data["code"] == "NOT_FOUND"
 
 
 class TestVersionDiffEndpoint:
@@ -146,16 +129,15 @@ class TestRollbackEndpoint:
     def test_rollback_not_found(self, mem_client):
         client, item1_id, _ = mem_client
         resp = client.post(f"/api/v1/memory/{item1_id}/rollback", json={"version": 999})
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
-        assert data["status"] == "not_found"
+        assert data["status"] == "error"
+        assert data["code"] == "NOT_FOUND"
 
     def test_rollback_missing_version(self, mem_client):
         client, item1_id, _ = mem_client
         resp = client.post(f"/api/v1/memory/{item1_id}/rollback", json={})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "error"
+        assert resp.status_code == 422
 
 
 class TestSnapshotEndpoint:

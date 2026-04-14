@@ -6,7 +6,6 @@ import json
 
 import pytest
 
-from memos.core import MemOS
 from memos.ingest.miner import (
     Miner,
     MineResult,
@@ -218,60 +217,55 @@ def test_parse_slack_jsonl():
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mem():
-    return MemOS()
-
-
-def test_miner_mine_file(tmp_path, mem):
+def test_miner_mine_file(tmp_path, memos_empty):
     md = tmp_path / "notes.md"
     md.write_text("## Python Tips\n\nUse list comprehensions.\n\n## Docker\n\nUse multi-stage builds.")
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_file(md)
     assert result.imported >= 1
     assert result.errors == []
-    assert mem.stats().total_memories >= 1
+    assert memos_empty.stats().total_memories >= 1
 
 
-def test_miner_dry_run(tmp_path, mem):
+def test_miner_dry_run(tmp_path, memos_empty):
     md = tmp_path / "notes.md"
     md.write_text("## Tips\n\nPython is great for scripting and automation tasks.")
-    miner = Miner(mem, dry_run=True)
+    miner = Miner(memos_empty, dry_run=True)
     result = miner.mine_file(md)
     assert result.imported >= 1
-    assert mem.stats().total_memories == 0  # nothing actually stored
+    assert memos_empty.stats().total_memories == 0  # nothing actually stored
 
 
-def test_miner_deduplication(tmp_path, mem):
+def test_miner_deduplication(tmp_path, memos_empty):
     md = tmp_path / "notes.md"
     md.write_text("This is a unique memory about Python programming.")
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     r1 = miner.mine_file(md)
     r2 = miner.mine_file(md)  # same file again
     assert r1.imported >= 1
     assert r2.skipped_duplicates >= 1
-    assert mem.stats().total_memories == r1.imported  # no new memories
+    assert memos_empty.stats().total_memories == r1.imported  # no new memories
 
 
-def test_miner_directory(tmp_path, mem):
+def test_miner_directory(tmp_path, memos_empty):
     (tmp_path / "a.md").write_text("Python async is powerful for IO-bound tasks.")
     (tmp_path / "b.md").write_text("Docker simplifies deployment and environment setup.")
     (tmp_path / "c.txt").write_text("Redis is great for caching and pub-sub messaging.")
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_directory(tmp_path)
     assert result.imported >= 3
 
 
-def test_miner_extra_tags(tmp_path, mem):
+def test_miner_extra_tags(tmp_path, memos_empty):
     md = tmp_path / "notes.md"
     md.write_text("FastAPI is a modern async Python web framework.")
-    miner = Miner(mem, extra_tags=["imported", "project-x"])
+    miner = Miner(memos_empty, extra_tags=["imported", "project-x"])
     miner.mine_file(md)
-    results = mem.recall("FastAPI", top=1)
+    results = memos_empty.recall("FastAPI", top=1)
     assert any("imported" in r.item.tags for r in results)
 
 
-def test_miner_claude_export(tmp_path, mem):
+def test_miner_claude_export(tmp_path, memos_empty):
     export = tmp_path / "claude.json"
     data = [
         {
@@ -283,15 +277,15 @@ def test_miner_claude_export(tmp_path, mem):
         }
     ]
     export.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_claude_export(export)
     assert result.imported >= 1
     assert result.errors == []
-    recalls = mem.recall("async python", top=5)
+    recalls = memos_empty.recall("async python", top=5)
     assert len(recalls) >= 1
 
 
-def test_miner_chatgpt_export(tmp_path, mem):
+def test_miner_chatgpt_export(tmp_path, memos_empty):
     export = tmp_path / "chatgpt.json"
     data = [
         {
@@ -314,32 +308,32 @@ def test_miner_chatgpt_export(tmp_path, mem):
         }
     ]
     export.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_chatgpt_export(export)
     assert result.imported >= 1
     assert result.errors == []
 
 
-def test_miner_auto_claude(tmp_path, mem):
+def test_miner_auto_claude(tmp_path, memos_empty):
     export = tmp_path / "export.json"
     data = [{"name": "test", "messages": [{"role": "human", "content": "Tell me about MemOS memory system."}]}]
     export.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_auto(export)
     assert result.imported >= 1
 
 
-def test_miner_auto_directory(tmp_path, mem):
+def test_miner_auto_directory(tmp_path, memos_empty):
     (tmp_path / "readme.md").write_text("Project documentation for testing purposes.")
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_auto(tmp_path)
     assert result.imported >= 1
 
 
-def test_miner_missing_file(mem):
+def test_miner_missing_file(memos_empty):
     from pathlib import Path
 
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_file(Path("/nonexistent/file.md"))
     assert len(result.errors) == 1
     assert result.imported == 0
@@ -420,7 +414,7 @@ def test_parse_discord_list():
     assert len(result) == 2
 
 
-def test_miner_discord_export(tmp_path, mem):
+def test_miner_discord_export(tmp_path, memos_empty):
     export = tmp_path / "discord.json"
     data = {
         "guild": {"name": "DevServer"},
@@ -441,13 +435,13 @@ def test_miner_discord_export(tmp_path, mem):
         ],
     }
     export.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_discord_export(export)
     assert result.imported >= 1
     assert result.errors == []
 
 
-def test_miner_auto_discord(tmp_path, mem):
+def test_miner_auto_discord(tmp_path, memos_empty):
     export = tmp_path / "discord_export.json"
     data = {
         "guild": {"name": "S"},
@@ -462,7 +456,7 @@ def test_miner_auto_discord(tmp_path, mem):
         ],
     }
     export.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_auto(export)
     assert result.imported >= 1
 
@@ -548,7 +542,7 @@ def test_parse_telegram_skips_non_messages():
     assert "Valid message" in result[0]["text"]
 
 
-def test_miner_telegram_export(tmp_path, mem):
+def test_miner_telegram_export(tmp_path, memos_empty):
     export = tmp_path / "result.json"
     data = {
         "name": "Dev Chat",
@@ -573,7 +567,7 @@ def test_miner_telegram_export(tmp_path, mem):
         ],
     }
     export.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_telegram_export(export)
     assert result.imported >= 1
     assert result.errors == []
@@ -635,7 +629,7 @@ def test_parse_openclaw_list():
     assert len(result) == 2
 
 
-def test_miner_openclaw_json(tmp_path, mem):
+def test_miner_openclaw_json(tmp_path, memos_empty):
     log = tmp_path / "session.json"
     data = {
         "job": "forge-chantier-memos",
@@ -643,35 +637,35 @@ def test_miner_openclaw_json(tmp_path, mem):
         "output": "Added temporal knowledge graph with SQLite backend and validity windows.",
     }
     log.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_openclaw(log)
     assert result.imported >= 1
-    assert "openclaw" in mem.recall("knowledge graph", top=1)[0].item.tags
+    assert "openclaw" in memos_empty.recall("knowledge graph", top=1)[0].item.tags
 
 
-def test_miner_openclaw_jsonl(tmp_path, mem):
+def test_miner_openclaw_jsonl(tmp_path, memos_empty):
     log = tmp_path / "cron.jsonl"
     lines = [
         json.dumps({"job": "forge-gate", "status": "ok", "output": "Spawned memos chantier."}),
         json.dumps({"job": "forge-scout", "status": "ok", "output": "Found 3 new signals."}),
     ]
     log.write_text("\n".join(lines))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_openclaw(log)
     assert result.imported >= 2
 
 
-def test_miner_openclaw_directory(tmp_path, mem):
+def test_miner_openclaw_directory(tmp_path, memos_empty):
     (tmp_path / "session1.json").write_text(
         json.dumps({"job": "j1", "output": "Implemented first feature successfully."})
     )
     (tmp_path / "notes.md").write_text("## Learnings\n\nAlways validate before building.")
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_openclaw(tmp_path)
     assert result.imported >= 2
 
 
-def test_miner_auto_openclaw(tmp_path, mem):
+def test_miner_auto_openclaw(tmp_path, memos_empty):
     log = tmp_path / "openclaw_session.json"
     data = {
         "summary": "Session implementing the wiki compile mode for MemOS.",
@@ -679,7 +673,7 @@ def test_miner_auto_openclaw(tmp_path, mem):
         "decisions": ["Use ~/.memos/wiki as default output dir"],
     }
     log.write_text(json.dumps(data))
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     result = miner.mine_auto(log)
     assert result.imported >= 1
 
@@ -689,7 +683,7 @@ def test_miner_auto_openclaw(tmp_path, mem):
 # ---------------------------------------------------------------------------
 
 
-def test_miner_format_choices(tmp_path, mem):
+def test_miner_format_choices(tmp_path, memos_empty):
     """Verify each format can be explicitly forced."""
     # Discord
     discord_file = tmp_path / "d.json"
@@ -709,7 +703,7 @@ def test_miner_format_choices(tmp_path, mem):
             }
         )
     )
-    miner = Miner(mem)
+    miner = Miner(memos_empty)
     r = miner.mine_discord_export(discord_file)
     assert r.imported >= 1
 

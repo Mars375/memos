@@ -31,16 +31,10 @@ from memos.core import MemOS
 
 
 @pytest.fixture()
-def memos_mem() -> MemOS:
-    """In-memory MemOS instance (no embedding, fast)."""
-    return MemOS(backend="memory")
-
-
-@pytest.fixture()
-def cs_tmp(memos_mem: MemOS, tmp_path: Path) -> ContextStack:
+def cs_tmp(memos_empty: MemOS, tmp_path: Path) -> ContextStack:
     """ContextStack with a temporary identity file path."""
     identity_file = tmp_path / "identity.txt"
-    return ContextStack(memos_mem, identity_path=str(identity_file))
+    return ContextStack(memos_empty, identity_path=str(identity_file))
 
 
 @pytest.fixture()
@@ -70,9 +64,9 @@ def test_set_then_get_identity(cs_tmp: ContextStack) -> None:
     assert cs_tmp.get_identity() == content
 
 
-def test_set_identity_creates_parent_dirs(memos_mem: MemOS, tmp_path: Path) -> None:
+def test_set_identity_creates_parent_dirs(memos_empty: MemOS, tmp_path: Path) -> None:
     deep_path = tmp_path / "a" / "b" / "c" / "identity.txt"
-    cs = ContextStack(memos_mem, identity_path=str(deep_path))
+    cs = ContextStack(memos_empty, identity_path=str(deep_path))
     cs.set_identity("deep identity")
     assert deep_path.exists()
     assert deep_path.read_text() == "deep identity"
@@ -84,9 +78,9 @@ def test_set_identity_overwrites(cs_tmp: ContextStack) -> None:
     assert cs_tmp.get_identity() == "second version"
 
 
-def test_identity_path_tilde_expansion(memos_mem: MemOS) -> None:
+def test_identity_path_tilde_expansion(memos_empty: MemOS) -> None:
     """ContextStack constructor must expand ~ in identity_path."""
-    cs = ContextStack(memos_mem, identity_path="~/.memos/identity.txt")
+    cs = ContextStack(memos_empty, identity_path="~/.memos/identity.txt")
     assert "~" not in str(cs._identity_path)
     assert str(Path.home()) in str(cs._identity_path)
 

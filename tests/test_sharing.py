@@ -4,6 +4,7 @@ import json
 import time
 
 import pytest
+from freezegun import freeze_time
 
 from memos.core import MemOS
 from memos.models import MemoryItem
@@ -491,9 +492,10 @@ class TestSharingEdgeCases:
 
     def test_share_id_unique(self):
         engine = SharingEngine()
-        req1 = engine.offer("a", "b")
-        time.sleep(0.01)
-        req2 = engine.offer("a", "b")
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            req1 = engine.offer("a", "b")
+            frozen.tick(1)
+            req2 = engine.offer("a", "b")
         assert req1.id != req2.id
 
     def test_admin_can_read_and_write(self):

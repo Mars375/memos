@@ -50,7 +50,8 @@ class TestMigrationEngine:
 
 
 class TestMigrationCLI:
-    def test_parser_accepts_migrate(self):
+    def test_parser_accepts_migrate(self, tmp_path):
+        fake_path = str(tmp_path / "memos.json")
         p = build_parser()
         ns = p.parse_args(
             [
@@ -58,7 +59,7 @@ class TestMigrationCLI:
                 "--dest",
                 "json",
                 "--dest-option",
-                "path=/tmp/memos.json",
+                f"path={fake_path}",
                 "--namespaces",
                 "agents,ops",
                 "--merge",
@@ -67,11 +68,13 @@ class TestMigrationCLI:
         )
         assert ns.command == "migrate"
         assert ns.dest == "json"
-        assert ns.dest_option == ["path=/tmp/memos.json"]
+        assert ns.dest_option == [f"path={fake_path}"]
         assert ns.namespaces == "agents,ops"
         assert ns.merge == "overwrite"
 
-    def test_cmd_migrate_prints_summary(self, capsys):
+    def test_cmd_migrate_prints_summary(self, capsys, tmp_path):
+        fake_path = str(tmp_path / "memos.json")
+
         class FakeReport:
             source_backend = "memory"
             dest_backend = "json"
@@ -93,7 +96,7 @@ class TestMigrationCLI:
                 assert kwargs["merge"] == "overwrite"
                 assert kwargs["dry_run"] is False
                 assert kwargs["batch_size"] == 50
-                assert kwargs["path"] == "/tmp/memos.json"
+                assert kwargs["path"] == fake_path
                 return FakeReport()
 
         ns = SimpleNamespace(
@@ -120,7 +123,7 @@ class TestMigrationCLI:
             dry_run=False,
             json=False,
             batch_size=50,
-            dest_option=["path=/tmp/memos.json"],
+            dest_option=[f"path={fake_path}"],
         )
 
         from unittest.mock import patch

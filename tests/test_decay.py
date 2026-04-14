@@ -28,11 +28,6 @@ def engine() -> DecayEngine:
     return DecayEngine(rate=0.01, reinforce_strength=0.05)
 
 
-@pytest.fixture()
-def mem() -> MemOS:
-    return MemOS(backend="memory")
-
-
 def _make_item(content: str, age_days: float = 0, importance: float = 0.5) -> MemoryItem:
     item = MemoryItem(
         id=f"test-{content[:8]}",
@@ -219,12 +214,12 @@ def test_decay_config_defaults():
 # ---------------------------------------------------------------------------
 
 
-def test_cli_decay_dry_run(mem: MemOS, capsys):
+def test_cli_decay_dry_run(memos_empty: MemOS, capsys):
     import argparse
 
     from memos.cli import cmd_decay
 
-    mem.learn("test memory for decay", importance=0.5)
+    memos_empty.learn("test memory for decay", importance=0.5)
     ns = argparse.Namespace(
         apply=False,
         min_age_days=0,
@@ -235,7 +230,7 @@ def test_cli_decay_dry_run(mem: MemOS, capsys):
     import memos.cli as cli_mod
 
     original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: mem
+    cli_mod._get_memos = lambda ns: memos_empty
     try:
         cmd_decay(ns)
     finally:
@@ -246,12 +241,12 @@ def test_cli_decay_dry_run(mem: MemOS, capsys):
     assert "Total memories" in captured.out
 
 
-def test_cli_decay_apply(mem: MemOS, capsys):
+def test_cli_decay_apply(memos_empty: MemOS, capsys):
     import argparse
 
     from memos.cli import cmd_decay
 
-    mem.learn("old decay test", importance=0.8)
+    memos_empty.learn("old decay test", importance=0.8)
     ns = argparse.Namespace(
         apply=True,
         min_age_days=0,
@@ -262,7 +257,7 @@ def test_cli_decay_apply(mem: MemOS, capsys):
     import memos.cli as cli_mod
 
     original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: mem
+    cli_mod._get_memos = lambda ns: memos_empty
     try:
         cmd_decay(ns)
     finally:
@@ -272,12 +267,12 @@ def test_cli_decay_apply(mem: MemOS, capsys):
     assert "APPLIED" in captured.out
 
 
-def test_cli_reinforce(mem: MemOS, capsys):
+def test_cli_reinforce(memos_empty: MemOS, capsys):
     import argparse
 
     from memos.cli import cmd_reinforce
 
-    item = mem.learn("reinforce target", importance=0.5)
+    item = memos_empty.learn("reinforce target", importance=0.5)
     ns = argparse.Namespace(
         memory_id=item.id,
         strength=None,
@@ -287,7 +282,7 @@ def test_cli_reinforce(mem: MemOS, capsys):
     import memos.cli as cli_mod
 
     original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: mem
+    cli_mod._get_memos = lambda ns: memos_empty
     try:
         cmd_reinforce(ns)
     finally:
@@ -298,7 +293,7 @@ def test_cli_reinforce(mem: MemOS, capsys):
     assert item.id[:8] in captured.out
 
 
-def test_cli_reinforce_not_found(mem: MemOS):
+def test_cli_reinforce_not_found(memos_empty: MemOS):
     import argparse
 
     from memos.cli import cmd_reinforce
@@ -312,7 +307,7 @@ def test_cli_reinforce_not_found(mem: MemOS):
     import memos.cli as cli_mod
 
     original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: mem
+    cli_mod._get_memos = lambda ns: memos_empty
     try:
         with pytest.raises(SystemExit):
             cmd_reinforce(ns)
@@ -326,10 +321,10 @@ def test_cli_reinforce_not_found(mem: MemOS):
 
 
 @pytest.fixture()
-def app(mem: MemOS):
+def app(memos_empty: MemOS):
     from memos.api import create_fastapi_app
 
-    return create_fastapi_app(memos=mem)
+    return create_fastapi_app(memos=memos_empty)
 
 
 @pytest.mark.anyio
@@ -384,7 +379,7 @@ async def test_rest_reinforce_not_found(app):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/memories/nonexistent/reinforce", json={})
-    assert resp.status_code == 200
+    assert resp.status_code == 404
     data = resp.json()
     assert data["status"] == "error"
 
@@ -394,37 +389,37 @@ async def test_rest_reinforce_not_found(app):
 # ---------------------------------------------------------------------------
 
 
-def test_mcp_decay_dry_run(mem: MemOS):
+def test_mcp_decay_dry_run(memos_empty: MemOS):
     from memos.mcp_server import _dispatch
 
-    mem.learn("mcp decay test", importance=0.5)
-    result = _dispatch(mem, "memory_decay", {"min_age_days": 0})
+    memos_empty.learn("mcp decay test", importance=0.5)
+    result = _dispatch(memos_empty, "memory_decay", {"min_age_days": 0})
     assert not result.get("isError")
     assert "DRY RUN" in result["content"][0]["text"]
 
 
-def test_mcp_decay_apply(mem: MemOS):
+def test_mcp_decay_apply(memos_empty: MemOS):
     from memos.mcp_server import _dispatch
 
-    mem.learn("mcp decay apply", importance=0.5)
-    result = _dispatch(mem, "memory_decay", {"apply": True, "min_age_days": 0})
+    memos_empty.learn("mcp decay apply", importance=0.5)
+    result = _dispatch(memos_empty, "memory_decay", {"apply": True, "min_age_days": 0})
     assert not result.get("isError")
     assert "APPLIED" in result["content"][0]["text"]
 
 
-def test_mcp_reinforce(mem: MemOS):
+def test_mcp_reinforce(memos_empty: MemOS):
     from memos.mcp_server import _dispatch
 
-    item = mem.learn("mcp reinforce test", importance=0.5)
-    result = _dispatch(mem, "memory_reinforce", {"memory_id": item.id, "strength": 0.1})
+    item = memos_empty.learn("mcp reinforce test", importance=0.5)
+    result = _dispatch(memos_empty, "memory_reinforce", {"memory_id": item.id, "strength": 0.1})
     assert not result.get("isError")
     assert "Reinforced" in result["content"][0]["text"]
 
 
-def test_mcp_reinforce_not_found(mem: MemOS):
+def test_mcp_reinforce_not_found(memos_empty: MemOS):
     from memos.mcp_server import _dispatch
 
-    result = _dispatch(mem, "memory_reinforce", {"memory_id": "nonexistent"})
+    result = _dispatch(memos_empty, "memory_reinforce", {"memory_id": "nonexistent"})
     assert result.get("isError")
 
 

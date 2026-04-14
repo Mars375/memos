@@ -239,13 +239,14 @@ class TestRenameTagCore:
         assert count == 0
 
     def test_rename_updates_accessed_at(self):
-        import time
+        from unittest.mock import patch
 
         self.memos.learn("hello", tags=["old"])
         item_before = self.memos._store.list_all()[0]
         ts_before = item_before.accessed_at
-        time.sleep(0.01)
-        self.memos.rename_tag("old", "new")
+        future_time = ts_before + 10
+        with patch("memos.core.time.time", return_value=future_time):
+            self.memos.rename_tag("old", "new")
         item_after = self.memos._store.list_all()[0]
         assert item_after.accessed_at >= ts_before
 
@@ -327,8 +328,7 @@ class TestRenameTagAPI:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tags/rename", json={"old": "x"})
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 422
 
     def test_api_rename_nonexistent(self):
         from fastapi.testclient import TestClient
@@ -481,6 +481,4 @@ class TestDeleteTagAPI:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tags/delete", json={})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "error" in data
+        assert resp.status_code == 422

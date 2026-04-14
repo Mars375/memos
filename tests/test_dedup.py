@@ -324,4 +324,4 @@ class TestDedupAPI:
 
     def test_dedup_check_missing_content(self, client):
         resp = client.post("/api/v1/dedup/check", json={})
-        assert resp.status_code in (200, 400)
+        assert resp.status_code in (200, 400, 422)

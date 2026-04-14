@@ -4,13 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from memos.api import create_fastapi_app
-
-
-@pytest.fixture
-def app():
-    return create_fastapi_app(backend="memory")
-
 
 @pytest.mark.asyncio
 async def test_dashboard_html_served(app):

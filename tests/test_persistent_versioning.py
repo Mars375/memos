@@ -4,6 +4,8 @@ import os
 import tempfile
 import time
 
+from freezegun import freeze_time
+
 from memos import MemOS
 from memos.models import MemoryItem, generate_id
 from memos.versioning.engine import VersioningEngine
@@ -79,40 +81,39 @@ class TestSqliteVersionStore:
         assert self.store.version_count(item.id) == 2
 
     def test_version_at(self):
-        item = self._make_item("time travel")
-        self.store.record(item)
-        t_after_v1 = time.time()
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            item = self._make_item("time travel")
+            self.store.record(item)
+            t_after_v1 = time.time()
 
-        time.sleep(0.05)
-        item.content = "updated"
-        v2 = self.store.record(item)
-        t_after_v2 = time.time()
+            frozen.tick(2)
+            item.content = "updated"
+            v2 = self.store.record(item)
+            t_after_v2 = time.time()
 
-        # Before v1: nothing
-        assert self.store.version_at(item.id, 0.0) is None
+            assert self.store.version_at(item.id, 0.0) is None
 
-        # After v1, before v2: should get v1
-        result = self.store.version_at(item.id, (t_after_v1 + v2.created_at) / 2)
-        assert result is not None
-        assert result.version_number == 1
+            result = self.store.version_at(item.id, (t_after_v1 + v2.created_at) / 2)
+            assert result is not None
+            assert result.version_number == 1
 
-        # After v2: should get v2
-        result = self.store.version_at(item.id, t_after_v2 + 1)
-        assert result is not None
-        assert result.version_number == 2
+            result = self.store.version_at(item.id, t_after_v2 + 1)
+            assert result is not None
+            assert result.version_number == 2
 
     def test_all_at(self):
-        item1 = self._make_item("item one")
-        item2 = self._make_item("item two")
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            item1 = self._make_item("item one")
+            item2 = self._make_item("item two")
 
-        self.store.record(item1)
-        t = time.time()
-        time.sleep(0.05)
-        self.store.record(item2)
+            self.store.record(item1)
+            t = time.time()
+            frozen.tick(2)
+            self.store.record(item2)
 
-        snapshot = self.store.all_at(t)
-        assert len(snapshot) == 1
-        assert snapshot[0].content == "item one"
+            snapshot = self.store.all_at(t)
+            assert len(snapshot) == 1
+            assert snapshot[0].content == "item one"
 
     def test_delete_versions(self):
         item = self._make_item("deletable")

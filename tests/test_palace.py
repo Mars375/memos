@@ -33,12 +33,6 @@ def palace() -> Generator[PalaceIndex, None, None]:
     p.close()
 
 
-@pytest.fixture()
-def memos_mem() -> MemOS:
-    """In-memory MemOS instance (no embedding, fast)."""
-    return MemOS(backend="memory")
-
-
 # ---------------------------------------------------------------------------
 # 1. Wing CRUD
 # ---------------------------------------------------------------------------
@@ -291,55 +285,55 @@ def test_auto_assign_no_match_returns_none(palace: PalaceIndex) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_palace_recall_global_fallback(palace: PalaceIndex, memos_mem: MemOS) -> None:
+def test_palace_recall_global_fallback(palace: PalaceIndex, memos_empty: MemOS) -> None:
     """No scope → global recall."""
-    memos_mem.learn("Python is a programming language", tags=["python"])
+    memos_empty.learn("Python is a programming language", tags=["python"])
     pr = PalaceRecall(palace)
-    results = pr.palace_recall(memos_mem, "Python language", top=5)
+    results = pr.palace_recall(memos_empty, "Python language", top=5)
     assert len(results) >= 1
 
 
-def test_palace_recall_with_scope(palace: PalaceIndex, memos_mem: MemOS) -> None:
+def test_palace_recall_with_scope(palace: PalaceIndex, memos_empty: MemOS) -> None:
     palace.create_wing("project")
-    item = memos_mem.learn("auth token implementation", tags=["auth"])
+    item = memos_empty.learn("auth token implementation", tags=["auth"])
     palace.assign(item.id, "project")
     pr = PalaceRecall(palace)
-    results = pr.palace_recall(memos_mem, "auth token", wing_name="project", top=10)
+    results = pr.palace_recall(memos_empty, "auth token", wing_name="project", top=10)
     ids = [r.item.id for r in results]
     assert item.id in ids
 
 
-def test_palace_recall_scope_filters_out(palace: PalaceIndex, memos_mem: MemOS) -> None:
+def test_palace_recall_scope_filters_out(palace: PalaceIndex, memos_empty: MemOS) -> None:
     """Memories not in scope should not appear when scope is non-empty."""
     palace.create_wing("wing-a")
     palace.create_wing("wing-b")
-    item_a = memos_mem.learn("deployment pipeline configuration", tags=["deploy"])
-    item_b = memos_mem.learn("deployment pipeline configuration copy", tags=["deploy"])
+    item_a = memos_empty.learn("deployment pipeline configuration", tags=["deploy"])
+    item_b = memos_empty.learn("deployment pipeline configuration copy", tags=["deploy"])
     palace.assign(item_a.id, "wing-a")
     palace.assign(item_b.id, "wing-b")
     pr = PalaceRecall(palace)
-    results = pr.palace_recall(memos_mem, "deployment pipeline", wing_name="wing-a", top=10)
+    results = pr.palace_recall(memos_empty, "deployment pipeline", wing_name="wing-a", top=10)
     ids = {r.item.id for r in results}
     # item_a should be present; item_b should not (different wing)
     assert item_a.id in ids
     assert item_b.id not in ids
 
 
-def test_palace_recall_empty_scope_fallback(palace: PalaceIndex, memos_mem: MemOS) -> None:
+def test_palace_recall_empty_scope_fallback(palace: PalaceIndex, memos_empty: MemOS) -> None:
     """Empty scope (no assignments) → fallback to global recall."""
     palace.create_wing("empty-wing")
-    memos_mem.learn("fallback content keyword", tags=["fallback"])
+    memos_empty.learn("fallback content keyword", tags=["fallback"])
     pr = PalaceRecall(palace)
-    results = pr.palace_recall(memos_mem, "fallback content keyword", wing_name="empty-wing", top=5)
+    results = pr.palace_recall(memos_empty, "fallback content keyword", wing_name="empty-wing", top=5)
     # Should get results via fallback
     assert len(results) >= 1
 
 
-def test_palace_recall_unknown_wing_fallback(palace: PalaceIndex, memos_mem: MemOS) -> None:
+def test_palace_recall_unknown_wing_fallback(palace: PalaceIndex, memos_empty: MemOS) -> None:
     """Unknown wing → fallback to global recall (no error)."""
-    memos_mem.learn("some global memory about anything", tags=["global"])
+    memos_empty.learn("some global memory about anything", tags=["global"])
     pr = PalaceRecall(palace)
-    results = pr.palace_recall(memos_mem, "global memory", wing_name="nonexistent-wing", top=5)
+    results = pr.palace_recall(memos_empty, "global memory", wing_name="nonexistent-wing", top=5)
     assert len(results) >= 1
 
 

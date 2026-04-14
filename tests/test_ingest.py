@@ -125,8 +125,8 @@ class TestJsonIngest:
 
 
 class TestEdgeCases:
-    def test_nonexistent_file(self):
-        result = ingest_file("/tmp/does_not_exist_12345.md")
+    def test_nonexistent_file(self, tmp_path):
+        result = ingest_file(str(tmp_path / "does_not_exist_12345.md"))
         assert result.errors
         assert result.total_chunks == 0
 

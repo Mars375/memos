@@ -1,8 +1,7 @@
 """Tests for the persistent embedding cache."""
 
-import time
-
 import pytest
+from freezegun import freeze_time
 
 from memos.cache.embedding_cache import EmbeddingCache
 
@@ -87,20 +86,21 @@ class TestEmbeddingCacheTTL:
         assert ttl_cache.get("temp") == [1.0]
 
     def test_entry_expired_after_ttl(self, ttl_cache):
-        ttl_cache.put("temp", [1.0])
-        time.sleep(2.1)
-        assert ttl_cache.get("temp") is None
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            ttl_cache.put("temp", [1.0])
+            frozen.tick(3)  # Advance past TTL of 2.0s
+            assert ttl_cache.get("temp") is None
 
     def test_ttl_zero_never_expires(self, cache):
         cache.put("permanent", [1.0])
-        time.sleep(0.1)
         assert cache.get("permanent") == [1.0]
 
     def test_expired_entry_removed_from_db(self, ttl_cache):
-        ttl_cache.put("temp", [1.0])
-        time.sleep(2.1)
-        ttl_cache.get("temp")  # Triggers cleanup
-        assert len(ttl_cache) == 0
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            ttl_cache.put("temp", [1.0])
+            frozen.tick(3)  # Advance past TTL of 2.0s
+            ttl_cache.get("temp")  # Triggers cleanup
+            assert len(ttl_cache) == 0
 
 
 class TestEmbeddingCacheEviction:

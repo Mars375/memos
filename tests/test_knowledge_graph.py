@@ -14,24 +14,10 @@ Covers:
 from __future__ import annotations
 
 import time
-from typing import Generator
 
 import pytest
 
 from memos.knowledge_graph import KnowledgeGraph, _parse_date
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def kg() -> Generator[KnowledgeGraph, None, None]:
-    """In-memory KnowledgeGraph for tests."""
-    graph = KnowledgeGraph(db_path=":memory:")
-    yield graph
-    graph.close()
-
 
 # ---------------------------------------------------------------------------
 # 1. add_fact — basic

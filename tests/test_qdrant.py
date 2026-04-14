@@ -401,17 +401,18 @@ class TestQdrantBackend:
             fresh._ensure_client()
             mock_qdrant.QdrantClient.assert_called_once()
 
-    def test_lazy_init_local_path(self):
+    def test_lazy_init_local_path(self, tmp_path):
+        qdrant_data_path = str(tmp_path / "qdrant_data")
         mock_qdrant = MagicMock()
         mock_client_instance = MagicMock()
         mock_qdrant.QdrantClient.return_value = mock_client_instance
 
         with patch.dict("sys.modules", {"qdrant_client": mock_qdrant}):
-            fresh = QdrantBackend(path="/tmp/qdrant_data")
+            fresh = QdrantBackend(path=qdrant_data_path)
             fresh._client = None
             fresh._collections = {}
             fresh._ensure_client()
-            mock_qdrant.QdrantClient.assert_called_once_with(path="/tmp/qdrant_data")
+            mock_qdrant.QdrantClient.assert_called_once_with(path=qdrant_data_path)
 
     def test_lazy_init_import_error(self):
         fresh = QdrantBackend()

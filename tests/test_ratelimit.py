@@ -2,6 +2,8 @@
 
 import time
 
+from freezegun import freeze_time
+
 from memos.api.ratelimit import (
     DEFAULT_RULES,
     EndpointRule,
@@ -63,12 +65,13 @@ class TestTokenBucket:
         assert bucket.remaining == 5  # Capped at max
 
     def test_consume_then_refill(self):
-        bucket = TokenBucket(max_tokens=5, refill_rate=10.0, tokens=5.0)
-        for _ in range(5):
-            assert bucket.consume()
-        assert bucket.consume() is False
-        time.sleep(0.15)  # ~1.5 tokens
-        assert bucket.remaining >= 1
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            bucket = TokenBucket(max_tokens=5, refill_rate=10.0, tokens=5.0)
+            for _ in range(5):
+                assert bucket.consume()
+            assert bucket.consume() is False
+            frozen.tick(0.2)  # ~2 tokens refilled at 10/s
+            assert bucket.remaining >= 1
 
     def test_remaining_reflects_refill(self):
         bucket = TokenBucket(max_tokens=10, refill_rate=10.0, tokens=0.0)

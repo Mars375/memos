@@ -5,62 +5,53 @@ import time
 from unittest.mock import patch
 
 import pytest
+from freezegun import freeze_time
 
 from memos.cli import _fmt_ts, _parse_timestamp, main
-from memos.core import MemOS
 
 
 @pytest.fixture
-def mem():
-    """Create a MemOS instance for testing."""
-    return MemOS(backend="memory")
-
-
-@pytest.fixture
-def mem_with_versions(mem):
+def mem_with_versions(memos_empty):
     """Create a MemOS instance with versioned memories."""
-    item1 = mem.learn("Initial content about AI", tags=["ai"], importance=0.5)
-    time.sleep(0.01)
-    # Update by learning similar content (creates new item)
-    # For versioning, we need to use the same item_id
-    # Let's learn then update via storage upsert
-    mem.learn("Updated content about AI and ML", tags=["ai", "ml"], importance=0.7)
-    time.sleep(0.01)
-    mem.learn("Final content about AI, ML, and deep learning", tags=["ai", "ml", "dl"], importance=0.9)
+    mem = memos_empty
+    with freeze_time("2024-01-01 12:00:00") as frozen:
+        item1 = mem.learn("Initial content about AI", tags=["ai"], importance=0.5)
+        frozen.tick(1)
+        mem.learn("Updated content about AI and ML", tags=["ai", "ml"], importance=0.7)
+        frozen.tick(1)
+        mem.learn("Final content about AI, ML, and deep learning", tags=["ai", "ml", "dl"], importance=0.9)
 
-    item2 = mem.learn("Separate memory about cooking", tags=["food"], importance=0.3)
-    time.sleep(0.01)
-    # For true version history, we need the same item to be updated
-    # Let's use storage.upsert directly
-    from memos.models import MemoryItem
+        item2 = mem.learn("Separate memory about cooking", tags=["food"], importance=0.3)
+        frozen.tick(1)
+        from memos.models import MemoryItem
 
-    updated_item1 = MemoryItem(
-        id=item1.id,
-        content="Updated content about AI and ML",
-        tags=["ai", "ml"],
-        importance=0.7,
-    )
-    mem._store.upsert(updated_item1)
-    mem.versioning.record_version(updated_item1, source="upsert")
-    time.sleep(0.01)
+        updated_item1 = MemoryItem(
+            id=item1.id,
+            content="Updated content about AI and ML",
+            tags=["ai", "ml"],
+            importance=0.7,
+        )
+        mem._store.upsert(updated_item1)
+        mem.versioning.record_version(updated_item1, source="upsert")
+        frozen.tick(1)
 
-    final_item1 = MemoryItem(
-        id=item1.id,
-        content="Final content about AI, ML, and deep learning",
-        tags=["ai", "ml", "dl"],
-        importance=0.9,
-    )
-    mem._store.upsert(final_item1)
-    mem.versioning.record_version(final_item1, source="upsert")
+        final_item1 = MemoryItem(
+            id=item1.id,
+            content="Final content about AI, ML, and deep learning",
+            tags=["ai", "ml", "dl"],
+            importance=0.9,
+        )
+        mem._store.upsert(final_item1)
+        mem.versioning.record_version(final_item1, source="upsert")
 
-    return mem, item1.id, item2.id
+        return mem, item1.id, item2.id
 
 
 @pytest.fixture
-def mock_mem(mem):
+def mock_mem(memos_empty):
     """Patch _get_memos to return our shared MemOS instance."""
-    with patch("memos.cli.commands_versioning._get_memos", return_value=mem):
-        yield mem
+    with patch("memos.cli.commands_versioning._get_memos", return_value=memos_empty):
+        yield memos_empty
 
 
 class TestTimestampParsing:
@@ -140,9 +131,9 @@ class TestCmdHistory:
         assert isinstance(data, list)
         assert len(data) == 3
 
-    def test_history_no_versions(self, mem, mock_mem, capsys):
-        item = mem.learn("No versions test")
-        mem.versioning.clear()
+    def test_history_no_versions(self, memos_empty, mock_mem, capsys):
+        item = memos_empty.learn("No versions test")
+        memos_empty.versioning.clear()
         main(["history", item.id, "--backend", "memory"])
         out = capsys.readouterr().out
         assert "No version history" in out
@@ -173,8 +164,8 @@ class TestCmdDiff:
         assert "changes" in data
         assert "content" in data["changes"]
 
-    def test_diff_no_versions(self, mem, mock_mem, capsys):
-        item = mem.learn("Single version")
+    def test_diff_no_versions(self, memos_empty, mock_mem, capsys):
+        item = memos_empty.learn("Single version")
         main(["diff", item.id, "--latest", "--backend", "memory"])
         out = capsys.readouterr().out
         assert "Fewer than 2 versions" in out
@@ -206,8 +197,8 @@ class TestCmdRollback:
         results = mem.recall("Initial content about AI", top=5)
         assert len(results) > 0
 
-    def test_rollback_version_not_found(self, mem, mock_mem, capsys):
-        item = mem.learn("Test item")
+    def test_rollback_version_not_found(self, memos_empty, mock_mem, capsys):
+        item = memos_empty.learn("Test item")
         with pytest.raises(SystemExit):
             main(["rollback", item.id, "--version", "999", "--yes", "--backend", "memory"])
 
@@ -306,19 +297,19 @@ class TestCmdVersionGC:
 class TestCLIVersioningIntegration:
     """Integration tests for versioning CLI commands end-to-end."""
 
-    def test_full_versioning_workflow(self, mem, mock_mem, capsys):
+    def test_full_versioning_workflow(self, memos_empty, mock_mem, capsys):
         """Learn -> update -> history -> diff -> rollback -> verify."""
         from memos.models import MemoryItem
 
-        # Learn initial
-        item = mem.learn("Version 1: hello world", tags=["v1"], importance=0.5)
-        time.sleep(0.01)
+        mem = memos_empty
+        with freeze_time("2024-01-01 12:00:00") as frozen:
+            item = mem.learn("Version 1: hello world", tags=["v1"], importance=0.5)
+            frozen.tick(1)
 
-        # Update to v2
-        v2 = MemoryItem(id=item.id, content="Version 2: hello world updated", tags=["v1", "v2"], importance=0.7)
-        mem._store.upsert(v2)
-        mem.versioning.record_version(v2, source="upsert")
-        time.sleep(0.01)
+            v2 = MemoryItem(id=item.id, content="Version 2: hello world updated", tags=["v1", "v2"], importance=0.7)
+            mem._store.upsert(v2)
+            mem.versioning.record_version(v2, source="upsert")
+            frozen.tick(1)
 
         # Update to v3
         v3 = MemoryItem(id=item.id, content="Version 3: final version", tags=["v1", "v2", "v3"], importance=0.9)
