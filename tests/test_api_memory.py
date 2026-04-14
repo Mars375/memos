@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from memos.api import create_fastapi_app
 from memos.core import MemOS
 
-
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
 
@@ -254,7 +253,6 @@ class TestPrune:
     @staticmethod
     def _seed_old_item(memos: MemOS, content: str, importance: float) -> str:
         """Create an item with created_at 2 days ago so prune considers it."""
-        from memos.models import MemoryItem
 
         item = memos.learn(content, importance=importance)
         item.created_at -= 2 * 86400  # age it 2 days
@@ -693,38 +691,9 @@ class TestRecallEnriched:
         assert data["status"] == "ok"
 
 
-# ── 20. GET /api/v1/memory/{id} ───────────────────────────────────────────
+# ── 20. GET /api/v1/memory/{id} — covered by TestGetMemory above ──────────
 
-
-class TestGetMemory:
-    """Get single memory by ID."""
-
-    def test_found(self, client):
-        item_id = _learn(client, "Fetch me")
-        resp = client.get(f"/api/v1/memory/{item_id}")
-        assert resp.status_code == 200
-        assert resp.json()["item"]["content"] == "Fetch me"
-
-    def test_not_found(self, client):
-        resp = client.get("/api/v1/memory/no-such-id")
-        assert resp.status_code == 404
-
-
-# ── 21. DELETE /api/v1/memory/{id} ────────────────────────────────────────
-
-
-class TestDeleteMemory:
-    """Delete a memory."""
-
-    def test_delete_existing(self, client):
-        item_id = _learn(client, "Delete me")
-        resp = client.delete(f"/api/v1/memory/{item_id}")
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
-
-    def test_delete_nonexistent(self, client):
-        resp = client.delete("/api/v1/memory/no-such-id")
-        assert resp.status_code == 404
+# ── 21. DELETE /api/v1/memory/{id} — covered by TestDeleteMemory above ────
 
 
 # ── 22. POST /api/v1/prune ────────────────────────────────────────────────

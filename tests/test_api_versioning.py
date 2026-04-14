@@ -3,7 +3,6 @@
 import time
 
 import pytest
-from freezegun import freeze_time
 
 from memos.api import create_fastapi_app
 from memos.core import MemOS

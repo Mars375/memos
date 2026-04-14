@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from memos.api import create_fastapi_app
 from memos.core import MemOS
 
-
 # ── Fixtures ──────────────────────────────────────────────────
 
 
@@ -89,9 +88,9 @@ class TestEventsAndSubscriptions:
     """SSE stream, subscriptions CRUD, event stats."""
 
     def test_event_stream_sse_content_type(self, app):
-        import httpx
         import threading
 
+        import httpx
         import uvicorn
 
         server = threading.Thread(
@@ -319,7 +318,7 @@ class TestSharing:
         assert data["status"] == "error"
 
     def test_share_import(self, client, memos):
-        item = memos.learn("shared knowledge", tags=["share-test"], importance=0.7)
+        item = memos.learn("shared knowledge", tags=["share-test"], importance=0.7)  # noqa: F841
         offer_resp = client.post(
             "/api/v1/share/offer",
             json={"target_agent": "default", "scope": "tag", "scope_key": "share-test"},

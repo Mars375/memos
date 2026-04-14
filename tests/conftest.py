@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import pytest
+
+from memos.api import create_fastapi_app
 from memos.core import MemOS
 from memos.knowledge_graph import KnowledgeGraph
-from memos.api import create_fastapi_app
-from memos.storage.memory_backend import InMemoryBackend
 
 # --- MemOS instances ---
 

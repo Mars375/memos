@@ -1,6 +1,5 @@
 """Tests for API key authentication and rate limiting."""
 
-import time
 
 import pytest
 from freezegun import freeze_time

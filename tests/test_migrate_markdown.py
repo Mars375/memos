@@ -168,19 +168,17 @@ def test_collect_files_recursive(tmp_path):
 
 def test_migrate_imports(simple_md, memos_empty):
     imported, errors = migrate([simple_md], memos_empty)
-
-    s = memos_empty.stats()
+    memos_empty.stats()
 
 
 def test_migrate_dry_run(simple_md, memos_empty):
     imported, errors = migrate([simple_md], memos_empty, dry_run=True)
-
-    s = memos_empty.stats()
+    memos_empty.stats()
 
 
 def test_migrate_extra_tags(simple_md, memos_empty):
     migrate([simple_md], memos_empty, extra_tags=["migrated"])
-    results = memos_empty.recall("Python", top=10)
+    memos_empty.recall("Python", top=10)
 
 
 def test_migrate_multiple_files(simple_md, frontmatter_md, memos_empty):
