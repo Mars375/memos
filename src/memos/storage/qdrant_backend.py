@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Optional
 
 from ..models import MemoryItem
 from .base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class QdrantBackend(StorageBackend):
@@ -112,10 +115,9 @@ class QdrantBackend(StorageBackend):
                         del self._embed_cache[k]
                 return vec
         except Exception:
+            logger.debug("Embedding fetch failed for Qdrant", exc_info=True)
             pass
         return None
-
-    # --- StorageBackend interface ---
 
     def upsert(self, item: MemoryItem, *, namespace: str = "") -> None:
         self._ensure_collection(namespace)
@@ -158,6 +160,7 @@ class QdrantBackend(StorageBackend):
                 return None
             return self._point_to_item(points[0])
         except Exception:
+            logger.warning("Qdrant get() failed for %s", item_id, exc_info=True)
             return None
 
     def delete(self, item_id: str, *, namespace: str = "") -> bool:
@@ -173,6 +176,7 @@ class QdrantBackend(StorageBackend):
             )
             return True
         except Exception:
+            logger.warning("Qdrant delete() failed for %s", item_id, exc_info=True)
             return False
 
     def list_all(self, *, namespace: str = "") -> list[MemoryItem]:
@@ -187,6 +191,7 @@ class QdrantBackend(StorageBackend):
             )
             return [self._point_to_item(p) for p in points]
         except Exception:
+            logger.warning("Qdrant list_all() failed", exc_info=True)
             return []
 
     def search(self, query: str, limit: int = 20, *, namespace: str = "") -> list[MemoryItem]:
@@ -205,6 +210,7 @@ class QdrantBackend(StorageBackend):
                 )
                 return [self._point_to_item(r) for r in results]
             except Exception:
+                logger.debug("Qdrant vector search failed, falling back to keyword", exc_info=True)
                 pass
 
         # Fallback: keyword-based search
@@ -266,6 +272,7 @@ class QdrantBackend(StorageBackend):
                     item = self._point_to_item(r)
                     vector_results[item.id] = r.score
             except Exception:
+                logger.debug("Qdrant hybrid vector search failed", exc_info=True)
                 pass
 
         # Keyword results (BM25-like)

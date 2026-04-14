@@ -18,10 +18,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from .chunker import chunk_text, content_hash, detect_room
 from .parsers import (
@@ -303,6 +306,7 @@ class Miner:
                     try:
                         self._memos.forget(mid)
                     except Exception:
+                        logger.warning("Forget failed during undo for %s", mid, exc_info=True)
                         pass
 
         # --diff: collect hashes already stored for this file
@@ -564,6 +568,7 @@ class Miner:
                         t.extend(extra)
                         result.merge(self._mine_chunks(convo["text"], t, importance=importance))
                 except json.JSONDecodeError:
+                    logger.debug("JSON decode error in OpenClaw session", exc_info=True)
                     pass
             return result
 

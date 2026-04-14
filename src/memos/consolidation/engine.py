@@ -6,6 +6,16 @@ import re
 import time
 from dataclasses import dataclass, field
 
+from .._constants import (
+    CONSOLIDATION_RECENCY_FADE_DAYS,
+    DEFAULT_CONSOLIDATION_THRESHOLD,
+    MERGE_ACCESS_COUNT_WEIGHT,
+    MERGE_IMPORTANCE_WEIGHT,
+    MERGE_RECENCY_FLOOR,
+    MERGE_RECENCY_WEIGHT,
+    SECONDS_PER_DAY,
+    UNIQUE_CONTENT_RATIO_THRESHOLD,
+)
 from ..models import MemoryItem, generate_id
 from ..storage.base import StorageBackend
 
@@ -48,7 +58,7 @@ class ConsolidationEngine:
     def __init__(
         self,
         *,
-        similarity_threshold: float = 0.75,
+        similarity_threshold: float = DEFAULT_CONSOLIDATION_THRESHOLD,
         use_embeddings: bool = False,
         embed_host: str = "http://localhost:11434",
         embed_model: str = "nomic-embed-text",
@@ -320,9 +330,13 @@ class ConsolidationEngine:
         """Pick the best item to keep: highest importance * recency."""
 
         def score(item: MemoryItem) -> float:
-            age_days = (time.time() - item.created_at) / 86400
-            recency = max(0.1, 1.0 - age_days / 90)  # Fade over 90 days
-            return item.importance * 0.7 + recency * 0.3 + item.access_count * 0.01
+            age_days = (time.time() - item.created_at) / SECONDS_PER_DAY
+            recency = max(MERGE_RECENCY_FLOOR, 1.0 - age_days / CONSOLIDATION_RECENCY_FADE_DAYS)  # Fade over 90 days
+            return (
+                item.importance * MERGE_IMPORTANCE_WEIGHT
+                + recency * MERGE_RECENCY_WEIGHT
+                + item.access_count * MERGE_ACCESS_COUNT_WEIGHT
+            )
 
         return max(items, key=score)
 
@@ -377,7 +391,7 @@ class ConsolidationEngine:
             other_tokens = self._tokenize(other)
             # If >40% of tokens are new, include as additional content
             new_tokens = other_tokens - primary_tokens
-            if new_tokens and len(new_tokens) / max(len(other_tokens), 1) > 0.4:
+            if new_tokens and len(new_tokens) / max(len(other_tokens), 1) > UNIQUE_CONTENT_RATIO_THRESHOLD:
                 parts.append(other)
 
         return parts

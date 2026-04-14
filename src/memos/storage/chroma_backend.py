@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from typing import Optional
 
 from ..models import MemoryItem
 from .base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class _CachedOllamaEF:
@@ -56,6 +59,7 @@ class _CachedOllamaEF:
                     self._mem[key] = vec
                     return vec
         except Exception:
+            logger.debug("Embed cache load failed", exc_info=True)
             pass
         return None
 
@@ -70,6 +74,7 @@ class _CachedOllamaEF:
                 )
                 conn.commit()
         except Exception:
+            logger.debug("Embed cache store failed", exc_info=True)
             pass
 
     def _call_ollama(self, text: str) -> list[float]:

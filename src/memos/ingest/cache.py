@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import time
@@ -153,8 +154,6 @@ class MinerCache:
         ``memory_count``
             Number of memories created from this file.
         """
-        import hashlib as _hashlib
-
         entries = self.list_all()
         results: list[dict] = []
 
@@ -164,7 +163,7 @@ class MinerCache:
                 status = "missing"
             else:
                 try:
-                    current_hash = _hashlib.sha256(p.read_bytes()).hexdigest()
+                    current_hash = hashlib.sha256(p.read_bytes()).hexdigest()
                     status = "fresh" if current_hash == entry["sha256"] else "changed"
                 except OSError:
                     status = "missing"

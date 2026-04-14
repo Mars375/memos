@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Iterator, List
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_claude_export(data: Any) -> Iterator[dict]:
@@ -225,6 +228,7 @@ def _parse_discord_export(data: Any) -> Iterator[dict]:
                 dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
                 ts = dt.timestamp()
             except Exception:
+                logger.debug("Timestamp parse failed: %s", ts_str, exc_info=True)
                 pass
         parsed.append({"ts": ts, "author": author, "content": content})
 
@@ -319,6 +323,7 @@ def _parse_telegram_export(data: Any) -> Iterator[dict]:
                 dt = datetime.datetime.fromisoformat(date_str)
                 ts = dt.timestamp()
             except Exception:
+                logger.debug("Timestamp parse failed: %s", date_str, exc_info=True)
                 pass
         parsed.append({"ts": ts, "from": sender, "text": text.strip()})
 
@@ -401,6 +406,7 @@ def _parse_openclaw_session(data: Any) -> Iterator[dict]:
                     else:
                         created = str(ts)
                 except Exception:
+                    logger.debug("Timestamp parse failed", exc_info=True)
                     pass
             yield {
                 "text": f"[{job}] {status}\n{output}".strip(),

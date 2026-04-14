@@ -8,6 +8,7 @@ Usage (programmatic):
         embed_host="http://localhost:11434",
     )
 
+
 Usage (CLI):
     memos migrate --dest chroma --dest-embed-host http://localhost:11434
     memos migrate --dest qdrant --dest-qdrant-path ./qdrant-data --dest-embed-host http://localhost:11434
@@ -16,11 +17,14 @@ Usage (CLI):
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 from .storage.chroma_backend import ChromaBackend
 from .storage.json_backend import JsonFileBackend
 from .storage.memory_backend import InMemoryBackend
@@ -196,6 +200,7 @@ class MigrationEngine:
                     try:
                         on_progress(report, items_done)
                     except Exception:
+                        logger.debug("on_progress callback failed", exc_info=True)
                         pass
 
         report.finished_at = time.time()

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from typing import Optional
 
 from ..models import MemoryItem
 from .base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 
 class PineconeBackend(StorageBackend):
@@ -115,6 +118,7 @@ class PineconeBackend(StorageBackend):
                         del self._embed_cache[k]
                 return vec
         except Exception:
+            logger.debug("Embedding fetch failed for Pinecone", exc_info=True)
             pass
         return None
 
@@ -241,6 +245,7 @@ class PineconeBackend(StorageBackend):
             metadata = vec_data.metadata if hasattr(vec_data, "metadata") else vec_data.get("metadata", {})
             return self._metadata_to_item(metadata)
         except Exception:
+            logger.warning("Pinecone get() failed for %s", item_id, exc_info=True)
             return None
 
     def delete(self, item_id: str, *, namespace: str = "") -> bool:
@@ -251,6 +256,7 @@ class PineconeBackend(StorageBackend):
             self._index.delete(ids=[pinecone_id], namespace=ns)
             return True
         except Exception:
+            logger.warning("Pinecone delete() failed for %s", item_id, exc_info=True)
             return False
 
     def list_all(self, *, namespace: str = "") -> list[MemoryItem]:
@@ -277,6 +283,7 @@ class PineconeBackend(StorageBackend):
                             )
                             items.append(self._metadata_to_item(metadata))
         except Exception:
+            logger.debug("Pinecone list_all() failed", exc_info=True)
             pass
 
         return items
@@ -301,6 +308,7 @@ class PineconeBackend(StorageBackend):
                     items.append(self._metadata_to_item(metadata))
                 return items
             except Exception:
+                logger.debug("Pinecone vector search failed, falling back to keyword", exc_info=True)
                 pass
 
         return self._keyword_search(query, limit, namespace)

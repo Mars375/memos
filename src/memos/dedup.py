@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from ._constants import DEFAULT_DEDUP_THRESHOLD
 from .models import MemoryItem
 from .storage.base import StorageBackend
 
@@ -57,7 +58,7 @@ class DedupEngine:
         self,
         store: StorageBackend,
         *,
-        threshold: float = 0.95,
+        threshold: float = DEFAULT_DEDUP_THRESHOLD,
         namespace: Optional[str] = None,
     ) -> None:
         self._store = store

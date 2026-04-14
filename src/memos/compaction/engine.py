@@ -7,6 +7,22 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from .._constants import (
+    CLUSTER_SUMMARY_IMPORTANCE_FACTOR,
+    CLUSTER_SUMMARY_MIN_IMPORTANCE,
+    COMPACTION_MERGE_IMPORTANCE_BOOST,
+    DEFAULT_ARCHIVE_AGE_DAYS,
+    DEFAULT_ARCHIVE_IMPORTANCE_FLOOR,
+    DEFAULT_CLUSTER_MAX_SIZE,
+    DEFAULT_CLUSTER_MIN_SIZE,
+    DEFAULT_DECAY_RATE,
+    DEFAULT_MAX_COMPACT_PER_RUN,
+    DEFAULT_MAX_MEMORIES,
+    DEFAULT_MERGE_SIMILARITY_THRESHOLD,
+    DEFAULT_STALE_SCORE_THRESHOLD,
+    SECONDS_PER_DAY,
+    STALE_MERGE_NOVELTY_RATIO,
+)
 from ..consolidation.engine import ConsolidationEngine
 from ..decay.engine import DecayEngine
 from ..models import MemoryItem, generate_id
@@ -18,20 +34,20 @@ class CompactionConfig:
     """Configuration for memory compaction."""
 
     # Age-based archiving
-    archive_age_days: float = 90.0  # Age threshold for archiving
-    archive_importance_floor: float = 0.3  # Never archive above this importance
+    archive_age_days: float = DEFAULT_ARCHIVE_AGE_DAYS  # Age threshold for archiving
+    archive_importance_floor: float = DEFAULT_ARCHIVE_IMPORTANCE_FLOOR  # Never archive above this importance
 
     # Stale memory merging
-    stale_score_threshold: float = 0.25  # Score below which a memory is "stale"
-    merge_similarity_threshold: float = 0.6  # Jaccard threshold for grouping stales
+    stale_score_threshold: float = DEFAULT_STALE_SCORE_THRESHOLD  # Score below which a memory is "stale"
+    merge_similarity_threshold: float = DEFAULT_MERGE_SIMILARITY_THRESHOLD  # Jaccard threshold for grouping stales
 
     # Cluster compaction
-    cluster_min_size: int = 3  # Min memories to form a cluster
-    cluster_max_size: int = 20  # Max memories per cluster
+    cluster_min_size: int = DEFAULT_CLUSTER_MIN_SIZE  # Min memories to form a cluster
+    cluster_max_size: int = DEFAULT_CLUSTER_MAX_SIZE  # Max memories per cluster
 
     # Safety
     dry_run: bool = False  # If True, don't modify anything
-    max_compact_per_run: int = 200  # Cap on modifications per run
+    max_compact_per_run: int = DEFAULT_MAX_COMPACT_PER_RUN  # Cap on modifications per run
 
 
 @dataclass
@@ -104,8 +120,8 @@ class CompactionEngine:
         self,
         config: Optional[CompactionConfig] = None,
         *,
-        decay_rate: float = 0.01,
-        max_memories: int = 10_000,
+        decay_rate: float = DEFAULT_DECAY_RATE,
+        max_memories: int = DEFAULT_MAX_MEMORIES,
     ) -> None:
         self._config = config or CompactionConfig()
         self._decay = DecayEngine(rate=decay_rate, max_memories=max_memories)
@@ -158,7 +174,7 @@ class CompactionEngine:
         candidates = []
 
         for item in items:
-            age_days = (now - item.created_at) / 86400
+            age_days = (now - item.created_at) / SECONDS_PER_DAY
 
             # Skip recent
             if age_days < self._config.archive_age_days:
@@ -185,7 +201,7 @@ class CompactionEngine:
                 continue
             score = self._decay.adjusted_score(0.5, item)
             if score < self._config.stale_score_threshold:
-                age_days = (now - item.created_at) / 86400
+                age_days = (now - item.created_at) / SECONDS_PER_DAY
                 if age_days > 1.0:  # At least 1 day old
                     stale.append(item)
 
@@ -211,7 +227,7 @@ class CompactionEngine:
 
             if len(similar) >= self._config.cluster_min_size:
                 group_items = [s[0] for s in similar[: self._config.cluster_max_size]]
-                ages = [(now - m.created_at) / 86400 for m in group_items]
+                ages = [(now - m.created_at) / SECONDS_PER_DAY for m in group_items]
                 scores = [self._decay.adjusted_score(0.5, m) for m in group_items]
                 dominant_tag = self._dominant_tag(group_items)
 
@@ -279,7 +295,7 @@ class CompactionEngine:
                     {
                         "id": item.id,
                         "content": item.content[:100],
-                        "age_days": round((time.time() - item.created_at) / 86400, 1),
+                        "age_days": round((time.time() - item.created_at) / SECONDS_PER_DAY, 1),
                         "original_importance": item.importance,
                     }
                 )
@@ -308,7 +324,7 @@ class CompactionEngine:
                 {
                     "id": item.id,
                     "content": item.content[:100],
-                    "age_days": round((time.time() - item.created_at) / 86400, 1),
+                    "age_days": round((time.time() - item.created_at) / SECONDS_PER_DAY, 1),
                     "original_importance": archived_meta["original_importance"],
                 }
             )
@@ -414,7 +430,7 @@ class CompactionEngine:
         for m in memories[1:]:
             m_tokens = self._tokenize(m.content)
             new_ratio = len(m_tokens - base_tokens) / max(len(m_tokens), 1)
-            if new_ratio > 0.3:
+            if new_ratio > STALE_MERGE_NOVELTY_RATIO:
                 all_content.append(m.content)
 
         # Merge tags
@@ -449,7 +465,7 @@ class CompactionEngine:
             id=new_id,
             content=content,
             tags=sorted(all_tags),
-            importance=min(max_importance + 0.05, 1.0),  # Slight boost
+            importance=min(max_importance + COMPACTION_MERGE_IMPORTANCE_BOOST, 1.0),  # Slight boost
             created_at=min(m.created_at for m in memories),
             accessed_at=max(m.accessed_at for m in memories),
             access_count=sum(m.access_count for m in memories),
@@ -481,7 +497,9 @@ class CompactionEngine:
             id=generate_id(content),
             content=content,
             tags=[tag, "compacted"],
-            importance=max(0.3, max(i.importance for i in items) * 0.7),
+            importance=max(
+                CLUSTER_SUMMARY_MIN_IMPORTANCE, max(i.importance for i in items) * CLUSTER_SUMMARY_IMPORTANCE_FACTOR
+            ),
             created_at=min(i.created_at for i in items),
             accessed_at=time.time(),
             access_count=sum(i.access_count for i in items),

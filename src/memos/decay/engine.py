@@ -14,6 +14,20 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from .._constants import (
+    DEFAULT_ACCESS_BOOST,
+    DEFAULT_DECAY_MIN_AGE_DAYS,
+    DEFAULT_DECAY_RATE,
+    DEFAULT_IMPORTANCE_FLOOR,
+    DEFAULT_MAX_MEMORIES,
+    DEFAULT_PRUNE_MAX_AGE_DAYS,
+    DEFAULT_PRUNE_THRESHOLD,
+    DEFAULT_REINFORCE_STRENGTH,
+    HARD_MAX_AGE_DAYS,
+    IMPORTANCE_FLOOR_FACTOR,
+    PERMANENT_IMPORTANCE_THRESHOLD,
+    SECONDS_PER_DAY,
+)
 from ..models import MemoryItem
 
 
@@ -21,14 +35,14 @@ from ..models import MemoryItem
 class DecayConfig:
     """Configuration for memory decay behavior."""
 
-    rate: float = 0.01  # Relevance loss per day (exponential decay)
-    access_boost: float = 0.05  # Relevance gain per access
-    importance_floor: float = 0.1  # Minimum importance (memories don't decay below this)
-    max_age_days: float = 365.0  # Hard age limit regardless of score
-    max_memories: int = 10_000  # Evict oldest if over this
-    reinforce_strength: float = 0.05  # Importance boost per reinforce call
+    rate: float = DEFAULT_DECAY_RATE  # Relevance loss per day (exponential decay)
+    access_boost: float = DEFAULT_ACCESS_BOOST  # Relevance gain per access
+    importance_floor: float = DEFAULT_IMPORTANCE_FLOOR  # Minimum importance (memories don't decay below this)
+    max_age_days: float = HARD_MAX_AGE_DAYS  # Hard age limit regardless of score
+    max_memories: int = DEFAULT_MAX_MEMORIES  # Evict oldest if over this
+    reinforce_strength: float = DEFAULT_REINFORCE_STRENGTH  # Importance boost per reinforce call
     auto_reinforce: bool = True  # Auto-reinforce recalled memories
-    decay_min_age_days: float = 7.0  # Don't decay memories younger than this
+    decay_min_age_days: float = DEFAULT_DECAY_MIN_AGE_DAYS  # Don't decay memories younger than this
 
 
 @dataclass
@@ -58,12 +72,12 @@ class DecayEngine:
 
     def __init__(
         self,
-        rate: float = 0.01,
-        max_memories: int = 10_000,
-        reinforce_strength: float = 0.05,
+        rate: float = DEFAULT_DECAY_RATE,
+        max_memories: int = DEFAULT_MAX_MEMORIES,
+        reinforce_strength: float = DEFAULT_REINFORCE_STRENGTH,
         auto_reinforce: bool = True,
-        importance_floor: float = 0.1,
-        decay_min_age_days: float = 7.0,
+        importance_floor: float = DEFAULT_IMPORTANCE_FLOOR,
+        decay_min_age_days: float = DEFAULT_DECAY_MIN_AGE_DAYS,
     ) -> None:
         self.rate = rate
         self.max_memories = max_memories
@@ -74,7 +88,7 @@ class DecayEngine:
 
     def adjusted_score(self, base_score: float, item: MemoryItem) -> float:
         """Calculate decay-adjusted relevance score."""
-        age_days = (time.time() - item.created_at) / 86400
+        age_days = (time.time() - item.created_at) / SECONDS_PER_DAY
 
         # Exponential decay
         decay_factor = (1 - self.rate) ** age_days
@@ -83,7 +97,7 @@ class DecayEngine:
         access_bonus = item.importance * self.reinforce_strength * math.log(item.access_count + 1)
 
         # Importance floor — important memories resist decay
-        importance_floor = item.importance * 0.1
+        importance_floor = item.importance * IMPORTANCE_FLOOR_FACTOR
 
         adjusted = base_score * decay_factor + access_bonus + importance_floor
         return max(0.0, min(1.0, adjusted))
@@ -132,7 +146,7 @@ class DecayEngine:
         importance_before = []
 
         for item in items:
-            age_days = (now - item.created_at) / 86400
+            age_days = (now - item.created_at) / SECONDS_PER_DAY
             importance_before.append(item.importance)
 
             # Skip young memories
@@ -140,7 +154,7 @@ class DecayEngine:
                 continue
 
             # Skip permanent memories (importance >= 0.9)
-            if item.importance >= 0.9:
+            if item.importance >= PERMANENT_IMPORTANCE_THRESHOLD:
                 continue
 
             # Calculate decay factor
@@ -170,8 +184,8 @@ class DecayEngine:
     def find_prune_candidates(
         self,
         items: list[MemoryItem],
-        threshold: float = 0.1,
-        max_age_days: float = 90.0,
+        threshold: float = DEFAULT_PRUNE_THRESHOLD,
+        max_age_days: float = DEFAULT_PRUNE_MAX_AGE_DAYS,
     ) -> list[MemoryItem]:
         """Find memories that should be pruned.
 
@@ -184,19 +198,19 @@ class DecayEngine:
         candidates = []
 
         for item in items:
-            age_days = (now - item.created_at) / 86400
+            age_days = (now - item.created_at) / SECONDS_PER_DAY
 
             # Never prune very recent memories (under 1 day)
             if age_days < 1.0:
                 continue
 
             # Never prune high-importance memories unless very old
-            if item.importance >= 0.9 and age_days < max_age_days:
+            if item.importance >= PERMANENT_IMPORTANCE_THRESHOLD and age_days < max_age_days:
                 continue
 
             # Prune if decayed (never prune by age alone if high importance)
             adjusted = self.adjusted_score(0.5, item)  # Use median base score
-            if adjusted < threshold or (age_days > max_age_days and item.importance < 0.9):
+            if adjusted < threshold or (age_days > max_age_days and item.importance < PERMANENT_IMPORTANCE_THRESHOLD):
                 candidates.append(item)
 
         # Sort: lowest score first (prune worst first)

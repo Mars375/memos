@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
+from .._constants import (
+    DEFAULT_EMBED_TIMEOUT,
+    DEFAULT_SEMANTIC_WEIGHT,
+    EMBED_CACHE_EVICT_COUNT,
+    EMBED_CACHE_MAX,
+    IMPORTANCE_BOOST_WEIGHT,
+    RECENCY_BONUS_WEIGHT,
+    RECENCY_FADE_DAYS,
+    SECONDS_PER_DAY,
+    TAG_BONUS_MAX,
+    TAG_BONUS_PER_TAG,
+)
 from ..models import MemoryItem, RecallResult, ScoreBreakdown
 from ..storage.base import StorageBackend
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..cache.embedding_cache import EmbeddingCache
@@ -52,9 +67,9 @@ class RetrievalEngine:
         store: StorageBackend,
         embed_host: str = "http://localhost:11434",
         embed_model: str = "nomic-embed-text",
-        semantic_weight: float = 0.6,
+        semantic_weight: float = DEFAULT_SEMANTIC_WEIGHT,
         embedder: Optional[Embedder] = None,
-        embed_timeout: float = 30.0,
+        embed_timeout: float = DEFAULT_EMBED_TIMEOUT,
     ) -> None:
         self._store = store
         self._embed_host = embed_host
@@ -128,7 +143,7 @@ class RetrievalEngine:
             tag_bonus = 0.0
             if filter_tags:
                 tag_overlap = len(set(t.lower() for t in item.tags) & set(t.lower() for t in filter_tags))
-                tag_bonus = min(tag_overlap * 0.1, 0.3)
+                tag_bonus = min(tag_overlap * TAG_BONUS_PER_TAG, TAG_BONUS_MAX)
 
             # Semantic score
             sem_score = 0.0
@@ -141,13 +156,13 @@ class RetrievalEngine:
                         match_reason = "semantic"
 
             # Importance boost
-            importance_boost = item.importance * 0.1
+            importance_boost = item.importance * IMPORTANCE_BOOST_WEIGHT
 
             # Recency bonus (fades over 30 days)
             import time
 
-            age_days = (time.time() - item.created_at) / 86400
-            recency_bonus = max(0, 0.1 * (1 - age_days / 30))
+            age_days = (time.time() - item.created_at) / SECONDS_PER_DAY
+            recency_bonus = max(0, RECENCY_BONUS_WEIGHT * (1 - age_days / RECENCY_FADE_DAYS))
 
             # Final score
             final_score = (
@@ -210,13 +225,13 @@ class RetrievalEngine:
                     continue
 
             # Importance boost
-            importance_boost = item.importance * 0.1
+            importance_boost = item.importance * IMPORTANCE_BOOST_WEIGHT
 
             # Recency bonus (fades over 30 days)
             import time as _time
 
-            age_days = (_time.time() - item.created_at) / 86400
-            recency_bonus = max(0, 0.1 * (1 - age_days / 30))
+            age_days = (_time.time() - item.created_at) / SECONDS_PER_DAY
+            recency_bonus = max(0, RECENCY_BONUS_WEIGHT * (1 - age_days / RECENCY_FADE_DAYS))
 
             final_score = min(score + importance_boost + recency_bonus, 1.0)
 
@@ -265,6 +280,7 @@ class RetrievalEngine:
             try:
                 vec = self._embedder.encode(text)
             except Exception:
+                logger.warning("Local embedder failed", exc_info=True)
                 pass  # Fall through to Ollama
 
         # Fallback: Ollama API
@@ -284,6 +300,7 @@ class RetrievalEngine:
                 if embeddings:
                     vec = embeddings[0]
             except Exception:
+                logger.warning("Ollama embedding failed", exc_info=True)
                 pass  # Graceful fallback to keyword-only
 
         # Cache result if obtained
@@ -292,8 +309,8 @@ class RetrievalEngine:
             if self._persistent_cache is not None:
                 self._persistent_cache.put(text, vec, model=cache_key)
             # Limit L1 cache size
-            if len(self._embed_cache) > 5000:
-                keys = list(self._embed_cache.keys())[:2500]
+            if len(self._embed_cache) > EMBED_CACHE_MAX:
+                keys = list(self._embed_cache.keys())[:EMBED_CACHE_EVICT_COUNT]
                 for k in keys:
                     del self._embed_cache[k]
 
