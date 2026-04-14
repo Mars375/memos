@@ -23,13 +23,13 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .storage.base import StorageBackend
-
-logger = logging.getLogger(__name__)
 from .storage.chroma_backend import ChromaBackend
 from .storage.json_backend import JsonFileBackend
 from .storage.memory_backend import InMemoryBackend
 from .storage.pinecone_backend import PineconeBackend
 from .storage.qdrant_backend import QdrantBackend
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

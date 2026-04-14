@@ -24,8 +24,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, List, Optional
 
-logger = logging.getLogger(__name__)
-
 from .chunker import chunk_text, content_hash, detect_room
 from .parsers import (
     _parse_chatgpt_export,
@@ -35,6 +33,8 @@ from .parsers import (
     _parse_slack_jsonl,
     _parse_telegram_export,
 )
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Result types
