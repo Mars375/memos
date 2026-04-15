@@ -14,12 +14,40 @@ function rebuildDegreeMap() {
 // ── P1: Detect clusters via connected components + tag grouping ──
 function detectClusters() {
   const adj = {};
+  // Reset cluster maps
+  Object.keys(clusterMap).forEach(k => delete clusterMap[k]);
+  Object.keys(clusterColors).forEach(k => delete clusterColors[k]);
   GD.nodes.forEach(n => { adj[n.id] = new Set(); });
   const allE = [...GD.edges, ...GD.kgEdges];
   allE.forEach(e => {
     const s = nid(e.source), t = nid(e.target);
     if (adj[s]) adj[s].add(t);
     if (adj[t]) adj[t].add(s);
+  });
+  // Virtual namespace edges — nodes sharing a namespace are clustered together
+  const nodesByNS = {};
+  GD.nodes.forEach(n => {
+    const ns = n.namespace || 'default';
+    if (!nodesByNS[ns]) nodesByNS[ns] = [];
+    nodesByNS[ns].push(n.id);
+  });
+  Object.values(nodesByNS).forEach(ids => {
+    if (ids.length < 2) return;
+    const anchor = ids[0];
+    ids.slice(1).forEach(id => { adj[anchor].add(id); adj[id].add(anchor); });
+  });
+  // Virtual primary-tag edges — nodes sharing first tag are clustered together
+  const nodesByTag = {};
+  GD.nodes.forEach(n => {
+    const pt = (n.tags || [])[0];
+    if (!pt) return;
+    if (!nodesByTag[pt]) nodesByTag[pt] = [];
+    nodesByTag[pt].push(n.id);
+  });
+  Object.values(nodesByTag).forEach(ids => {
+    if (ids.length < 2) return;
+    const anchor = ids[0];
+    ids.slice(1).forEach(id => { adj[anchor].add(id); adj[id].add(anchor); });
   });
   // BFS connected components
   const visited = new Set();
@@ -43,6 +71,7 @@ function detectClusters() {
     });
     cid++;
   });
+  rebuildLegend();
 }
 
 // ── P1: BFS depth-limited neighborhood ──────────────────────────

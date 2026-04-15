@@ -29,6 +29,58 @@ function onColorModeChange(v) {
     fg.nodeColor(fg.nodeColor());
     fg.nodeCanvasObject(fg.nodeCanvasObject());
   }
+  rebuildLegend();
+}
+
+function rebuildLegend() {
+  const legend = document.getElementById('graph-legend');
+  while (legend.firstChild) legend.removeChild(legend.firstChild);
+
+  const staticItems = [
+    { cls: 'legend-line mem', text: 'Memory link' },
+    { cls: 'legend-line kg', text: 'KG relation' },
+    { cls: 'legend-line highlight', text: 'Highlighted' }
+  ];
+  staticItems.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'legend-item';
+    const line = document.createElement('div');
+    line.className = item.cls;
+    row.appendChild(line);
+    const span = document.createElement('span');
+    span.textContent = item.text;
+    row.appendChild(span);
+    legend.appendChild(row);
+  });
+
+  if (colorMode === 'cluster') {
+    const seen = new Set();
+    const clusterIds = [];
+    Object.values(clusterMap).forEach(cid => {
+      if (!seen.has(cid)) { seen.add(cid); clusterIds.push(cid); }
+    });
+    const maxShow = 8;
+    clusterIds.slice(0, maxShow).forEach((cid, idx) => {
+      const row = document.createElement('div');
+      row.className = 'legend-item';
+      const dot = document.createElement('div');
+      dot.className = 'legend-dot';
+      dot.style.background = clusterColors[cid] || '#888';
+      row.appendChild(dot);
+      const span = document.createElement('span');
+      span.textContent = 'Cluster ' + (idx + 1);
+      row.appendChild(span);
+      legend.appendChild(row);
+    });
+    if (clusterIds.length > maxShow) {
+      const row = document.createElement('div');
+      row.className = 'legend-item';
+      const span = document.createElement('span');
+      span.textContent = '+' + (clusterIds.length - maxShow) + ' more';
+      row.appendChild(span);
+      legend.appendChild(row);
+    }
+  }
 }
 
 function computeTimeRange() {
