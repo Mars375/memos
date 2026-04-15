@@ -29,7 +29,7 @@ def create_fastapi_app(
         kg_db_path: SQLite path for KnowledgeGraph and PalaceIndex.
     """
     if FastAPI is None:
-        raise ImportError("FastAPI is required for the server. Install with: pip install memos-agent[server]")
+        raise ImportError("FastAPI is required for the server. Install with: pip install memos-os[server]")
 
     if memos is None:
         memos = MemOS(**kwargs)

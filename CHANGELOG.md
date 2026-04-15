@@ -45,7 +45,7 @@
 
 ## v1.0.0 (2026-04-11) — Stable Release
 
-- **Package renamed to `memos-agent`** for PyPI publication
+- **Package renamed to `memos-os`** for PyPI publication
 - Deduplication enabled by default with smart comparison
 - Lazy imports for all optional backends (Qdrant, Pinecone, ChromaDB)
 - **1434 tests passing**

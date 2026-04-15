@@ -5,7 +5,7 @@ Connect Claude Code to MemOS for persistent memory across sessions. Your agent r
 ## Prerequisites
 
 ```bash
-pip install memos-agent
+pip install memos-os
 memos serve --port 8100
 ```
 

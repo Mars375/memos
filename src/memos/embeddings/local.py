@@ -83,7 +83,7 @@ class LocalEmbedder:
         except ImportError:
             logger.warning(
                 "sentence-transformers is not installed. "
-                "Install it with: pip install 'memos-agent[local]' "
+                "Install it with: pip install 'memos-os[local]' "
                 "or pip install sentence-transformers"
             )
             return False

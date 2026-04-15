@@ -2,7 +2,7 @@
 
 **Version:** v3.0-draft  
 **Status:** Active  
-**Product:** MemOS (`memos-agent` on PyPI)  
+**Product:** MemOS (`memos-os` on PyPI)  
 **Tagline:** The memory layer every LLM agent should use instead of brute-force context injection.
 
 ---
@@ -572,7 +572,7 @@ Provides tools for debugging, retrospective analysis and reproducibility.
 
 ### Stats
 - 1434 tests passing
-- Package: `pip install memos-agent`
+- Package: `pip install memos-os`
 
 ---
 

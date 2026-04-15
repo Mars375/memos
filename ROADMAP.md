@@ -20,7 +20,7 @@
 - [x] CLI (30+ commands) + Python SDK
 - [x] Second brain dashboard (D3.js graph view)
 - [x] Docker + CI (tests + PyPI publish workflow)
-- [x] Package: `pip install memos-agent` — 1434 tests
+- [x] Package: `pip install memos-os` — 1434 tests
 
 ---
 
@@ -66,7 +66,7 @@ Inspired by MemPalace, Karpathy Wiki, Obsidian, Graphify, GitNexus.
 
 ### Stats
 - 1534 tests passing
-- Package: `pip install memos-agent`
+- Package: `pip install memos-os`
 
 ---
 

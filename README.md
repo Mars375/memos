@@ -9,7 +9,7 @@
 [![Tests](https://img.shields.io/badge/tests-1710_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
-[![PyPI](https://img.shields.io/pypi/v/memos-agent.svg)](https://pypi.org/project/memos-agent/)
+[![PyPI](https://img.shields.io/pypi/v/memos-os.svg)](https://pypi.org/project/memos-os/)
 
 ---
 
@@ -29,19 +29,19 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 ## Installation
 
 ```bash
-pip install memos-agent
+pip install memos-os
 ```
 
 With local semantic recall (no external services):
 ```bash
-pip install "memos-agent[local]"    # sentence-transformers, backend="local"
+pip install "memos-os[local]"    # sentence-transformers, backend="local"
 ```
 
 With vector backend (recommended for production):
 ```bash
-pip install "memos-agent[chroma]"   # ChromaDB + Ollama embeddings
-pip install "memos-agent[qdrant]"   # Qdrant
-pip install "memos-agent[all]"      # all backends
+pip install "memos-os[chroma]"   # ChromaDB + Ollama embeddings
+pip install "memos-os[qdrant]"   # Qdrant
+pip install "memos-os[all]"      # all backends
 ```
 
 ---

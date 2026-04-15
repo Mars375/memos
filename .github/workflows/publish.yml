@@ -28,7 +28,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/p/memos-agent
+      url: https://pypi.org/p/memos-os
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
