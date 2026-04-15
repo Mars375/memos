@@ -54,7 +54,7 @@ def test_memos_compress_apply_replaces_with_summary():
 
 
 def test_cli_compress(capsys):
-    import memos.cli as cli_mod
+    import memos.cli.commands_memory as cm_mod
     from memos.cli import cmd_compress
 
     mem = MemOS(backend="memory")
@@ -62,12 +62,12 @@ def test_cli_compress(capsys):
     mem.learn("ops stale two", tags=["ops"], importance=0.04)
     ns = argparse.Namespace(threshold=0.1, dry_run=True, verbose=False, backend="memory")
 
-    original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: mem
+    original = cm_mod._get_memos
+    cm_mod._get_memos = lambda ns: mem
     try:
         cmd_compress(ns)
     finally:
-        cli_mod._get_memos = original
+        cm_mod._get_memos = original
 
     output = capsys.readouterr().out
     assert "DRY RUN Compression complete" in output

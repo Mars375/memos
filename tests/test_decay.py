@@ -227,14 +227,14 @@ def test_cli_decay_dry_run(memos_empty: MemOS, capsys):
         backend="memory",
     )
     # Inject the memos instance
-    import memos.cli as cli_mod
+    import memos.cli.commands_memory as cm_mod
 
-    original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: memos_empty
+    original = cm_mod._get_memos
+    cm_mod._get_memos = lambda ns: memos_empty
     try:
         cmd_decay(ns)
     finally:
-        cli_mod._get_memos = original
+        cm_mod._get_memos = original
 
     captured = capsys.readouterr()
     assert "DRY RUN" in captured.out
@@ -254,14 +254,14 @@ def test_cli_decay_apply(memos_empty: MemOS, capsys):
         backend="memory",
     )
 
-    import memos.cli as cli_mod
+    import memos.cli.commands_memory as cm_mod
 
-    original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: memos_empty
+    original = cm_mod._get_memos
+    cm_mod._get_memos = lambda ns: memos_empty
     try:
         cmd_decay(ns)
     finally:
-        cli_mod._get_memos = original
+        cm_mod._get_memos = original
 
     captured = capsys.readouterr()
     assert "APPLIED" in captured.out
@@ -271,6 +271,7 @@ def test_cli_reinforce(memos_empty: MemOS, capsys):
     import argparse
 
     from memos.cli import cmd_reinforce
+    from memos.cli.commands_memory import _get_memos as _real_get_memos
 
     item = memos_empty.learn("reinforce target", importance=0.5)
     ns = argparse.Namespace(
@@ -279,14 +280,14 @@ def test_cli_reinforce(memos_empty: MemOS, capsys):
         backend="memory",
     )
 
-    import memos.cli as cli_mod
+    import memos.cli.commands_memory as cm_mod
 
-    original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: memos_empty
+    original = cm_mod._get_memos
+    cm_mod._get_memos = lambda ns: memos_empty
     try:
         cmd_reinforce(ns)
     finally:
-        cli_mod._get_memos = original
+        cm_mod._get_memos = original
 
     captured = capsys.readouterr()
     assert "Reinforced" in captured.out
@@ -304,15 +305,15 @@ def test_cli_reinforce_not_found(memos_empty: MemOS):
         backend="memory",
     )
 
-    import memos.cli as cli_mod
+    import memos.cli.commands_memory as cm_mod
 
-    original = cli_mod._get_memos
-    cli_mod._get_memos = lambda ns: memos_empty
+    original = cm_mod._get_memos
+    cm_mod._get_memos = lambda ns: memos_empty
     try:
         with pytest.raises(SystemExit):
             cmd_reinforce(ns)
     finally:
-        cli_mod._get_memos = original
+        cm_mod._get_memos = original
 
 
 # ---------------------------------------------------------------------------
