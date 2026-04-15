@@ -251,13 +251,18 @@ function initGraph() {
       // Main circle
       ctx.beginPath();
       ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      let fillColor;
       if (dimmed) {
-        ctx.fillStyle = 'rgba(30,33,56,0.5)';
-      } else if (node.namespace && node.namespace !== 'default') {
-        ctx.fillStyle = tc(node.namespace);
+        fillColor = 'rgba(30,33,56,0.5)';
+      } else if (colorMode === 'cluster') {
+        fillColor = clusterColors[clusterMap[node.id]] || 'rgba(210,218,255,0.88)';
+      } else if (colorMode === 'tag' && node.primary_tag) {
+        fillColor = tc(node.primary_tag);
       } else {
-        ctx.fillStyle = 'rgba(210,218,255,0.88)';
+        fillColor = (node.namespace && node.namespace !== 'default')
+          ? tc(node.namespace) : 'rgba(210,218,255,0.88)';
       }
+      ctx.fillStyle = fillColor;
       ctx.fill();
 
       // Hub ring
