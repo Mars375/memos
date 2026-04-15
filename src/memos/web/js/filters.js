@@ -134,3 +134,30 @@ function buildNSChips() {
     container.appendChild(chip);
   });
 }
+
+function toggleLocalGraph() {
+  if (!focusNode) return;
+  localGraphMode = !localGraphMode;
+  const btn = document.getElementById('local-graph-btn');
+  if (btn) btn.classList.toggle('active', localGraphMode);
+  if (localGraphMode) {
+    const allData = buildGraphData();
+    const adj = {};
+    allData.nodes.forEach(n => { adj[n.id] = new Set(); });
+    allData.links.forEach(l => {
+      const s = nid(l.source), t = nid(l.target);
+      if (adj[s]) adj[s].add(t);
+      if (adj[t]) adj[t].add(s);
+    });
+    const neighbors = new Set([focusNode]);
+    (adj[focusNode] || new Set()).forEach(nb => neighbors.add(nb));
+    const localNodes = allData.nodes.filter(n => neighbors.has(n.id));
+    const localLinks = allData.links.filter(l =>
+      neighbors.has(nid(l.source)) && neighbors.has(nid(l.target))
+    );
+    fg.graphData({ nodes: localNodes, links: localLinks });
+    setTimeout(() => { if (fg) fg.zoomToFit(400, 40); }, 400);
+  } else {
+    initGraph();
+  }
+}

@@ -138,16 +138,39 @@ function createTooltip() {
 
 function showTooltip(node, x, y) {
   const tt = createTooltip();
-  const deg = degreeMap[node.id] || 0;
+  const inDeg = inDegreeMap[node.id] || 0;
+  const outDeg = outDegreeMap[node.id] || 0;
   const imp = (node.importance || 0).toFixed(2);
-  const age = node.age_days !== undefined ? node.age_days.toFixed(0) + 'd' : '?';
   const ns = node.namespace || 'default';
-  const tags = (node.tags || []).map(t => '#' + t).join(' ');
-  const snippet = escHtml((node.content || '').slice(0, 120));
-  tt.innerHTML = '<div style="color:#a78bfa;font-weight:600;margin-bottom:4px;">' + escHtml((node.content || '').slice(0, 40)) + '</div>' +
-    '<div style="font-size:11px;color:#8b95b0;">' + escHtml(ns) + ' \u00b7 ' + deg + ' links \u00b7 ' + imp + ' \u00b7 ' + age + '</div>' +
-    (tags ? '<div style="margin-top:4px;font-size:11px;color:#6ee7b7;">' + tags + '</div>' : '') +
-    (snippet.length > 40 ? '<div style="margin-top:6px;font-size:12px;color:#9ca3af;">' + snippet + '\u2026</div>' : '');
+
+  while (tt.firstChild) tt.removeChild(tt.firstChild);
+
+  const titleDiv = document.createElement('div');
+  titleDiv.style.cssText = 'color:#a78bfa;font-weight:600;margin-bottom:4px;';
+  titleDiv.textContent = (node.content || '').slice(0, 40);
+  tt.appendChild(titleDiv);
+
+  const metaDiv = document.createElement('div');
+  metaDiv.style.cssText = 'font-size:11px;color:#8b95b0;';
+  metaDiv.textContent = ns + ' \u00b7 in:' + inDeg + ' out:' + outDeg + ' \u00b7 imp:' + imp;
+  tt.appendChild(metaDiv);
+
+  const tags = (node.tags || []);
+  if (tags.length) {
+    const tagsDiv = document.createElement('div');
+    tagsDiv.style.cssText = 'margin-top:4px;font-size:11px;color:#6ee7b7;';
+    tagsDiv.textContent = tags.map(t => '#' + t).join(' ');
+    tt.appendChild(tagsDiv);
+  }
+
+  const snippet = (node.content || '').slice(0, 150);
+  if (snippet.length > 40) {
+    const snippetDiv = document.createElement('div');
+    snippetDiv.style.cssText = 'margin-top:6px;font-size:12px;color:#9ca3af;';
+    snippetDiv.textContent = snippet + ((node.content || '').length > 150 ? '\u2026' : '');
+    tt.appendChild(snippetDiv);
+  }
+
   tt.style.display = 'block';
   const px = Math.min(x + 15, window.innerWidth - 320);
   const py = Math.min(y + 15, window.innerHeight - 160);
@@ -427,6 +450,7 @@ function clearAll() {
 }
 
 async function refreshGraph() {
+  localGraphMode = false;
   document.getElementById('loading').style.display = 'flex';
   try {
     const [gd, st, an, kgr] = await Promise.all([
