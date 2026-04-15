@@ -3,11 +3,15 @@
 // ── Compute degree from all edges ────────────────────────────────
 function rebuildDegreeMap() {
   Object.keys(degreeMap).forEach(k => delete degreeMap[k]);
+  Object.keys(inDegreeMap).forEach(k => delete inDegreeMap[k]);
+  Object.keys(outDegreeMap).forEach(k => delete outDegreeMap[k]);
   const all = [...GD.edges, ...GD.kgEdges];
   all.forEach(e => {
     const s = nid(e.source), t = nid(e.target);
     degreeMap[s] = (degreeMap[s] || 0) + 1;
     degreeMap[t] = (degreeMap[t] || 0) + 1;
+    outDegreeMap[s] = (outDegreeMap[s] || 0) + 1;
+    inDegreeMap[t] = (inDegreeMap[t] || 0) + 1;
   });
 }
 
@@ -217,6 +221,10 @@ function initGraph() {
     window._lastMouseX = e.clientX;
     window._lastMouseY = e.clientY;
   });
+  container.addEventListener('mouseleave', () => {
+    hideTooltip();
+    if (!selId) clearAll();
+  });
   const data = buildGraphData();
 
   fg = ForceGraph()(container)
@@ -359,22 +367,19 @@ function initGraph() {
       hoverNode = node;
       container.style.cursor = node ? 'pointer' : null;
       if (node) {
-        // Show tooltip
         showTooltip(node, window._lastMouseX || 0, window._lastMouseY || 0);
-        // Quick neighborhood preview on hover (dim non-neighbors)
-        if (!highlightNodes.size || !selId) {
-          highlightLinks = new Set();
-          const conn = new Set([node.id]);
-          const data2 = fg.graphData();
-          data2.links.forEach(l => {
-            const s = nid(l.source), t = nid(l.target);
-            if (s === node.id) { conn.add(t); highlightLinks.add(l); }
-            if (t === node.id) { conn.add(s); highlightLinks.add(l); }
-          });
-          highlightNodes = conn;
-          fg.linkColor(fg.linkColor());
-          fg.nodeColor(fg.nodeColor());
-        }
+        // Always update hover edge highlight (DASH-07)
+        highlightLinks = new Set();
+        const conn = new Set([node.id]);
+        const data2 = fg.graphData();
+        data2.links.forEach(l => {
+          const s = nid(l.source), t = nid(l.target);
+          if (s === node.id) { conn.add(t); highlightLinks.add(l); }
+          if (t === node.id) { conn.add(s); highlightLinks.add(l); }
+        });
+        highlightNodes = conn;
+        fg.linkColor(fg.linkColor());
+        fg.nodeColor(fg.nodeColor());
       } else {
         hideTooltip();
         if (!selId) clearAll();
@@ -409,6 +414,9 @@ function initGraph() {
 function clearAll() {
   selId = null;
   focusNode = null;
+  localGraphMode = false;
+  const lgBtn = document.getElementById('local-graph-btn');
+  if (lgBtn) lgBtn.classList.remove('active');
   highlightNodes = new Set();
   highlightLinks = new Set();
   hideTooltip();

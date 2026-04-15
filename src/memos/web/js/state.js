@@ -15,6 +15,9 @@ let highlightNodes = new Set(), highlightLinks = new Set();
 let hoverNode = null;
 let analyticsChart = null;
 const degreeMap = {};
+const inDegreeMap = {};
+const outDegreeMap = {};
+let localGraphMode = false;
 
 // ── P1: Clustering, depth, hover preview, color mode ────────────
 let clusterMap = {};       // nodeId → clusterId
