@@ -1,295 +1,200 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-04-13
+**Analysis Date:** 2026-04-15
 
 ## Test Framework
 
 **Runner:**
-- `pytest` (7.0+)
-- Config: `pyproject.toml` with `[tool.pytest.ini_options]`
-- Test discovery: All files matching `test_*.py` in `tests/` directory
+- `pytest` >= 7.0
+- Config: `pyproject.toml` `[tool.pytest.ini_options]` — `testpaths = ["tests"]`
 
-**Assertion Library:**
-- `pytest` built-in assertions (no external library needed)
-- `pytest.approx()` for floating-point comparisons
-- `pytest.raises()` for exception testing
+**Async support:**
+- `pytest-asyncio` >= 0.23 — used with `@pytest.mark.asyncio`
+- `anyio` markers (`@pytest.mark.anyio`) also present in some test files
 
-**Test Dependencies** (`pyproject.toml`):
-```toml
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff>=0.4"]
-```
+**Coverage:**
+- `pytest-cov` >= 4.0
+- Source: `memos` package (`[tool.coverage.run] source = ["memos"]`)
+- Reports: `show_missing = true`, `skip_empty = true`
+- Coverage uploaded to Codecov for Python 3.11 CI run
+
+**Time freezing:**
+- `freezegun` >= 1.2 available in dev extras (used for TTL and decay time-sensitive tests)
 
 **Run Commands:**
 ```bash
-pytest                          # Run all tests
-pytest -v                       # Verbose output
-pytest tests/test_core.py       # Run single file
-pytest tests/test_core.py::TestMemoryItem::test_touch_updates_access  # Run single test
-pytest -k "test_learn"          # Run tests matching pattern
-pytest --cov=memos             # Coverage report
-pytest -x                       # Stop on first failure
-pytest -s                       # Show print output
+pytest -q --tb=short --cov=memos --cov-report=xml   # full suite with coverage (CI)
+pytest tests/test_core.py                            # single file
+pytest tests/test_core.py::TestMemOSInMemory         # single class
+pytest tests/test_core.py::TestMemOSInMemory::test_learn_basic  # single test
+pytest -q --tb=short                                 # all tests, quiet
 ```
 
 ## Test File Organization
 
 **Location:**
-- Tests co-located in `tests/` directory (not scattered in `src/`)
-- One test file per main module: `src/memos/core.py` → `tests/test_core.py`
-- Large modules may have multiple test files: `tests/test_versioning.py`, `tests/test_miner.py`
+- All tests in flat `tests/` directory at project root
+- No mirroring of `src/memos/` sub-package structure
+- One test file per major module or feature area
 
 **Naming:**
-- Test files: `test_*.py` (e.g., `test_core.py`, `test_config.py`, `test_retrieval.py`)
-- Test classes: `Test*` (e.g., `TestMemoryItem`, `TestMemOSInMemory`, `TestNamespaceIsolation`)
-- Test methods: `test_*` (e.g., `test_touch_updates_access`, `test_learn_basic`, `test_recall_keyword`)
+- `test_<module_or_feature>.py` — e.g., `test_core.py`, `test_api_memory.py`, `test_decay.py`
+- API tests broken out by concern: `test_api_memory.py`, `test_api_admin.py`, `test_api_recall_filters.py`, `test_api_versioning.py`
 
-**Statistics:**
-- 15 test files total in `tests/`
-- 1,513 total `def test_` definitions
-- Largest test file: `test_knowledge_graph.py` (744 lines)
-- Well-distributed coverage across modules
+**Count:** 70 test files covering all major subsystems.
 
 ## Test Structure
 
 **Suite Organization:**
-```python
-class TestMemoryItem:
-    """Test group for MemoryItem dataclass."""
-    
-    def test_touch_updates_access(self):
-        item = MemoryItem(id="test", content="hello")
-        old_accessed = item.accessed_at
-        old_count = item.access_count
-        time.sleep(0.01)
-        item.touch()
-        assert item.accessed_at > old_accessed
-        assert item.access_count == old_count + 1
+- Classes used for related test groups: `class TestMemOSInMemory`, `class TestSanitizer`, `class TestDecayEngine`
+- Module-level functions used for async tests and simple one-shot cases
+- `setup_method` used (not `setUp`) for class-level state initialization:
 
+```python
 class TestMemOSInMemory:
-    """Tests using the in-memory backend — no deps required."""
-    
     def setup_method(self):
-        """Called before each test method."""
         self.mem = MemOS(backend="memory", sanitize=False)
+
+    def test_learn_basic(self):
+        item = self.mem.learn("User prefers dark mode", tags=["preference"])
+        assert item.content == "User prefers dark mode"
 ```
 
-**Patterns:**
-- `setup_method()` for per-test initialization (replaces `setUp()`)
-- No `teardown_method()` needed in most cases (in-memory state discarded)
-- Test fixtures via `@pytest.fixture()` for shared test data
-- Test class grouping by functionality (model tests, backend tests, API tests)
+**Fixtures defined in `tests/conftest.py`:**
+- `memos_empty` — bare `MemOS(backend="memory")` instance
+- `mem` — alias for `memos_empty` (backward compat)
+- `memos_with_sample_data` — pre-populated with 3 memories (alpha, beta, gamma)
+- `kg` — `KnowledgeGraph(db_path=":memory:")` with `yield` + `graph.close()` teardown
+- `app` — FastAPI test app wrapping `memos_empty`
+- `client` — `starlette.testclient.TestClient` wrapping `app`
 
-**Fixtures:**
-```python
-@pytest.fixture()
-def memos_mem() -> MemOS:
-    """In-memory MemOS instance (no embedding, fast)."""
-    return MemOS(backend="memory")
-
-@pytest.fixture()
-def cs_tmp(memos_mem: MemOS, tmp_path: Path) -> ContextStack:
-    """ContextStack with a temporary identity file path."""
-    identity_file = tmp_path / "identity.txt"
-    return ContextStack(memos_mem, identity_path=str(identity_file))
-
-@pytest.fixture()
-def corpus() -> list[str]:
-    return [
-        "Docker deployment pipeline for kubernetes and helm charts",
-        "Python FastAPI backend REST endpoint authentication",
-        "React Vue frontend component UI tailwind CSS",
-    ]
-```
+**Local fixture override:** Many test files define their own `memos`, `app`, `client` fixtures to control exact state. This is the preferred pattern for isolated API tests.
 
 ## Mocking
 
-**Framework:** `unittest.mock` (standard library)
+**Framework:** `unittest.mock` (standard library — `MagicMock`, `patch`)
 
-**Patterns:**
+**Pattern — patching time:**
 ```python
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-# Patch environment variables
-with patch.dict(os.environ, {"MEMOS_BACKEND": "chroma"}, clear=False):
-    cfg = resolve()
-
-# Patch function behavior
-with patch("memos.config.load_config", return_value={"backend": "chroma"}):
-    cfg = resolve()
-
-# Patch module import
-with patch("memos.cli.commands_system.config_path", return_value=cfg_file):
-    main(["config", "init"])
+with patch("memos.models.time.time", return_value=future_time):
+    item.touch()
 ```
 
-**What to Mock:**
-- Environment variables (for config testing)
-- File system operations (use `tmp_path` fixture instead where possible)
-- External service calls (but only when necessary; prefer in-memory backends for unit tests)
-- subprocess/system calls (never actually execute shell commands in tests)
+**Pattern — mocking external client (Chroma example):**
+```python
+# tests/test_chroma.py
+from unittest.mock import MagicMock, patch
 
-**What NOT to Mock:**
-- Core business logic (test actual MemOS behavior, not mocked versions)
-- Data models/dataclasses (test as-is)
-- In-memory storage backends (fast, safe, no need to mock)
-- Standard library functions like `time.time()` (only mock when testing time-dependent behavior)
+def _make_item(**overrides): ...  # local factory
+
+@patch("memos.storage.chroma_backend.chromadb")
+def test_upsert(mock_chroma):
+    mock_chroma.Client.return_value = MagicMock()
+    ...
+```
+
+**What to mock:**
+- External service clients: Chroma, Qdrant, Pinecone (never require live servers)
+- `time.time` for decay / TTL tests
+- Network calls (Ollama embedding endpoint)
+
+**What NOT to mock:**
+- `MemOS(backend="memory")` — always use the real in-memory backend for business logic tests
+- SQLite KnowledgeGraph — use `:memory:` path, not a mock
 
 ## Fixtures and Factories
 
-**Test Data:**
+**Test data factories (module-level helpers):**
 ```python
-@pytest.fixture()
-def cs_with_memories(cs_tmp: ContextStack) -> ContextStack:
-    """ContextStack loaded with a few memories for testing."""
-    m = cs_tmp._memos
-    m.learn("Python async best practices", tags=["python", "async"], importance=0.9)
-    m.learn("Docker multi-stage builds", tags=["devops"], importance=0.85)
-    m.learn("Redis caching patterns", tags=["redis", "cache"], importance=0.7)
-    m.learn("Git rebase workflow", tags=["git"], importance=0.5)
-    return cs_tmp
+# Common pattern across test files
+def _make_item(content: str, age_days: float = 0, importance: float = 0.5) -> MemoryItem:
+    return MemoryItem(
+        id=f"test-{content[:8]}",
+        content=content,
+        importance=importance,
+        created_at=time.time() - age_days * 86400,
+    )
+
+def _item(content: str, **kw) -> MemoryItem:
+    kw.setdefault("id", uuid.uuid4().hex[:12])
+    return MemoryItem(content=content, **kw)
 ```
 
-**Location:**
-- Fixtures defined at top of test file or in conftest.py
-- Use `tmp_path` (pytest built-in) for temporary files
-- Use `monkeypatch` (pytest built-in) for patching instead of `unittest.mock` where possible
+**API test helper:**
+```python
+def _learn(client: TestClient, content: str = "test memory", **kwargs) -> str:
+    """POST /learn and return the new item's ID."""
+    payload = {"content": content}
+    payload.update(kwargs)
+    resp = client.post("/api/v1/learn", json=payload)
+    assert resp.status_code == 200, f"learn failed: {resp.text}"
+    return resp.json()["id"]
+```
+
+**Location:** All fixtures and factories defined locally in each test file or in `tests/conftest.py`. No separate `fixtures/` directory.
 
 ## Coverage
 
-**Requirements:** None enforced (no coverage threshold in CI/CD)
+**Requirements:** No minimum threshold enforced in config.
 
-**View Coverage:**
+**CI:** Coverage collected on every test run (`--cov=memos --cov-report=xml`) and uploaded to Codecov for Python 3.11.
+
+**View coverage:**
 ```bash
 pytest --cov=memos --cov-report=html
-# Opens htmlcov/index.html in browser
-pytest --cov=memos --cov-report=term-missing
-```
-
-**Configuration** (`pyproject.toml`):
-```toml
-[tool.coverage.run]
-source = ["memos"]
-
-[tool.coverage.report]
-show_missing = true
-skip_empty = true
+open htmlcov/index.html
 ```
 
 ## Test Types
 
-**Unit Tests (Primary):**
-- Scope: Single function or class in isolation
-- Approach: No external services, use in-memory backends
-- Example: `TestMemoryItem.test_touch_updates_access()` tests the `touch()` method directly
-- Speed: < 1ms per test
-- Count: Majority of tests (1,000+)
+**Unit Tests:**
+- The dominant type — pure Python, no external services
+- Use `MemOS(backend="memory")` as the real-but-lightweight backend
+- Cover: core logic, models, sanitizer, decay, BM25, consolidation, dedup, compression, versioning, tagger, namespaces, MCP dispatch, CLI commands
 
-**Integration Tests:**
-- Scope: Multiple components working together
-- Approach: Full MemOS instance with in-memory backend
-- Example: `TestMemOSInMemory` tests end-to-end learn → recall → forget workflows
-- Speed: 1-100ms per test
-- Count: ~300 tests
+**Integration / API Tests:**
+- `starlette.testclient.TestClient` used to test the full FastAPI stack in-process
+- Files: `test_api_memory.py`, `test_api_admin.py`, `test_api_recall_filters.py`, `test_api_versioning.py`, `test_dashboard.py`, `test_streaming.py`, `test_websocket.py`
+- No live HTTP server required — TestClient runs the ASGI app in-process
 
-**Config/CLI Tests:**
-- Scope: Configuration loading and command-line interface
-- Approach: Mock file system, patch environment
-- Example: `TestResolve` tests config precedence (defaults < file < env < CLI)
-- Uses temporary paths via `tmp_path` fixture
+**Backend Tests (mocked externals):**
+- `test_chroma.py`, `test_qdrant.py`, `test_pinecone.py` — use `unittest.mock` to avoid live service dependencies
+- `test_json_backend.py` — uses temp filesystem
 
 **Async Tests:**
-- Scope: Async/await code paths
-- Framework: `pytest-asyncio` (configured in `pyproject.toml`)
-- Pattern: Mark with `@pytest.mark.asyncio` or use async fixtures
-- Example from codebase (implicit async fixtures in test_streaming.py)
+- `test_async.py` — `AsyncWrapper` over `InMemoryBackend`, concurrent read/write scenarios
+- `test_async_consolidation.py`, `test_dashboard.py`, `test_palace.py` — `@pytest.mark.asyncio` or `@pytest.mark.anyio`
 
-**E2E Tests:**
-- Not currently used (complex integration would require docker services)
-- Could be added for API server testing via `httpx` client
+**E2E / Docker Tests:**
+- `test_docker.py` — checks Docker image build/config (CI-facing)
 
-## Common Patterns
+## What Is Tested
 
-**Basic Unit Test:**
-```python
-class TestTokenizer:
-    def test_tokenize_basic(self):
-        tokens = _tokenize("Hello World, this is a test!")
-        assert "hello" in tokens
-        assert "world" in tokens
-        assert "test" in tokens
+- Core `MemOS` CRUD: learn, recall, forget, prune, stats (`test_core.py`)
+- All FastAPI REST endpoints: full request/response shape validation (`test_api_memory.py`, `test_api_admin.py`)
+- Decay engine: score adjustment, reinforcement, run_decay, find_prune_candidates (`test_decay.py`)
+- Consolidation engine (sync + async) (`test_consolidation.py`, `test_async_consolidation.py`)
+- Knowledge Graph: entity CRUD, fact extraction, backlinks, paths, timeline (`test_knowledge_graph.py`, `test_kg_*.py`)
+- Versioning: history, diff, rollback, snapshot, gc (`test_versioning.py`, `test_api_versioning.py`)
+- MCP server: tool dispatch, all 15 MCP tools (`test_mcp_server.py`, `test_mcp_hooks.py`)
+- CLI commands: memory, versioning, namespace, IO (`test_cli.py`, `test_cli_versioning.py`)
+- Storage backends: in-memory, JSON, Chroma (mocked), Qdrant (mocked), Pinecone (mocked) (`test_json_backend.py`, `test_chroma.py`, etc.)
+- Ingest pipeline: chunker, miner, cache, URL fetch, conversation parsing (`test_ingest.py`, `test_miner.py`)
+- Export: Parquet, Markdown, Obsidian vault (`test_parquet.py`, `test_export_markdown.py`, `test_export_obsidian.py`)
+- Sanitizer, encryption, TTL, dedup, compression, tagger, analytics, namespaces ACL, sharing, subscriptions, palace, wiki
 
-    def test_tokenize_empty(self):
-        assert _tokenize("") == []
-```
+## What Is NOT Tested (gaps)
 
-**Setup/State Tests:**
-```python
-class TestMemOSInMemory:
-    def setup_method(self):
-        self.mem = MemOS(backend="memory", sanitize=False)
-    
-    def test_learn_basic(self):
-        item = self.mem.learn("User prefers dark mode", tags=["preference"])
-        assert item.id
-        assert item.content == "User prefers dark mode"
-        assert item.tags == ["preference"]
-```
-
-**Exception Testing:**
-```python
-def test_learn_empty_raises(self):
-    with pytest.raises(ValueError, match="cannot be empty"):
-        self.mem.learn("")
-
-def test_parse_ttl_invalid(self):
-    with pytest.raises(ValueError, match="Invalid TTL"):
-        parse_ttl("xyz")
-```
-
-**Floating-Point Assertions:**
-```python
-def test_normalize_range(self):
-    result = _normalize([0.0, 5.0, 10.0])
-    assert result[0] == pytest.approx(0.0)
-    assert result[1] == pytest.approx(0.5)
-    assert result[2] == pytest.approx(1.0)
-```
-
-**Async Testing:**
-```python
-@pytest.mark.asyncio
-async def test_recall_stream_async(self):
-    mem = MemOS(backend="memory")
-    mem.learn("async content")
-    results = []
-    async for item in mem.recall_stream("async"):
-        results.append(item)
-    assert len(results) > 0
-```
-
-**File I/O Testing:**
-```python
-def test_set_identity_creates_parent_dirs(memos_mem: MemOS, tmp_path: Path) -> None:
-    deep_path = tmp_path / "a" / "b" / "c" / "identity.txt"
-    cs = ContextStack(memos_mem, identity_path=str(deep_path))
-    cs.set_identity("deep identity")
-    assert deep_path.exists()
-    assert deep_path.read_text() == "deep identity"
-```
-
-## Test Data and Isolation
-
-**Isolation:**
-- Each test class with `setup_method()` gets a fresh MemOS instance
-- No shared state between tests
-- In-memory backend ensures tests don't interfere with each other
-- Temporary files via `tmp_path` are automatically cleaned up by pytest
-
-**Determinism:**
-- No random seeds needed (most tests are deterministic)
-- Time-based tests use `time.sleep()` for short delays
-- ID generation is deterministic (SHA-256 hash of content)
+- **`src/memos/web/js/`** — No JavaScript tests. The dashboard JS (`graph.js`, `wiki.js`, `state.js`, `controls.js`, etc.) has zero automated test coverage.
+- **`src/memos/benchmark.py` / `src/memos/benchmark_quality.py`** — `test_benchmark.py` and `test_benchmark_quality.py` exist in `__pycache__` but not as source files in `tests/`. Coverage of benchmark accuracy is likely shallow.
+- **Live embedding integration** — Ollama endpoint (`http://localhost:11434`) is never called in tests; all semantic scoring falls back to keyword-only. Real embedding quality is untested in CI.
+- **Live external backends** — Chroma, Qdrant, Pinecone are always mocked; no integration tests against real running services.
+- **`src/memos/brain.py`** — Only `test_brain_search.py` covers this, and it mocks the embedding layer.
+- **`src/memos/wiki_living.py`** — `test_wiki_living.py` exists but coverage of the living-wiki rebuild pipeline may be partial.
+- **No test coverage enforcement** — No minimum threshold means coverage regressions are silent.
 
 ---
 
-*Testing analysis: 2026-04-13*
+*Testing analysis: 2026-04-15*

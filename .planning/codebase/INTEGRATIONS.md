@@ -1,202 +1,112 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-13
+**Analysis Date:** 2026-04-15
 
 ## APIs & External Services
 
-**Embedding Models:**
-- Ollama - Local embedding server for vector generation
-  - SDK/Client: httpx (HTTP requests)
-  - URL: `MEMOS_EMBED_HOST` (default: http://localhost:11434)
-  - Endpoint: `/api/embed` (POST)
-  - Model: `MEMOS_EMBED_MODEL` (default: nomic-embed-text)
-  - Timeout: `MEMOS_EMBED_TIMEOUT` (default: 30s)
-  - Alternative: Sentence-Transformers library for local embeddings (no external API)
+**Ollama (local LLM embedding):**
+- Purpose: Remote embedding generation via HTTP
+- Endpoint: `http://<MEMOS_EMBED_HOST>:<MEMOS_EMBED_PORT>/api/embeddings` (default `localhost:11434`)
+- Model: configurable via `MEMOS_EMBED_MODEL` (default `nomic-embed-text`)
+- Client: `httpx` — sync POST in `src/memos/retrieval/engine.py`
+- Auth: None (local service)
+- Docker Compose override: `MEMOS_EMBED_HOST=http://host.docker.internal:11434`
 
-## Data Storage
+## Databases / Vector Stores
 
-**Vector Databases (pluggable backends):**
+**In-Memory Backend (default):**
+- Type: Python dict, no persistence
+- Class: `src/memos/storage/memory_backend.py` (`InMemoryBackend`)
+- Use: development, testing, ephemeral agents
 
-1. **ChromaDB** (Production vector search)
-   - Type: Vector database with metadata filtering
-   - Connection: HTTP to ChromaDB server
-   - Config: `MEMOS_CHROMA_HOST` / `MEMOS_CHROMA_PORT` (default: localhost:8000)
-   - Client: chromadb Python client
-   - File: `src/memos/storage/chroma_backend.py`
-   - Features: Embedding caching via SQLite, Ollama EmbeddingFunction integration
+**JSON File Backend:**
+- Type: Local JSON file
+- Class: `src/memos/storage/json_backend.py` (`JsonFileBackend`)
+- Path: `~/.memos/memories.json` or `MEMOS_PERSIST_PATH`
+- Use: standalone/local-first deployment with zero dependencies
 
-2. **Qdrant** (Vector search with native gRPC/HTTP)
-   - Type: Vector database with payload storage
-   - Connection: HTTP or gRPC
-   - Config: `MEMOS_QDRANT_HOST` / `MEMOS_QDRANT_PORT` (default: localhost:6333)
-   - Auth: Optional `MEMOS_QDRANT_API_KEY`
-   - Client: qdrant-client Python SDK
-   - File: `src/memos/storage/qdrant_backend.py`
-   - Features: Native vector search, namespace support, gRPC acceleration
+**SQLite (Knowledge Graph):**
+- Type: Embedded relational DB
+- Library: Python stdlib `sqlite3`
+- File: configurable `kg_db_path` arg (default `~/.memos/kg.db`)
+- Class: `src/memos/knowledge_graph.py` (`KnowledgeGraph`)
+- Use: temporal triple store for entity relationships
 
-3. **Pinecone** (Serverless cloud vector search)
-   - Type: Cloud-managed vector database
-   - Auth: `MEMOS_PINECONE_API_KEY` (required)
-   - Config: 
-     - `MEMOS_PINECONE_INDEX_NAME` (default: memos)
-     - `MEMOS_PINECONE_CLOUD` (default: aws)
-     - `MEMOS_PINECONE_REGION` (default: us-east-1)
-     - `MEMOS_PINECONE_SERVERLESS` (default: true)
-   - Client: pinecone-client SDK
-   - File: `src/memos/storage/pinecone_backend.py`
-   - Features: Serverless index management, automatic scaling
+**ChromaDB (optional):**
+- Type: Vector database (HTTP client mode)
+- Library: `chromadb >= 0.4` (`[chroma]` extra)
+- Connection: `MEMOS_CHROMA_HOST` / `MEMOS_CHROMA_PORT` (default `localhost:8000`)
+- Class: `src/memos/storage/chroma_backend.py` (`ChromaBackend`)
+- Docker: `chromadb/chroma:1.5.7` in `docker-compose.yml` (`chroma` profile)
 
-**Relational/Embedded Databases:**
+**Qdrant (optional):**
+- Type: Vector database (gRPC + HTTP client)
+- Library: `qdrant-client >= 1.17.1` (`[qdrant]` extra)
+- Connection: `MEMOS_QDRANT_HOST` / `MEMOS_QDRANT_PORT` (default `localhost:6333`)
+- Auth: `MEMOS_QDRANT_API_KEY` (optional)
+- Class: `src/memos/storage/qdrant_backend.py` (`QdrantBackend`)
+- Docker: `qdrant/qdrant:v1.17.1` in `docker-compose.yml` (`qdrant` profile)
 
-- **SQLite3** (Embedded)
-  - Knowledge Graph: `~/.memos/knowledge.db` (temporal facts, entities, relationships)
-  - Embedding Cache: `~/.memos/embedding-cache.db` (vector embeddings with timestamps)
-  - Palace Index: `~/.memos/palace.db` (context memory structure)
-  - Files:
-    - `src/memos/knowledge_graph.py` - Fact/entity storage with temporal queries
-    - `src/memos/cache/embedding_cache.py` - LRU embedding cache with SQLite backend
-    - `src/memos/palace.py` - Memory palace structure and recall
+**Pinecone (optional, cloud):**
+- Type: Managed vector database (cloud API)
+- Library: `pinecone-client >= 3.0` (`[pinecone]` extra)
+- Auth: `MEMOS_PINECONE_API_KEY`
+- Config: `MEMOS_PINECONE_INDEX_NAME`, `MEMOS_PINECONE_CLOUD`, `MEMOS_PINECONE_REGION`, `MEMOS_PINECONE_SERVERLESS`
+- Class: `src/memos/storage/pinecone_backend.py` (`PineconeBackend`)
 
-**File Storage:**
+## APIs Exposed
 
-- **Local Filesystem Only** - No cloud storage integration
-  - Default storage path: `~/.memos/` (configurable via `MEMOS_PERSIST_PATH`)
-  - Files managed:
-    - `store.json` - Memory items (JsonFileBackend)
-    - `knowledge.db` - Knowledge graph (SQLite)
-    - `embedding-cache.db` - Embedding cache (SQLite)
-    - `palace.db` - Palace index (SQLite)
+**REST API (FastAPI — `[server]` extra):**
+- Framework: FastAPI + Uvicorn
+- Entry: `src/memos/api/__init__.py` (`create_fastapi_app`)
+- Routes: `src/memos/api/routes/`
+- Auth: Bearer token via `MEMOS_API_KEY` (`src/memos/api/auth.py`)
+- Rate limiting: per-key requests/minute (`src/memos/api/ratelimit.py`)
+- Default bind: `0.0.0.0:8000` in Docker, `127.0.0.1:8000` locally
 
-**Caching:**
+**MCP Server (JSON-RPC 2.0):**
+- Spec: MCP 2025-03-26
+- Entry: `src/memos/mcp_server.py`
+- Transports:
+  - `stdio` — for Claude Code / Cursor direct integration
+  - Streamable HTTP — POST/GET/OPTIONS `/mcp`, discovery at `GET /.well-known/mcp.json`
+- Consumers: OpenClaw, Claude Code, Cursor
+- Tools exposed: `memory_search` and others defined in `TOOLS` list
 
-- **Embedding Cache** (persistent SQLite-backed)
-  - Location: `src/memos/cache/embedding_cache.py`
-  - Purpose: Avoid re-embedding identical text (critical on ARM64/low-resource systems)
-  - LRU eviction strategy
-  - In-process L1 cache (dict) + L2 disk cache (SQLite)
+**Server-Sent Events:**
+- File: `src/memos/api/sse.py`
+- Used for: streaming recall results, MCP SSE keepalive
 
-## Authentication & Identity
+## URL / Web Ingestion
 
-**API Authentication:**
+**httpx-based URL fetcher:**
+- File: `src/memos/ingest/url.py`
+- Supported sources: arXiv, Twitter/X, PDFs, generic webpages
+- Uses: stdlib `html.parser`, `urllib.parse`, regex — no third-party HTML parser
 
-- **Custom API Key Authentication** - Optional bearer token validation
-  - Header: `Authorization: Bearer <api_key>`
-  - Env: `MEMOS_API_KEY` (single key for server)
-  - Implementation: `src/memos/api/auth.py`
-  - Features:
-    - SHA256 hashing of keys in memory
-    - Per-key rate limiting
-    - Can be disabled (no keys = no auth required)
-  - FastAPI middleware integration for HTTP routes
+## Notable Third-Party Libraries
 
-**No OAuth/OIDC Integration** - Not applicable to this codebase
+| Library | Extra | Purpose | Key files |
+|---------|-------|---------|-----------|
+| `fastapi` | `[server]` | REST API + MCP HTTP | `src/memos/api/`, `src/memos/mcp_server.py` |
+| `uvicorn` | `[server]` | ASGI server | `src/memos/cli/` |
+| `httpx` | core | HTTP client (Ollama, URL ingest) | `src/memos/ingest/url.py`, `src/memos/retrieval/engine.py` |
+| `sentence-transformers` | `[local]` | Local embeddings (all-MiniLM-L6-v2) | `src/memos/embeddings/local.py` |
+| `chromadb` | `[chroma]` | Vector storage | `src/memos/storage/chroma_backend.py` |
+| `qdrant-client` | `[qdrant]` | Vector storage | `src/memos/storage/qdrant_backend.py` |
+| `pinecone-client` | `[pinecone]` | Cloud vector storage | `src/memos/storage/pinecone_backend.py` |
+| `pyarrow` | `[parquet]` | Parquet export/import | `src/memos/parquet_io.py` |
 
-## Monitoring & Observability
+## Authentication & Secrets
 
-**Error Tracking:**
-- Not detected - No error tracking service integration (Sentry, DataDog, etc.)
+**REST API:** `MEMOS_API_KEY` env var — bearer token, optional (disabled when empty)
 
-**Logs:**
-- Console/stdout logging via Python's logging module
-- Uvicorn/FastAPI auto-logging in server mode
-- No structured logging service integration
+**Pinecone:** `MEMOS_PINECONE_API_KEY` env var
 
-**Metrics:**
-- No external metrics/observability integration
-- Internal statistics available via CLI: `memos stats` command
-- Rate limiting metrics accessible via FastAPI middleware
+**Qdrant:** `MEMOS_QDRANT_API_KEY` env var (optional, for cloud/managed deployments)
 
-## CI/CD & Deployment
-
-**Hosting:**
-- Docker Compose - Local containerization (see `docker-compose.yml`)
-- No cloud platform integration (no AWS/GCP/Azure SDK)
-- Manual deployment or container orchestration (Kubernetes, Podman, etc.)
-
-**CI Pipeline:**
-- Not detected in codebase - No GitHub Actions, GitLab CI, or Jenkins integration
-
-**Docker Images:**
-- Container registry: ghcr.io (GitHub Container Registry)
-- Image: `ghcr.io/mars375/memos:latest`
-- Profiles:
-  - `memos-standalone` - Zero dependencies, local storage
-  - `memos` (with chroma profile) - Production ChromaDB setup
-  - `memos-qdrant` (with qdrant profile) - Qdrant vector search
-
-## Environment Configuration
-
-**Required env vars (variable by backend):**
-
-For standalone/local:
-- `MEMOS_BACKEND=local` (or `memory`, `json`)
-- `MEMOS_EMBED_HOST` (if using local embeddings, not needed)
-
-For ChromaDB:
-- `MEMOS_BACKEND=chroma`
-- `MEMOS_CHROMA_URL` or `MEMOS_CHROMA_HOST` + `MEMOS_CHROMA_PORT`
-- `MEMOS_EMBED_HOST` (Ollama for embeddings)
-
-For Qdrant:
-- `MEMOS_BACKEND=qdrant`
-- `MEMOS_QDRANT_HOST` + `MEMOS_QDRANT_PORT`
-- `MEMOS_QDRANT_API_KEY` (if secured)
-
-For Pinecone:
-- `MEMOS_BACKEND=pinecone`
-- `MEMOS_PINECONE_API_KEY` (required)
-- `MEMOS_PINECONE_INDEX_NAME`, `MEMOS_PINECONE_CLOUD`, `MEMOS_PINECONE_REGION`
-
-**Secrets location:**
-- Environment variables only (no .env file reading in core library)
-- Docker: passed via `.env` file in compose directory
-- CLI: `MEMOS_CONFIG` TOML file (home directory, user-readable)
-- No secrets vault integration (HashiCorp Vault, AWS Secrets Manager, etc.)
-
-## Webhooks & Callbacks
-
-**Incoming Webhooks:**
-- Not detected - No webhook receiver endpoints
-
-**Outgoing Webhooks:**
-- Not detected - No outbound webhook triggers
-
-**Event Streaming:**
-- Internal event system via `ContextStack` (`src/memos/context.py`)
-- API endpoint: `/api/v1/events` (SSE - Server-Sent Events)
-- For memory updates, not external integrations
-
-## MCP (Model Context Protocol) Integration
-
-**MCP Server:**
-- Transport modes: stdio and Streamable HTTP (MCP 2025-03-26 spec)
-- Endpoints:
-  - POST `/mcp` - JSON-RPC 2.0 call
-  - GET `/mcp` - SSE keepalive stream
-  - OPTIONS `/mcp` - CORS preflight
-  - GET `/.well-known/mcp.json` - Discovery
-- CORS: Configurable via `MEMOS_CORS_ORIGINS` env var (default: *)
-- File: `src/memos/mcp_server.py`
-- Tools exposed:
-  - `memory_search` - Semantic + filtered search
-  - `memory_save` - Persist new memories
-  - `memory_forget` - Delete by ID or tag
-  - `kg_add_fact` - Knowledge graph facts
-  - And 15+ other memory/knowledge management tools
-
-## Rate Limiting
-
-**Built-in Rate Limiter:**
-- Middleware: `src/memos/api/ratelimit.py`
-- Per-API-key sliding window (default: 60 seconds)
-- Configurable per endpoint via `EndpointRule` patterns
-- Default limits:
-  - `/api/v1/learn`: 30 req/min
-  - `/api/v1/search`: 60 req/min
-  - `/api/v1/consolidate`: 5 req/min
-- Response headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
-- Can be disabled if no API keys configured
+**Encryption at rest:** passphrase-derived keys via PBKDF2 (stdlib only, no external secrets manager) — `src/memos/crypto.py`, `src/memos/storage/encrypted_backend.py`
 
 ---
 
-*Integration audit: 2026-04-13*
+*Integration audit: 2026-04-15*

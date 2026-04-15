@@ -1,120 +1,90 @@
 # Technology Stack
 
-**Analysis Date:** 2026-04-13
+**Analysis Date:** 2026-04-15
 
-## Languages
+## Languages & Runtimes
 
 **Primary:**
-- Python 3.11+ - Core MemOS library, CLI, API server, and all backends
-- JavaScript/TypeScript - Optional dashboard UI modules (bundled in web distribution)
+- Python 3.11+ — entire codebase (source, tests, tooling)
 
-## Runtime
+**Runtime:**
+- CPython 3.11 (minimum required, pinned in `pyproject.toml` and `Dockerfile`)
 
-**Environment:**
-- Python 3.11+ required (`requires-python = ">=3.11"` in `pyproject.toml`)
-- Docker support: `FROM python:3.11-slim` (see `Dockerfile`)
+## Package Management
 
-**Package Manager:**
-- pip - Primary package manager
-- Lockfile: `pyproject.toml` with `setuptools>=68.0` build system
+- **Build system:** setuptools >= 68.0 with wheel
+- **Package definition:** `pyproject.toml` (PEP 517/518)
+- **Lockfile:** None — dependencies are range-pinned in `pyproject.toml`
+- **Install extras:** `local`, `chroma`, `qdrant`, `pinecone`, `parquet`, `server`, `dev`
 
-## Frameworks
+## Frameworks & Libraries
 
-**Core:**
-- FastAPI 0.104+ - REST API server framework (optional, installed via `memos[server]`)
-- Uvicorn 0.24+ - ASGI server for FastAPI deployments (optional, installed via `memos[server]`)
+**Web / API (optional — `[server]` extra):**
+- `fastapi >= 0.104` — REST API and MCP HTTP server (`src/memos/api/__init__.py`, `src/memos/mcp_server.py`)
+- `uvicorn >= 0.44.0` — ASGI server (`src/memos/cli/`)
 
-**Vector Search Backends (pluggable):**
-- ChromaDB 0.4+ - Production vector database with embedding support (profile: `chroma`)
-- Qdrant Client 1.7+ - Vector search and payload storage (profile: `qdrant`)
-- Pinecone Client 3.0+ - Serverless cloud vector search (optional)
-- Sentence-Transformers 2.7+ - Local embedding generation (optional, installed via `memos[local]`)
+**HTTP Client:**
+- `httpx >= 0.25` — URL ingestion, Ollama embedding calls, Pinecone/Qdrant HTTP calls (`src/memos/ingest/url.py`, `src/memos/retrieval/engine.py`)
+
+**Embeddings (optional — `[local]` extra):**
+- `sentence-transformers >= 2.7` — local embedding without any external service; default model `all-MiniLM-L6-v2` (`src/memos/embeddings/local.py`)
+
+**Vector Stores (all optional):**
+- `chromadb >= 0.4` (`[chroma]`) — ChromaDB HTTP client (`src/memos/storage/chroma_backend.py`)
+- `qdrant-client >= 1.17.1` (`[qdrant]`) — Qdrant gRPC/HTTP client (`src/memos/storage/qdrant_backend.py`)
+- `pinecone-client >= 3.0` (`[pinecone]`) — Pinecone serverless/pod client (`src/memos/storage/pinecone_backend.py`)
+
+**Data Export (optional — `[parquet]` extra):**
+- `pyarrow >= 12.0` — Parquet import/export (`src/memos/parquet_io.py`)
+
+**Cryptography:**
+- Python stdlib `hashlib` — PBKDF2-HMAC-SHA256 key derivation; Fernet-style AES encryption implemented without third-party `cryptography` library (`src/memos/crypto.py`)
+
+**Knowledge Graph / Persistence:**
+- Python stdlib `sqlite3` — temporal knowledge graph triple store (`src/memos/knowledge_graph.py`)
+
+**Configuration:**
+- Python 3.11 stdlib `tomllib` (with `tomli` fallback for older Pythons) — TOML config file parsing (`src/memos/config.py`)
+
+## Build & Tooling
+
+**Linter / Formatter:**
+- `ruff >= 0.15.10` — lint (E, F, W, I rules) + import sorting; line length 120; target Python 3.11 (`pyproject.toml` `[tool.ruff]`)
 
 **Testing:**
-- pytest 7.0+ - Test framework
-- pytest-cov 4.0+ - Coverage reporting
-- pytest-asyncio 0.23+ - Async test support
+- `pytest >= 7.0`
+- `pytest-asyncio >= 0.23` — async test support
+- `pytest-cov >= 4.0` — coverage reporting
+- `freezegun >= 1.2` — time mocking in tests
 
-**Build/Dev:**
-- ruff 0.4+ - Linting and code formatting
-- setuptools 68.0+ - Package building
+**Containerization:**
+- Docker — `Dockerfile` based on `python:3.11-slim`, installs `[server,chroma,local,dev]` extras
+- Docker Compose — `docker-compose.yml` with three profiles: standalone (default), `chroma`, `qdrant`
 
-## Key Dependencies
+**Distribution:**
+- Package published to GitHub Container Registry as `ghcr.io/mars375/memos:latest`
+- No CI config file detected in workspace root
 
-**Critical:**
-- httpx 0.25+ - HTTP client for external API calls (Ollama, Qdrant, Pinecone)
-  - Used for: Embedding API calls to Ollama, Qdrant HTTP requests, Pinecone API interaction
-  - Why it matters: Core integration with vector search backends and embedding models
+## Key Config Files
 
-**Infrastructure:**
-- starlette - ASGI toolkit bundled with FastAPI (for static file serving, middleware)
-- pyarrow 12.0+ - Parquet file I/O support (optional, installed via `memos[parquet]`)
+- `pyproject.toml` — project metadata, dependencies, pytest/ruff/coverage config
+- `Dockerfile` — container build definition
+- `docker-compose.yml` — multi-profile deployment (standalone, chroma, qdrant)
+- `~/.memos.toml` (runtime) — user config file (TOML); path overridable via `MEMOS_CONFIG` env var
 
-**Storage & Persistence:**
-- SQLite3 (stdlib) - Embedded database for:
-  - Knowledge Graph (`src/memos/knowledge_graph.py`) — temporal facts and relationships
-  - Embedding cache (`src/memos/cache/embedding_cache.py`) — persistent LRU cache for vector embeddings
-  - Palace Index (`src/memos/palace.py`) — context memory structure
-- JSON (stdlib) - Default file-based storage backend (`JsonFileBackend`)
+## Environment Variables
 
-## Configuration
-
-**Environment Variables:**
-- `MEMOS_BACKEND` - Storage backend selection (memory|local|json|chroma|qdrant|pinecone|encrypted)
-- `MEMOS_HOST` - Server bind address (default: 127.0.0.1)
-- `MEMOS_PORT` - Server port (default: 8000)
-- `MEMOS_CHROMA_URL` - ChromaDB server URL (e.g., http://chroma:8000)
-- `MEMOS_QDRANT_HOST` / `MEMOS_QDRANT_PORT` - Qdrant server address
-- `MEMOS_QDRANT_API_KEY` - Qdrant authentication
-- `MEMOS_EMBED_HOST` - Ollama server URL (default: http://localhost:11434)
-- `MEMOS_EMBED_MODEL` - Embedding model name (default: nomic-embed-text)
-- `MEMOS_PINECONE_API_KEY` - Pinecone API key
-- `MEMOS_API_KEY` - API key for server authentication
-- `MEMOS_CONFIG` - Custom config file path (default: ~/.memos.toml)
-
-**Config Files:**
-- `~/.memos.toml` - Optional user config (TOML format, section `[memos]`)
-- `Dockerfile` environment defaults: `MEMOS_BACKEND=local`, `MEMOS_HOST=0.0.0.0`, `MEMOS_PORT=8000`
-
-**Build Config:**
-- `pyproject.toml` - Package metadata, dependencies, build config
-- `Dockerfile` - Multi-stage containerization with all optional dependencies
-
-## Platform Requirements
-
-**Development:**
-- Python 3.11+ interpreter
-- pip or similar package manager
-- Optional: Docker/Docker Compose for containerized deployments
-
-**Production:**
-- Python 3.11+ runtime
-- Optional vector database: ChromaDB, Qdrant, or Pinecone (cloud)
-- Optional embedding server: Ollama instance at `MEMOS_EMBED_HOST`
-- For CLI usage: ~.memos directory for persistent storage (JSON backend)
-- For server: HTTP port (8000 default) and optional database connections
-
-**Docker Deployment:**
-- `docker-compose.yml` supports three profiles:
-  1. **Standalone** (`memos-standalone`): Single container, zero external dependencies
-     - Uses local JSON storage + built-in embeddings (all-MiniLM-L6-v2)
-     - Port: 8000
-  2. **ChromaDB** (`--profile chroma`): MemOS + ChromaDB server
-     - MemOS on port 8100, ChromaDB on port 8001
-  3. **Qdrant** (`--profile qdrant`): MemOS + Qdrant server
-     - MemOS on port 8000, Qdrant on ports 6333 (HTTP) and 6334 (gRPC)
-
-## Optional Extras
-
-Installation groups (`pip install memos-agent[extra]`):
-- `local` - Sentence-transformers for local embeddings (zero external dependencies)
-- `chroma` - ChromaDB client
-- `qdrant` - Qdrant client
-- `pinecone` - Pinecone client
-- `parquet` - PyArrow for Parquet export/import
-- `server` - FastAPI + Uvicorn for REST API server
-- `dev` - Testing and linting tools (pytest, ruff, pytest-asyncio)
+All configuration via `MEMOS_*` env vars (see `src/memos/config.py` `ENV_MAP`):
+- `MEMOS_BACKEND` — storage backend: `memory`, `json`, `chroma`, `qdrant`, `pinecone`
+- `MEMOS_HOST` / `MEMOS_PORT` — API server bind address (default `127.0.0.1:8000`)
+- `MEMOS_CHROMA_HOST` / `MEMOS_CHROMA_PORT` / `MEMOS_CHROMA_URL`
+- `MEMOS_QDRANT_HOST` / `MEMOS_QDRANT_PORT` / `MEMOS_QDRANT_API_KEY` / `MEMOS_QDRANT_PATH`
+- `MEMOS_EMBED_HOST` / `MEMOS_EMBED_MODEL` / `MEMOS_EMBED_TIMEOUT`
+- `MEMOS_PINECONE_API_KEY` / `MEMOS_PINECONE_INDEX_NAME` / `MEMOS_PINECONE_CLOUD` / `MEMOS_PINECONE_REGION` / `MEMOS_PINECONE_SERVERLESS`
+- `MEMOS_API_KEY` — REST API authentication key
+- `MEMOS_PERSIST_PATH` — JSON backend file path
+- `MEMOS_CORS_ORIGINS` — CORS allowed origins for MCP HTTP server (default `*`)
 
 ---
 
-*Stack analysis: 2026-04-13*
+*Stack analysis: 2026-04-15*

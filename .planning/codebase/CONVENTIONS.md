@@ -1,192 +1,128 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-04-13
-
-## Naming Patterns
-
-**Files:**
-- Module files: `snake_case.py` (e.g., `dedup.py`, `config.py`, `embedding_cache.py`)
-- Package directories: `snake_case` (e.g., `src/memos/storage/`, `src/memos/retrieval/`)
-- Test files: `test_*.py` (e.g., `test_core.py`, `test_config.py`)
-
-**Functions and Methods:**
-- Functions: `snake_case` (e.g., `generate_id()`, `_build_hash_index()`, `keyword_score()`)
-- Private/internal functions: `_leading_underscore()` (e.g., `_tokenize()`, `_normalize()`)
-- Class methods: `snake_case` (e.g., `setup_method()`, `test_learn_basic()`)
-- Async functions: `async def snake_case()` (e.g., `async def recall_stream()`, `async def consolidate_async()`)
-
-**Variables:**
-- Local variables: `snake_case` (e.g., `item_id`, `chunk_size`, `semantic_weight`)
-- Constants: `UPPER_CASE` (e.g., `DEFAULTS`, `ENV_MAP`)
-- Private module variables: `_leading_underscore` (e.g., `_hash_index`)
-
-**Classes:**
-- Main classes: `PascalCase` (e.g., `MemOS`, `StorageBackend`, `RetrievalEngine`)
-- Dataclasses: `PascalCase` (e.g., `MemoryItem`, `RecallResult`, `ScoreBreakdown`)
-
-**Protocols and Abstract Classes:**
-- Same as regular classes: `PascalCase` (e.g., `Embedder`, `StorageBackend`)
+**Analysis Date:** 2026-04-15
 
 ## Code Style
 
 **Formatting:**
-- Tool: `ruff` (linter and formatter)
-- Line length: 120 characters (configured in `pyproject.toml`)
-- Python version: 3.11+
+- Tool: `ruff format` (configured in `pyproject.toml`)
+- Line length: 120 characters
+- All source and test files are ruff-formatted; CI enforces `ruff format --check src/ tests/`
 
-**Linting Configuration** (`pyproject.toml`):
-```toml
-[tool.ruff]
-target-version = "py311"
-line-length = 120
+**Linting:**
+- Tool: `ruff check` with rules `E`, `F`, `W`, `I` (pycodestyle errors/warnings, pyflakes, isort)
+- `E501` (line too long) is explicitly ignored — line length is advisory via formatter, not enforced as a lint error
+- Target: Python 3.11+
+- Checked in CI on every push and PR to `main`
 
-[tool.ruff.lint]
-select = ["E", "F", "W", "I"]  # Error, Pyflakes, Warning, Import-sorting
-ignore = ["E501"]  # Line too long (handled by formatter)
+**Type hints:**
+- All function signatures carry type annotations
+- `Optional[X]` is used (not `X | None`), consistent with Python 3.11 target
+- `from __future__ import annotations` is present in **every** source file (all 83 modules) and in all test files
+- `typing.Any` is used sparingly; no untyped `dict` or `list` in public APIs
+- `TYPE_CHECKING` guard used for imports that would create circular dependencies (e.g., `src/memos/retrieval/engine.py`)
+
+## Naming Patterns
+
+**Modules / files:**
+- `snake_case.py` throughout — e.g., `mcp_server.py`, `knowledge_graph.py`, `async_wrapper.py`
+- Sub-packages use short, descriptive names: `api/`, `cli/`, `storage/`, `ingest/`, `retrieval/`, `versioning/`, `consolidation/`, `decay/`, `namespaces/`, `sharing/`, `cache/`, `compaction/`, `subscriptions/`, `embeddings/`
+- CLI command modules are prefixed: `commands_memory.py`, `commands_knowledge.py`, `commands_io.py`, etc.
+- Internal helpers prefixed with `_`: `_constants.py`, `_common.py`, `_parser.py`
+
+**Classes:**
+- `PascalCase` — e.g., `MemOS`, `MemoryItem`, `StorageBackend`, `DecayEngine`, `RetrievalEngine`, `KnowledgeGraph`
+- Dataclasses used for plain data models (`MemoryItem`, `RecallResult`, `ScoreBreakdown`, `DecayConfig`)
+- ABCs named with `Backend` suffix: `StorageBackend`, `AsyncStorageBackend`
+- Protocol classes named with role: `Embedder` in `src/memos/retrieval/engine.py`
+
+**Functions:**
+- `snake_case` for all public functions and methods
+- Private helpers prefixed with `_`: `_bm25_score`, `_get_embedding`, `_dispatch`, `_make_item` (in tests)
+- Factory helper functions in tests named `_make_*` or `_item(...)`
+
+**Variables:**
+- `snake_case`; instance attributes with `_` prefix for private: `self._store`, `self._embed_host`
+- Constants: `SCREAMING_SNAKE_CASE` in `src/memos/_constants.py` — e.g., `DEFAULT_MAX_MEMORIES`, `SECONDS_PER_DAY`
+- Numeric constants use underscores for readability: `86_400`, `10_000`, `50_000`
+
+**Test helpers:**
+- Module-level helper functions prefixed `_`: `_learn()`, `_make_item()`, `_make_envelope()`, `_chroma_results()`
+
+## File Organization Rules
+
+**Source layout:**
+```
+src/memos/
+├── __init__.py, _constants.py   # package root + all domain constants
+├── core.py                      # main MemOS class (entry point)
+├── models.py                    # dataclasses: MemoryItem, RecallResult, etc.
+├── api/                         # FastAPI app + routes + middleware
+├── cli/                         # argparse CLI commands
+├── storage/                     # pluggable backends (base.py, *_backend.py)
+├── retrieval/                   # hybrid search engine
+├── consolidation/, decay/, ...  # domain sub-packages, each with engine.py
+└── web/                         # static dashboard (HTML/CSS/JS)
 ```
 
-**Docstring Style:**
-- Module docstrings: Present at top of file, describe purpose
-- Class docstrings: Describe the class and usage patterns with examples
-- Function docstrings: Present for public APIs; use standard format with Args/Returns/Raises
-- Example from `core.py`:
-  ```python
-  class MemOS:
-      """Memory Operating System for LLM Agents.
-      
-      Usage:
-          mem = MemOS(backend="memory")
-          mem.learn("User prefers concise responses", tags=["preference"])
-          results = mem.recall("how should I respond?")
-          mem.prune(threshold=0.3)
-      """
-  ```
+- Every sub-package has `__init__.py`
+- Domain engines live in `<feature>/engine.py`; async variants in `<feature>/async_engine.py`
+- Data models for a sub-package live in `<feature>/models.py`
+- Persistent storage for a sub-package lives in `<feature>/persistent_store.py` or `<feature>/store.py`
+- Tests live in a flat `tests/` directory at project root (not mirroring `src/` hierarchy)
 
-**Type Hints:**
-- Use strict type hints throughout (Python 3.11 syntax)
-- `from __future__ import annotations` at top of every module for forward references
-- Union types use `|` operator: `Optional[str]` or `str | None`
-- Always annotate function returns: `-> None`, `-> dict[str, Any]`, `-> RecallResult`
-- Avoid `Any` unless justified with a comment
+## Patterns Used
 
-**Imports:**
-- Order: Standard library, third-party, local imports (separated by blank lines)
-- Conditional imports with try/except for optional dependencies (e.g., `tomllib` vs `tomli`)
-- Use `from __future__ import annotations` at module top for PEP 563 compatibility
-- Import type-checking-only imports inside `if TYPE_CHECKING:` block
+**Abstract Base Classes:**
+- `StorageBackend` in `src/memos/storage/base.py` — all backends implement this ABC; keyword-only `namespace=""` parameter on every method
 
-## Error Handling
+**Protocols:**
+- `Embedder` protocol (`runtime_checkable`) in `src/memos/retrieval/engine.py` — pluggable embedding providers
 
-**Patterns:**
-- Raise `ValueError` for invalid input validation (e.g., empty content, invalid TTL format)
-- Log exceptions at info/debug level before raising if relevant context exists
-- Silent exception handling (bare `except Exception:`) used sparingly; log before continuing
-- Example from `core.py`:
-  ```python
-  if not content.strip():
-      raise ValueError("Memory content cannot be empty")
-  if sanitize:
-      issues = sanitizer.check(content)
-      if issues:
-          raise ValueError(f"Memory failed sanitization: {issues}")
-  ```
+**Dataclasses:**
+- Used for all domain data objects (`MemoryItem`, `ScoreBreakdown`, `RecallResult`, `DecayConfig`, etc.)
+- `field(default_factory=...)` used for mutable defaults
 
-**Validation:**
-- Input validation happens early in functions
-- Range/bound validation (e.g., importance clamping) happens in `learn()` not in models
-- Explicit checks before operations (e.g., check if item exists before deleting)
+**Constants module:**
+- All magic numbers defined in `src/memos/_constants.py` and imported explicitly; never hardcoded in logic files
+- Sections documented with ASCII header comments (`# ── General ────`)
 
-## Logging
+**Optional dependencies:**
+- Heavy optional packages (fastapi, chromadb, qdrant-client, pyarrow, sentence-transformers) guarded with `try/except ImportError` at import time; raise a helpful installation message when used without the extras install
 
-**Framework:** `logging` (standard library)
+**Logging:**
+- `logging.getLogger(__name__)` pattern; module-level `logger` variable
+- Present in `src/memos/core.py`, `src/memos/retrieval/engine.py`, `src/memos/ingest/miner.py`, and ~12 other modules
+- Not present in pure data modules or thin wrappers
 
-**Setup Pattern:**
-```python
-import logging
-logger = logging.getLogger(__name__)
+**Return types:**
+- Dataclass instances returned from engines; never raw `dict` from core logic
+- API routes return `dict` (FastAPI serializes from Pydantic models or plain dicts)
+
+## Linting / Formatting
+
+**Config location:** `pyproject.toml` `[tool.ruff]` and `[tool.ruff.lint]`
+
+**Run commands:**
+```bash
+ruff check src/ tests/           # lint
+ruff format src/ tests/          # format in-place
+ruff format --check src/ tests/  # format check (CI)
 ```
 
-**Usage Patterns:**
-- `logger.info()` for significant operations (learning, forgetting, recalls)
-- `logger.debug()` for low-level details (embedding caching, index builds)
-- Never log full content in production (truncate or hash if needed)
-- Example from `core.py`:
-  ```python
-  logger.info(
-      f"Learned: {item.id[:8]}... ({len(item.content)} chars, "
-      f"tags={item.tags}, importance={item.importance})"
-  )
-  ```
+**Enforced rules:**
+- `E` — pycodestyle errors
+- `F` — pyflakes (unused imports, undefined names)
+- `W` — pycodestyle warnings
+- `I` — isort (import ordering)
+- `E501` ignored (line length enforced only by formatter)
 
-## Comments
-
-**When to Comment:**
-- Complex algorithms (e.g., BM25 scoring, dedup trigram matching) get detailed comments
-- Workarounds and rationale for non-obvious choices (e.g., lazy imports for optional deps)
-- Business logic constraints (e.g., "Only enable client-side Ollama embeddings when...")
-- Section dividers in test files (e.g., `# -----------\n# 1. Identity\n# -----------`)
-
-**JSDoc/TSDoc:**
-- Not used (Python docstrings only)
-- Dataclass fields don't need inline documentation (self-evident names)
-
-## Function Design
-
-**Size:**
-- Functions typically 20-40 lines
-- Larger functions (100+ lines) are typically test files or top-level orchestrators
-- Most pure utility functions stay under 20 lines
-- Example: `_tokenize()`, `_normalize()` in retrieval are 5-10 lines each
-
-**Parameters:**
-- Required params before keyword-only params
-- Use `*` to enforce keyword-only: `def __init__(self, store: StorageBackend, *, namespace: str = "")`
-- Default values for optional params: `threshold: float = 0.95`
-- Avoid long parameter lists (max 5-6 before considering a config object)
-
-**Return Values:**
-- Always explicitly return; avoid implicit `None` returns
-- Use dataclasses for complex returns (e.g., `DedupCheckResult`, `RecallResult`)
-- Single-line returns for simple cases; multi-line for complex logic
-
-## Module Design
-
-**Exports:**
-- Public API via `__init__.py` with `__all__` list
-- Example from `src/memos/__init__.py`:
-  ```python
-  __all__ = [
-      "MemOS",
-      "MemoryItem",
-      "RecallResult",
-      "MemoryStats",
-      "MigrationEngine",
-      "MigrationReport",
-      "BrainSearch",
-      "BrainSearchResult",
-      "MarkdownExporter",
-      "MarkdownExportResult",
-  ]
-  ```
-
-**Barrel Files:**
-- `__init__.py` files re-export commonly used classes from submodules
-- Storage backends live in `src/memos/storage/` with `__init__.py` exposing base class
-- Each backend (Chroma, Qdrant, Pinecone) is a separate file imported on demand
-
-**Submodule Organization:**
-- Single responsibility: `config.py` handles configuration, `models.py` data structures
-- Large modules (>500 lines) get split: `core.py` is monolithic main class, but `retrieval/engine.py` and `consolidation/engine.py` separate concerns
-- Private submodules with `_` prefix for internal utilities (e.g., `_common.py` for CLI helpers)
-
-## Async/Concurrency
-
-**Pattern:**
-- Async functions use `async def` and `await`
-- Async sleep for yielding: `await asyncio.sleep(0)` to let other coroutines run
-- No raw thread/process usage; async/await throughout
-- Test async code with `pytest-asyncio` (configured in `pyproject.toml`)
+**Import order (isort via ruff):**
+1. `from __future__ import annotations` (always first line)
+2. Standard library
+3. Third-party packages
+4. Local relative imports (`.module` or `..module`)
 
 ---
 
-*Convention analysis: 2026-04-13*
+*Convention analysis: 2026-04-15*

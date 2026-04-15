@@ -62,6 +62,57 @@ memos serve --port 8100
 
 ---
 
+## Golden path
+
+The full lifecycle from storing a memory to maintaining it over time.
+
+```python
+from memos import MemOS
+from memos.context import ContextStack
+from memos.kg_bridge import KGBridge
+
+mem = MemOS(backend="chroma", embed_host="http://localhost:11434")
+cs = ContextStack(mem)
+bridge = KGBridge(mem)
+
+# 1. Learn — store memories with tags and importance
+mem.learn("User prefers dark mode in all apps", tags=["preference", "ui"], importance=0.8)
+mem.learn("Deploy with Docker on ARM64 homelab", tags=["devops", "docker"], importance=0.6)
+mem.learn("Alice leads the backend team", tags=["team", "people"], importance=0.7)
+
+# 2. Recall — semantic search
+results = mem.recall("who handles the server side?", top=3)
+for r in results:
+    print(f"[{r.score:.2f}] {r.item.content}")
+# [0.91] Alice leads the backend team (tags: team, people)
+
+# 3. context_for — targeted context for a specific LLM call
+ctx = cs.context_for("how should I deploy this app?", max_chars=1500, top=5)
+# Returns a string with identity + relevant memories:
+# === RELEVANT MEMORIES (2 results for: 'how should I deploy this app?') ===
+# [0.87] Deploy with Docker on ARM64 homelab (tags: devops, docker)
+
+# 4. wake_up — inject at session start
+prompt_fragment = cs.wake_up(max_chars=2000, l1_top=15, include_stats=True)
+# Returns L0 identity + L1 top-importance memories as a string
+# ready to paste into a system prompt
+
+# 5. Reinforce and decay — keep memories healthy over time
+# Boost a memory that keeps being useful
+results = mem.recall("deployment strategy", top=1)
+if results:
+    mem._decay.reinforce(results[0].item, strength=0.1)
+    mem._store.upsert(results[0].item, namespace=mem._namespace)
+
+# Decay stale memories (preview first)
+items = mem._store.list_all(namespace=mem._namespace)
+report = mem._decay.run_decay(items, dry_run=True)
+print(f"{report.decayed}/{report.total} memories would decay")
+# When ready: run_decay(items, dry_run=False)
+```
+
+---
+
 ## Python SDK
 
 ```python
@@ -98,6 +149,38 @@ mem.prune(threshold=0.2)          # decay-based cleanup
 # Stats
 s = mem.stats()
 # MemoryStats(total_memories=142, avg_relevance=0.71, decay_candidates=8)
+```
+
+---
+
+## Which recall API should I use?
+
+| Function | Best for | Returns | When NOT to use |
+|----------|----------|---------|-----------------|
+| `mem.recall()` | General search, browsing results | `list[RecallResult]` with scores | You need a ready-made prompt string |
+| `memory_search` (MCP) | Same as `recall()`, but over MCP | JSON via MCP protocol | You're using the Python SDK directly |
+| `context_for()` | Augmenting a single LLM call | `str` (identity + top results) | You need structured data to process |
+| `recall_enriched()` | Answers needing entity context | `dict` with memories + KG facts | No KG data exists or entity resolution isn't needed |
+
+```python
+from memos.context import ContextStack
+from memos.kg_bridge import KGBridge
+
+cs = ContextStack(mem)
+bridge = KGBridge(mem)
+
+# recall() — structured results you iterate over
+results = mem.recall("docker deployment", top=5)
+for r in results:
+    print(r.item.content, r.score)
+
+# context_for() — one string, ready for a system prompt
+ctx = cs.context_for("docker deployment", max_chars=1000, top=5)
+
+# recall_enriched() — memories + knowledge graph facts in one dict
+enriched = bridge.recall_enriched("who is Alice?", top=5, min_score=0.3)
+print(enriched["facts"])       # KG triples about Alice
+print(enriched["memory_count"])
 ```
 
 ---

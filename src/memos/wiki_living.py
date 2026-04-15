@@ -740,8 +740,6 @@ class LivingWikiEngine:
 
         return result
 
-        return result
-
     def lint(self) -> LintReport:
         """Detect orphan pages, contradictions, empty pages, and stale content.
 

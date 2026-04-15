@@ -10,9 +10,19 @@ Built for developers running agents on their own infrastructure (homelab, cloud 
 
 An agent that remembers everything relevant without token bloat — recall must be fast, contextual, and explainable.
 
+## Current State
+
+**Shipped: v2.2.0** (2026-04-15)
+- 3 phases: Maintenance ✅, Dashboard P1 ✅, Documentation Polish ✅
+- 17 requirements verified, 1,738 tests passing, 0 ruff errors
+- Cluster-colored force-graph with depth slider, local graph, rich tooltips
+- Golden path README + recall API guide + Claude Code & OpenClaw integration examples
+- Docker images pinned, CI on 3.11/3.12/3.13, log limits on all services
+- See [milestone archive](milestones/v2.2.0-ROADMAP.md) for full details
+
 ## Requirements
 
-### Validated
+### Validated (shipped through v2.2.0)
 
 - ✓ Core memory store (learn, recall, forget, prune, reinforce, decay) — v1.0
 - ✓ 6 storage backends (memory, JSON, ChromaDB, Qdrant, Pinecone, local sentence-transformers) — v1.0
@@ -29,48 +39,35 @@ An agent that remembers everything relevant without token bloat — recall must 
 - ✓ MCP server (HTTP + stdio, 12 tools) — v1.0
 - ✓ REST API (20+ endpoints, SSE streaming, auth, rate limiting) — v1.0
 - ✓ CLI (30+ commands) + Python SDK — v1.0
-- ✓ Second brain dashboard (Canvas force-graph, KG edges, Wiki view, Palace view, time-travel slider) — v2.0
-- ✓ Docker (all-in-one image + multi-profile compose) + CI (tests + PyPI publish) — v1.0 / v2.0
-- ✓ 1534 tests passing — v2.0
+- ✓ Second brain dashboard (Canvas force-graph, clustering, depth, hover) — v2.2.0
+- ✓ Docker (all-in-one + multi-profile compose) + CI (3.11/3.12/3.13) — v2.2.0
+- ✓ 1,738 tests passing, 0 ruff errors — v2.2.0
+- ✓ Golden path README + recall API guide + integration examples — v2.2.0
 
-### Active
+### Next Milestone Goals (v3.x candidates)
 
-#### Tier 1 — Maintenance ✅ COMPLETE (Phase 1, 2026-04-13)
-- ✓ Version `pyproject.toml` ↔ `__init__.py` = `2.2.0` — Validated Phase 1
-- ✓ Docker tiers épinglés (`chromadb/chroma:1.5.7`, `qdrant/qdrant:v1.17.1`) — Validated Phase 1
-- ✓ Log limits JSON sur 5 services (`max-size: 10m, max-file: 3`) — Validated Phase 1
-- ✓ CI matrix Python 3.11 / 3.12 / 3.13 — Validated Phase 1
-- ✓ `ACTIVE.md` mis à jour (v2.2.0, 1534 tests, canvas graph) — Validated Phase 1
-- ✓ `src/memos/miner/` supprimé (413 lignes orphelines) — Validated Phase 1
-
-#### Tier 2 — Dashboard P1 (impact utilisateur immédiat)
-- [ ] Community detection + nœuds colorés par cluster (Leiden ou connected components)
-- [ ] Depth filter / local graph (slider 1-5 hops + bouton "focus sur node")
-- [ ] Hover preview riche (content snippet, tags, namespace, degree)
-
-#### Tier 3 — v1.1 Polish & Docs
-- [ ] README et docs golden path (`learn → recall → context_for → wake_up → reinforce/decay`)
-- [ ] Clarifier quand utiliser `recall` vs `search` vs `memory_context_for` vs `memory_recall_enriched`
-- [ ] Exemple d'intégration Claude Code / MCP minimal
-- [ ] Exemple d'intégration OpenClaw / orchestrateur
-- [ ] Harden importers & mining flows
+- Progressive `core.py` decomposition (1909L god class → focused modules)
+- CLI `_parser.py` modularisation (1171L argparse monolith)
+- `wiki_living.py` split (1080L — rendering / logic / data)
+- `mcp_server.py` expansion (851L → 20+ tools)
+- Temporal intelligence (validity windows, retroactive queries, contradiction detection)
+- Harden importers & mining flows
 
 ### Out of Scope
 
-- Refactor complet de `core.py` (v3 feature dev) — trop risqué avant tests v3 ; refactor progressif au fil des phases
-- v3.0 features (temporal validity windows, blast radius, specialist agents, multimodal) — après T1-T3
+- Refactor complet de `core.py` en une seule phase — too risky; progressive refactor
 - Federated memory / hosted service — v4+
+- OAuth / SSO — Bearer + namespace keys sufficient
+- Mobile / desktop client — web-first
+- Fine-tuned embedding model — pre-benchmarks LongMemEval
 
 ## Context
 
 - **Stack** : Python 3.11+, FastAPI, Uvicorn, sentence-transformers, SQLite (KG/Palace), ChromaDB/Qdrant/Pinecone optionnels
 - **Infrastructure** : homelab Raspberry Pi 5 (orion-cortex), Docker, NFS storage, Tailscale
 - **Déployé** : `ghcr.io/mars375/memos:latest` — image all-in-one `docker compose up memos-standalone`
-- **Tests** : 1534 tests (pytest), CI GitHub Actions — test matrix 3.11/3.12/3.13, lint ruff, docker multi-arch (amd64+arm64)
+- **Tests** : 1,738 tests (pytest), CI GitHub Actions — test matrix 3.11/3.12/3.13, lint ruff, docker multi-arch (amd64+arm64)
 - **Codebase map** : `.planning/codebase/` (créé le 13 avril 2026)
-- **Problème connu** : `core.py` est un god object (1816 lignes, 78 méthodes) — à refactorer progressivement
-- **Problème connu** : `src/memos/miner/` est orphelin (413 lignes, non importé par core ou tests)
-- **Version drift** : `pyproject.toml` = 1.0.0, `__init__.py` = 2.2.0 — à corriger avant prochaine release
 
 ## Constraints
 
@@ -90,23 +87,12 @@ An agent that remembers everything relevant without token bloat — recall must 
 | JSON backend par défaut | Zéro dépendance externe pour quick start | ✓ Good |
 | sentence-transformers local | Pas d'API key requise, fonctionne offline | ✓ Good |
 | MCP HTTP + stdio | Compatibilité max (Claude Code, n8n, agents custom) | ✓ Good |
+| Connected components (vs Leiden) | Zero-dependency, deterministic, sufficient for current scale | ✓ Good |
+| DOM-only tooltip | Zero innerHTML with user data | ✓ Good |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd:transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
-
-**After each milestone** (via `/gsd:complete-milestone`):
-1. Full review of all sections
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state
-
 ---
-*Last updated: 2026-04-13 after Phase 1 (Maintenance) — codebase clean, releasable*
+*Last updated: 2026-04-15 after v2.2.0 milestone archival*

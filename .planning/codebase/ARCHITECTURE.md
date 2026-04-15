@@ -1,218 +1,179 @@
 # Architecture
 
-**Analysis Date:** 2026-04-13
+**Analysis Date:** 2026-04-15
 
-## Pattern Overview
+## Overview
 
-**Overall:** Three-layer memory system with pluggable storage, hybrid retrieval engine, and unified interface (CLI/REST/MCP).
+MemOS is a "Memory Operating System" for LLM agents — a persistent, queryable memory layer that agents can write to, recall from, and manage over time. It is a Python library (`memos-agent`) with multiple access surfaces: a Python API, a CLI, a REST/WebSocket server, and an MCP (Model Context Protocol) server for direct LLM tool integration.
 
-**Key Characteristics:**
-- **Pluggable storage backends** (in-memory, JSON, ChromaDB, Qdrant, Pinecone) — swappable without changing core logic
-- **Hybrid retrieval** combining semantic embeddings (Ollama) with keyword search (BM25)
-- **Multi-namespace isolation** for multi-agent scenarios with ACL-based sharing
-- **Temporal versioning** — all writes are immutable; time-travel queries supported
-- **Decay engine** — automatic importance degradation (Ebbinghaus-inspired) + manual reinforcement
-- **Knowledge graph** — separate SQLite triple store for facts with temporal validity bounds
-- **MCP-first design** — native JSON-RPC 2.0 for OpenClaw/Claude Code integration
+## Pattern
 
-## Layers
+**Layered / Plugin Architecture with a Central Facade**
 
-**Core Memory Engine (`MemOS`):**
-- Purpose: Main entry point and orchestration for learn/recall/forget operations
-- Location: `src/memos/core.py`
-- Contains: Memory lifecycle management, backend initialization, decay/versioning wiring
-- Depends on: All subsystems below
-- Used by: CLI, REST API, MCP server
+`MemOS` (in `src/memos/core.py`) acts as the facade: it owns all sub-engine instances and exposes the full public API. Consumers never instantiate sub-engines directly. Storage is pluggable via the `StorageBackend` ABC.
 
-**Storage Layer (`StorageBackend`):**
-- Purpose: Persistence abstraction — insert/update/delete/search operations
-- Location: `src/memos/storage/base.py` (interface), implementations in same directory
-- Contains: 
-  - Abstract base: `base.py`
-  - In-memory: `memory_backend.py`
-  - JSON file: `json_backend.py`
-  - Vector DBs: `chroma_backend.py`, `qdrant_backend.py`, `pinecone_backend.py`
-  - Encryption wrapper: `encrypted_backend.py`
-  - Async wrapper: `async_wrapper.py`
-- Depends on: None (storage is leaf layer)
-- Used by: RetrievalEngine, MemOS core
+## Layers / Components
 
-**Retrieval Engine (`RetrievalEngine`):**
-- Purpose: Hybrid search combining semantic similarity + keyword ranking
+**Models Layer**
+- Purpose: Pure data definitions shared by all layers.
+- Location: `src/memos/models.py`, `src/memos/_constants.py`
+- Contains: `MemoryItem`, `RecallResult`, `ScoreBreakdown`, `MemoryStats`, `FeedbackEntry`, `generate_id`, `parse_ttl`
+- Depends on: nothing
+- Used by: everything
+
+**Storage Layer**
+- Purpose: Pluggable persistence backends behind a common interface.
+- Location: `src/memos/storage/`
+- Contains:
+  - `base.py` — `StorageBackend` ABC (upsert, get, delete, list_all, search, list_namespaces)
+  - `memory_backend.py` — volatile in-memory dict store
+  - `json_backend.py` — file-persisted JSON store (default local backend)
+  - `chroma_backend.py` — ChromaDB vector store (optional dep)
+  - `qdrant_backend.py` — Qdrant vector store (optional dep)
+  - `pinecone_backend.py` — Pinecone vector store (optional dep)
+  - `encrypted_backend.py` — transparent encryption wrapper around any backend
+  - `async_base.py`, `async_wrapper.py` — async adapters
+- Depends on: `models`
+- Used by: `core`, `retrieval`
+
+**Retrieval Layer**
+- Purpose: Hybrid semantic + keyword recall with scoring.
 - Location: `src/memos/retrieval/engine.py`
-- Contains: Embedding coordination (Ollama or local), BM25 scoring, score combination logic
-- Depends on: StorageBackend, embedding cache, Ollama HTTP API
-- Used by: MemOS.recall() flow, API routes
+- Contains: `RetrievalEngine` — BM25 keyword scoring + Ollama/local embedding cosine similarity, combined into a `ScoreBreakdown`
+- Embedder protocol: `Embedder` (Protocol) in `retrieval/engine.py`; implementations in `src/memos/embeddings/`
+- Caching: `src/memos/cache/embedding_cache.py` — LRU cache for embeddings
+- Depends on: `storage`, `models`, `embeddings`, `cache`
+- Used by: `core`
 
-**Decay Engine (`DecayEngine`):**
-- Purpose: Automatic memory decay + explicit reinforcement
-- Location: `src/memos/decay/engine.py`
-- Contains: Ebbinghaus-inspired decay formula, access-based boosting, pruning logic
-- Depends on: None (pure function on MemoryItem)
-- Used by: MemOS.decay(), MemOS.prune(), optional auto-reinforce on recall
+**Core Facade**
+- Purpose: Orchestrates all sub-engines; the primary public API.
+- Location: `src/memos/core.py`
+- Contains: `MemOS` class — `learn()`, `recall()`, `forget()`, `prune()`, `consolidate()`, `reinforce()`, and all other public operations
+- Sub-engines owned: `RetrievalEngine`, `DecayEngine`, `ConsolidationEngine`, `VersioningEngine`, `SharingEngine`, `IngestEngine`, `DedupEngine`, `AutoTagger`, `MemoryCrypto`, `MemorySanitizer`, `EmbeddingCache`, `RecallAnalytics`, `EventBus`, `NamespaceACL`
+- Config: resolved via `src/memos/config.py` (layered: defaults → TOML file → env vars → CLI args)
+- Depends on: all sub-engines and storage
+- Used by: `api`, `mcp_server`, `cli`
 
-**Versioning Engine (`VersioningEngine`):**
-- Purpose: Immutable version history + time-travel queries
-- Location: `src/memos/versioning/engine.py`
-- Contains: Version recording on upsert, history traversal, snapshot restoration
-- Supports: In-memory store or persistent SQLite backend
-- Depends on: StorageBackend (for snapshots)
-- Used by: MemOS core (transparent wrapping), CLI versioning commands
+**Memory Lifecycle Sub-Engines**
+- `src/memos/decay/engine.py` — `DecayEngine`: Ebbinghaus exponential decay; access-based reinforcement; prune candidates by importance threshold
+- `src/memos/consolidation/engine.py` — `ConsolidationEngine`: exact + Jaccard semantic dedup; merges similar memories into one canonical item
+- `src/memos/consolidation/async_engine.py` — `AsyncConsolidationHandle`: runs consolidation in background thread
+- `src/memos/compaction/` — compaction of memory clusters
+- `src/memos/versioning/engine.py` — `VersioningEngine`: stores diffs between memory versions; `src/memos/versioning/models.py` — `MemoryVersion`, `VersionDiff`
+- `src/memos/dedup.py` — `DedupEngine`: fast pre-storage duplicate detection
+- `src/memos/compression.py` — `MemoryCompressor`: token-budget-aware summarization of memory content
 
-**Knowledge Graph (`KnowledgeGraph`):**
-- Purpose: Temporal triple store for facts (subject-predicate-object with valid_from/valid_to)
-- Location: `src/memos/knowledge_graph.py`
-- Contains: SQLite schema for facts, entity/relation queries, path-finding
-- Standalone: No dependency on MemOS; can be used separately
-- Used by: KGBridge (integration point), API routes, CLI
+**Knowledge Layer**
+- Purpose: Structured relational knowledge separate from freeform memories.
+- `src/memos/knowledge_graph.py` — `KnowledgeGraph`: SQLite-backed temporal triple store (subject, predicate, object, valid_from, valid_to)
+- `src/memos/kg_bridge.py` — `KGBridge`: bridges MemOS recalls to KG fact extraction and injection
+- `src/memos/wiki.py`, `src/memos/wiki_graph.py`, `src/memos/wiki_living.py` — wiki-style compiled/living pages organized by entity/concept (Karpathy-inspired)
+- `src/memos/palace.py` — `PalaceIndex`: SQLite-backed "memory palace" spatial index
+- `src/memos/brain.py` — `BrainSearch`, `BrainSearchResult`: unified search across memories + wiki + KG in a single ranked result set
 
-**Knowledge Bridge (`KGBridge`):**
-- Purpose: Integration layer — extract facts from memory content and link to KG
-- Location: `src/memos/kg_bridge.py`
-- Contains: learn_and_extract() method, fact extraction logic
-- Depends on: MemOS core, KnowledgeGraph
-- Used by: API learn/extract endpoint, enriched recall
+**API Layer**
+- Purpose: HTTP/WebSocket access surface.
+- Location: `src/memos/api/`
+- Contains:
+  - `__init__.py` — `create_fastapi_app()` factory; wires routers, middleware, MCP routes, static files
+  - `routes/memory.py` — memory CRUD and recall endpoints
+  - `routes/knowledge.py` — KG, wiki, palace, context endpoints
+  - `routes/admin.py` — dashboard HTML, stats, admin endpoints
+  - `auth.py` — `APIKeyManager`, auth middleware
+  - `ratelimit.py` — `RateLimiter`, rate-limit middleware
+  - `sse.py` — SSE streaming helpers
+  - `schemas.py` — Pydantic request/response schemas
+  - `errors.py` — error handling
 
-**Interface Layers:**
-- **CLI:** `src/memos/cli/` — command-line interface via argparse
-- **REST API:** `src/memos/api/` with routers for memory, knowledge, admin
-- **MCP Server:** `src/memos/mcp_server.py` — JSON-RPC 2.0 for Claude Code/OpenClaw
+**MCP Server**
+- Purpose: JSON-RPC 2.0 bridge exposing MemOS tools to LLM clients (Claude Code, OpenClaw, Cursor).
+- Location: `src/memos/mcp_server.py`
+- Transports: `stdio` (direct pipe to LLM) and Streamable HTTP (`POST /mcp`, `GET /mcp`, `OPTIONS /mcp`, `GET /.well-known/mcp.json`)
+- Tools exposed: `memory_search`, `memory_save`, and others
+- MCP spec version: 2025-03-26
+
+**CLI Layer**
+- Purpose: Command-line interface for all MemOS operations.
+- Location: `src/memos/cli/`
+- Entry point: `memos` script → `memos.cli:main`
+- Contains: `_parser.py` (argparse), `commands_memory.py`, `commands_io.py`, `commands_knowledge.py`, `_common.py` (shared helpers)
+- Depends on: `core`, `knowledge_graph`, `wiki_living`, `config`
+
+**Event Bus**
+- Purpose: In-process pub/sub for real-time memory change notifications.
+- Location: `src/memos/events.py`
+- Contains: `EventBus`, `MemoryEvent`
+- Event types: `learned`, `recalled`, `forgotten`, `pruned`, `consolidated`
+- Supports: async handlers, WebSocket client queues, filtered subscriptions
+- Depends on: `subscriptions` (`src/memos/subscriptions/`)
+
+**Namespace / ACL Layer**
+- Purpose: Multi-agent memory isolation with RBAC.
+- Location: `src/memos/namespaces/acl.py`
+- Roles: `owner`, `writer`, `reader`, `denied`
+- All `StorageBackend` methods accept a `namespace` parameter; the ACL layer gates access in `MemOS`.
+
+**Sharing Layer**
+- Purpose: Cross-agent memory sharing via signed envelopes.
+- Location: `src/memos/sharing/`
+- Contains: `engine.py` — `SharingEngine`; `models.py` — `MemoryEnvelope`, `SharePermission`, `ShareRequest`, `ShareScope`, `ShareStatus`
+
+**Web / Dashboard**
+- Purpose: Static HTML dashboard served at `/` by the FastAPI app.
+- Location: `src/memos/web/` — `dashboard.html`, `dashboard.css`, `js/`
+- Served as static files via Starlette `StaticFiles`
 
 ## Data Flow
 
-**Learn Flow (Capture):**
+**Learn (write) path:**
+1. Caller → `MemOS.learn(content, tags, importance, namespace, ...)`
+2. `MemorySanitizer` sanitizes content
+3. `AutoTagger` adds inferred tags
+4. `DedupEngine` checks for near-duplicates before storage
+5. `StorageBackend.upsert(item, namespace=...)` persists the item
+6. `VersioningEngine` records a diff if the item already existed
+7. `EventBus.emit_sync("learned", ...)` fires change notification
+8. Returns the new `MemoryItem`
 
-1. User calls `memos.learn(content, tags, importance)`
-2. MemOS creates MemoryItem (with id, timestamp, metadata)
-3. Sanitizer cleans content if enabled
-4. Item passed to StorageBackend.upsert()
-5. RetrievalEngine.index() pre-computes embedding (cached)
-6. VersioningEngine.record_version() appends to version history
-7. Return item ID to caller
+**Recall (read) path:**
+1. Caller → `MemOS.recall(query, top_k, tags, namespace, retrieval_mode, ...)`
+2. `NamespaceACL.check(agent_id, namespace, "read")` enforces RBAC
+3. `RetrievalEngine.search()` runs hybrid BM25 + semantic scoring against `StorageBackend`
+4. `EmbeddingCache` is consulted before calling Ollama/LocalEmbedder
+5. Results ranked by `ScoreBreakdown` (semantic + keyword + importance + recency + tag bonus)
+6. TTL-expired items filtered out
+7. `MemoryItem.touch()` updates `accessed_at` / `access_count`
+8. `EventBus.emit_sync("recalled", ...)` fires change notification
+9. Returns `list[RecallResult]`
 
-**Recall Flow (Retrieval):**
+**Decay / prune path:**
+1. `MemOS.prune(threshold)` or scheduled cron
+2. `DecayEngine.run_decay(items)` applies exponential decay to `importance` scores
+3. Items below `threshold` and older than `min_age_days` are candidates
+4. `StorageBackend.delete(item_id)` removes pruned items
+5. `EventBus.emit_sync("pruned", ...)` fires notification
 
-1. User calls `memos.recall(query, top=5, tags=[...])`
-2. RetrievalEngine performs hybrid search:
-   a. Encode query to embedding (via Ollama or local embedder)
-   b. Backend.search() returns keyword matches
-   c. Score breakdown: semantic + keyword + importance + recency + tag bonus
-   d. Combine scores (semantic_weight=0.6, keyword_weight=0.4)
-3. Results ranked by combined score
-4. Optional: auto-reinforce top results if decay.auto_reinforce=True
-5. Optional: enrich with KG facts via KGBridge
-6. Return list of RecallResult (item + score + match_reason)
+**Ingest path:**
+1. `memos ingest <file>` or `MemOS.ingest(path)`
+2. `IngestEngine` parses markdown/JSON into chunks
+3. Each chunk passed through the learn path above
 
-**Decay Cycle (Maintenance):**
+## Key Design Decisions
 
-1. User runs `memos decay --dry-run` or `decay --apply`
-2. DecayEngine.run_decay(items) processes all memories:
-   a. Filter by age (skip if < decay_min_age_days)
-   b. Apply formula: `importance *= (1 - rate)^age_days`
-   c. Add access bonus: `+ log(access_count + 1) * access_boost`
-   d. Clamp to importance_floor
-3. Optional: auto-prune if importance < threshold
-4. Write back to storage
-5. Return DecayReport (counts, before/after stats)
+1. **Facade pattern on `MemOS`** — all sub-engines created in `__init__`, never exposed directly. Consumers get a single object with a stable API.
 
-**State Management:**
+2. **`StorageBackend` ABC** — pluggable backends with a uniform interface. Encryption is a transparent decorator (`EncryptedStorageBackend`), not a backend-specific feature.
 
-- **Memories:** Live in StorageBackend; each item has: id, content, tags, importance, timestamps, metadata
-- **Versions:** Parallel VersionStore (in-memory or SQLite) tracks immutable snapshots
-- **KG Facts:** Separate SQLite DB (one global, or per-namespace)
-- **Embedding Cache:** Optional persistent cache in EmbeddingCache, else in-memory
-- **Namespaces:** Query filtering; ACL managed in NamespaceACL
-- **Subscriptions:** Optional event listeners (in-memory queue)
+3. **Optional heavy dependencies** — vector store clients (chromadb, qdrant-client, pinecone-client), sentence-transformers, FastAPI, and pyarrow are all optional extras. The core works with only `httpx`.
 
-## Key Abstractions
+4. **MCP as first-class surface** — the MCP server (`mcp_server.py`) is not just a wrapper; it implements the full MCP 2025-03-26 spec with two transports (stdio + Streamable HTTP) and is mounted directly into the FastAPI app.
 
-**StorageBackend Protocol:**
-- Purpose: Pluggable persistence
-- Examples: `JsonFileBackend`, `ChromaBackend`, `QdrantBackend`, `PineconeBackend`
-- Pattern: All implement `upsert()`, `get()`, `delete()`, `list_all()`, `search()`
+5. **Layered config** — `config.py` merges defaults → `~/.memos.toml` → `MEMOS_*` env vars → CLI args. No global singletons.
 
-**Embedder Protocol:**
-- Purpose: Pluggable semantic encoding
-- Examples: Ollama (HTTP), sentence-transformers (local), ONNX (Chroma built-in)
-- Pattern: Provide `encode(text) -> list[float]` and `model_name` property
+6. **Namespace-scoped operations** — all `StorageBackend` methods accept `namespace="..."`. Multi-agent isolation is a first-class concern, not an afterthought.
 
-**QueryBuilder (`MemoryQuery`):**
-- Purpose: Fluent API for complex recalls with filters
-- Example: `MemoryQuery().content("python").tags(["backend"], require=True).importance_min(0.6).recall(memos)`
-- Pattern: Builder pattern, converts to backend-native filters
-
-**MemoryItem (`models.py`):**
-- Purpose: Single memory unit
-- Attributes: id, content, tags, importance (0.0-1.0), created_at, accessed_at, access_count, ttl, metadata
-- Methods: `touch()` (increment access), `is_expired`, `expires_at`
-
-**RecallResult:**
-- Purpose: Search result with metadata
-- Contains: item (MemoryItem), score (0.0-1.0), match_reason ("semantic"|"keyword"|"recent"|"tag"), score_breakdown (optional)
-- Pattern: Transparent to caller; score_breakdown exposes hybrid scoring
-
-## Entry Points
-
-**CLI Entry Point:**
-- Location: `src/memos/cli/__init__.py` — `main(argv=None)`
-- Triggers: `memos` command or `python -m memos.cli`
-- Responsibilities: Parse args, dispatch to command handlers (learn, recall, decay, etc.), format output
-
-**REST API Entry Point:**
-- Location: `src/memos/api/__init__.py` — `create_fastapi_app(memos=None, **kwargs)`
-- Triggers: Uvicorn server startup (e.g., `memos serve --port 8100`)
-- Responsibilities: Initialize MemOS, wire middleware (auth, rate-limit), include routers
-- Routers mounted at `/api/v1/` and special endpoints (`/mcp`, `/.well-known/mcp.json`, `/dashboard`)
-
-**MCP Server Entry Point:**
-- Location: `src/memos/mcp_server.py` — two modes:
-  - `run_stdio()` for Claude Code local integration
-  - `add_mcp_routes(app, memos)` for HTTP (JSON-RPC 2.0 over FastAPI)
-- Triggers: `memos mcp-stdio` or `POST /mcp` in REST API
-- Responsibilities: Translate MCP calls to MemOS methods, stream responses (SSE for HTTP)
-- Tools exposed: memory_search, memory_save, memory_forget, memory_stats, kg_add_fact, etc.
-
-**Python SDK Entry Point:**
-- Location: `src/memos/__init__.py` exports `MemOS` class
-- Usage: `from memos import MemOS`
-- Initialization: `mem = MemOS(backend="chroma")` with backend selection and config
-- Responsibilities: Orchestrate all subsystems, provide sync API
-
-## Error Handling
-
-**Strategy:** Layered validation with meaningful errors, graceful degradation on embedding service outage.
-
-**Patterns:**
-
-- **Content validation** (MemorySanitizer): Strip HTML, validate length, reject empty content
-- **Backend failures**: If Ollama unreachable, fall back to keyword-only search
-- **Storage errors**: Propagate as ValueError with context, transaction rollback on failure
-- **API layer**: Return JSON error responses with status 400/500 and message
-- **Version conflicts**: On concurrent writes, last-write-wins with version tracking for audit trail
-- **TTL expiry**: Lazily filtered during recall; no cleanup daemon (explicit prune only)
-
-## Cross-Cutting Concerns
-
-**Logging:** Python stdlib logging configured via `src/memos/__init__.py`; loggers named per module.
-
-**Validation:** MemorySanitizer cleans user input; StorageBackend enforces schema (MemoryItem fields); API layer validates JSON schema.
-
-**Authentication:** APIKeyManager in `src/memos/api/auth.py` — optional; supports multiple keys with rate-limiting per key.
-
-**Encryption:** EncryptedStorageBackend wraps any backend; encryption_key passed to MemOS.__init__().
-
-**Rate Limiting:** RateLimiter in `src/memos/api/ratelimit.py` — configurable rules per endpoint; integrated as middleware.
-
-**Namespacing:** All storage operations accept optional `namespace` parameter (scoped queries); NamespaceACL enforces permissions (user-role-namespace mapping).
-
-**Sharing:** ShareEngine in `src/memos/sharing/` — share memories across namespaces via ShareRequest/ShareStatus (pending/accepted/rejected).
-
-**Caching:** EmbeddingCache in `src/memos/cache/` — optional persistent cache for embeddings; avoids re-computing same queries.
-
-**Analytics:** RecallAnalytics tracks recall patterns (frequency, avg score, tag distribution); optional telemetry.
-
-**Subscriptions:** EventBus in `src/memos/events.py` — in-memory pub/sub for learn/forget/decay events; used by live dashboards.
+7. **Sync `MemOS` with async event bus** — `MemOS` methods are synchronous for simplicity. `EventBus.emit_sync()` safely bridges sync code to async WebSocket handlers.
 
 ---
 
-*Architecture analysis: 2026-04-13*
+*Architecture analysis: 2026-04-15*
