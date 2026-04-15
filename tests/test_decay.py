@@ -271,7 +271,6 @@ def test_cli_reinforce(memos_empty: MemOS, capsys):
     import argparse
 
     from memos.cli import cmd_reinforce
-    from memos.cli.commands_memory import _get_memos as _real_get_memos
 
     item = memos_empty.learn("reinforce target", importance=0.5)
     ns = argparse.Namespace(
