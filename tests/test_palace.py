@@ -590,3 +590,234 @@ def test_palace_db_memory_when_kg_is_memory() -> None:
         assert not home_palace_db.exists(), (
             "palace.db was created in ~/.memos/ when kg_db_path=':memory:' — palace should have used ':memory:' too."
         )
+
+
+# ---------------------------------------------------------------------------
+# 10. Diary entries — Task 4.2
+# ---------------------------------------------------------------------------
+
+
+def test_write_diary_returns_id(palace: PalaceIndex) -> None:
+    entry_id = palace.write_diary("hermes", "Deployed v1.2.3 to production.")
+    assert isinstance(entry_id, str)
+    assert entry_id.startswith("diary-hermes-")
+    # ID format: diary-{agent}-{timestamp}-{uuid8}
+    parts = entry_id.split("-")
+    assert len(parts) >= 4
+
+
+def test_write_diary_empty_agent_raises(palace: PalaceIndex) -> None:
+    with pytest.raises(ValueError, match="Agent name cannot be empty"):
+        palace.write_diary("   ", "some content")
+
+
+def test_write_diary_empty_content_raises(palace: PalaceIndex) -> None:
+    with pytest.raises(ValueError, match="Content cannot be empty"):
+        palace.write_diary("hermes", "   ")
+
+
+def test_read_diary_returns_entries(palace: PalaceIndex) -> None:
+    palace.write_diary("hermes", "First entry")
+    palace.write_diary("hermes", "Second entry")
+    entries = palace.read_diary("hermes")
+    assert len(entries) == 2
+    # Newest first
+    assert entries[0]["content"] == "Second entry"
+    assert entries[1]["content"] == "First entry"
+    assert all("id" in e and "content" in e and "timestamp" in e for e in entries)
+
+
+def test_read_diary_respects_limit(palace: PalaceIndex) -> None:
+    for i in range(5):
+        palace.write_diary("hermes", f"Entry {i}")
+    entries = palace.read_diary("hermes", limit=3)
+    assert len(entries) == 3
+
+
+def test_read_diary_agent_isolation(palace: PalaceIndex) -> None:
+    palace.write_diary("hermes", "Hermes entry")
+    palace.write_diary("athena", "Athena entry")
+    hermes_entries = palace.read_diary("hermes")
+    athena_entries = palace.read_diary("athena")
+    assert len(hermes_entries) == 1
+    assert hermes_entries[0]["content"] == "Hermes entry"
+    assert len(athena_entries) == 1
+    assert athena_entries[0]["content"] == "Athena entry"
+
+
+def test_read_diary_empty_agent_raises(palace: PalaceIndex) -> None:
+    with pytest.raises(ValueError, match="Agent name cannot be empty"):
+        palace.read_diary("   ")
+
+
+def test_read_diary_no_entries(palace: PalaceIndex) -> None:
+    entries = palace.read_diary("nonexistent")
+    assert entries == []
+
+
+# ---------------------------------------------------------------------------
+# 11. Agent discovery — Task 4.3
+# ---------------------------------------------------------------------------
+
+
+def test_list_agents_empty(palace: PalaceIndex) -> None:
+    assert palace.list_agents() == []
+
+
+def test_list_agents_no_agent_wings(palace: PalaceIndex) -> None:
+    palace.create_wing("project-alpha")
+    assert palace.list_agents() == []
+
+
+def test_list_agents_finds_agents(palace: PalaceIndex) -> None:
+    palace.create_wing("agent-hermes")
+    palace.create_wing("agent-athena")
+    palace.create_wing("project-alpha")
+    agents = palace.list_agents()
+    names = {a["name"] for a in agents}
+    assert names == {"hermes", "athena"}
+    assert len(agents) == 2
+
+
+def test_list_agents_includes_diary_counts(palace: PalaceIndex) -> None:
+    palace.create_wing("agent-hermes")
+    palace.write_diary("hermes", "Diary entry 1")
+    palace.write_diary("hermes", "Diary entry 2")
+    palace.write_diary("athena", "Other agent diary")
+    agents = palace.list_agents()
+    hermes = next(a for a in agents if a["name"] == "hermes")
+    assert hermes["diary_entries"] == 2
+    assert hermes["wing"]["name"] == "agent-hermes"
+    assert "memory_count" in hermes["stats"]
+    assert "room_count" in hermes["stats"]
+
+
+def test_list_agents_includes_wing_stats(palace: PalaceIndex) -> None:
+    palace.create_wing("agent-hermes")
+    palace.create_room("agent-hermes", "logs")
+    palace.assign("mem-001", "agent-hermes", room_name="logs")
+    agents = palace.list_agents()
+    hermes = agents[0]
+    assert hermes["stats"]["memory_count"] >= 1
+    assert hermes["stats"]["room_count"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# 12. Diary REST endpoints — Task 4.2
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_rest_diary_write() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/palace/diary",
+            json={"agent": "hermes", "content": "REST diary entry"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["agent"] == "hermes"
+        assert "id" in data
+
+
+@pytest.mark.anyio
+async def test_rest_diary_write_missing_fields() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/api/v1/palace/diary", json={"agent": "hermes"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "error"
+
+
+@pytest.mark.anyio
+async def test_rest_diary_read() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Write first
+        await client.post(
+            "/api/v1/palace/diary",
+            json={"agent": "hermes", "content": "Diary for read test"},
+        )
+        # Then read
+        resp = await client.get("/api/v1/palace/diary/hermes")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["agent"] == "hermes"
+        assert data["count"] >= 1
+        assert any(e["content"] == "Diary for read test" for e in data["entries"])
+
+
+@pytest.mark.anyio
+async def test_rest_diary_read_with_limit() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        for i in range(5):
+            await client.post(
+                "/api/v1/palace/diary",
+                json={"agent": "limiter", "content": f"Entry {i}"},
+            )
+        resp = await client.get("/api/v1/palace/diary/limiter?limit=2")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# 13. Agent discovery REST endpoint — Task 4.3
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_rest_list_agents() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Create an agent wing
+        await client.post("/api/v1/palace/wings", json={"name": "agent-hermes"})
+        # Write a diary entry
+        await client.post(
+            "/api/v1/palace/diary",
+            json={"agent": "hermes", "content": "Agent discovery test"},
+        )
+        resp = await client.get("/api/v1/palace/agents")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["total"] >= 1
+        hermes = next(a for a in data["agents"] if a["name"] == "hermes")
+        assert hermes["diary_entries"] == 1
+        assert "wing" in hermes
+        assert "stats" in hermes
+
+
+@pytest.mark.anyio
+async def test_rest_list_agents_empty() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/palace/agents")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["total"] == 0
+        assert data["agents"] == []

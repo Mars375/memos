@@ -356,6 +356,35 @@ TOOLS = [
         "description": "Regenerate the Karpathy-style Living Wiki index.md and return its content.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "diary_write",
+        "description": "Write a diary entry for an agent. Entries are timestamped and stored in the memory palace.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "description": "Agent identifier (e.g. 'hermes')"},
+                "content": {"type": "string", "description": "Diary entry content"},
+            },
+            "required": ["agent", "content"],
+        },
+    },
+    {
+        "name": "diary_read",
+        "description": "Read diary entries for an agent, newest first.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "description": "Agent identifier"},
+                "limit": {"type": "integer", "default": 20, "description": "Maximum entries to return"},
+            },
+            "required": ["agent"],
+        },
+    },
+    {
+        "name": "palace_list_agents",
+        "description": "Discover all agents with agent- wings in the memory palace, including diary entry counts and wing stats.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -529,7 +558,13 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
                 return _text("No entities found (empty graph).")
             lines = [f"Top {len(nodes)} god nodes:"]
             for n in nodes:
-                lines.append(f"  {n['entity']} (degree={n['degree']})")
+                top_preds = ", ".join(n.get("top_predicates", []))
+                lines.append(
+                    f"  {n['entity']} (degree={n['degree']}, "
+                    f"as_subject={n.get('facts_as_subject', 0)}, "
+                    f"as_object={n.get('facts_as_object', 0)}"
+                    f"{', top_predicates=[' + top_preds + ']' if top_preds else ''})"
+                )
             return _text("\n".join(lines))
 
         elif tool == "kg_surprising":
@@ -743,6 +778,52 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             wiki = LivingWikiEngine(memos)
             content = wiki.regenerate_index()
             return _text(content)
+
+        elif tool == "diary_write":
+            from .palace import PalaceIndex
+
+            agent = args.get("agent", "").strip()
+            content = args.get("content", "").strip()
+            if not agent or not content:
+                return _error("agent and content are required")
+            palace = getattr(memos, "_palace", None)
+            if palace is None:
+                return _error("Palace index not available")
+            entry_id = palace.write_diary(agent, content)
+            return _text(f"Diary entry saved [{entry_id}] for agent '{agent}'")
+
+        elif tool == "diary_read":
+            from .palace import PalaceIndex
+
+            agent = args.get("agent", "").strip()
+            if not agent:
+                return _error("agent is required")
+            palace = getattr(memos, "_palace", None)
+            if palace is None:
+                return _error("Palace index not available")
+            limit = int(args.get("limit", 20))
+            entries = palace.read_diary(agent, limit=limit)
+            if not entries:
+                return _text(f"No diary entries found for agent '{agent}'")
+            lines = [f"Diary entries for '{agent}' ({len(entries)}):"]
+            for e in entries:
+                lines.append(f"  [{e['id']}] {e['content']}")
+            return _text("\n".join(lines))
+
+        elif tool == "palace_list_agents":
+            palace = getattr(memos, "_palace", None)
+            if palace is None:
+                return _error("Palace index not available")
+            agents = palace.list_agents()
+            if not agents:
+                return _text("No agents found in palace.")
+            lines = [f"Found {len(agents)} agent(s):"]
+            for a in agents:
+                lines.append(
+                    f"  {a['name']}: {a['diary_entries']} diary entries, "
+                    f"{a['stats']['memory_count']} memories, {a['stats']['room_count']} rooms"
+                )
+            return _text("\n".join(lines))
 
         else:
             return _error(f"Unknown tool: {tool}")

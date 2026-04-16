@@ -80,9 +80,17 @@ class PalaceIndex:
                 assigned_at REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS diary_entries (
+                id        TEXT PRIMARY KEY,
+                agent     TEXT NOT NULL,
+                content   TEXT NOT NULL,
+                timestamp REAL NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_assignments_wing  ON assignments(wing_id);
             CREATE INDEX IF NOT EXISTS idx_assignments_room  ON assignments(room_id);
             CREATE INDEX IF NOT EXISTS idx_rooms_wing        ON rooms(wing_id);
+            CREATE INDEX IF NOT EXISTS idx_diary_agent       ON diary_entries(agent);
             """
         )
         self._conn.commit()
@@ -364,6 +372,89 @@ class PalaceIndex:
     def _get_room_names_for_wing(self, wing_id: str) -> List[str]:
         rows = self._conn.execute("SELECT name FROM rooms WHERE wing_id = ?", (wing_id,)).fetchall()
         return [r["name"] for r in rows]
+
+    # ------------------------------------------------------------------
+    # Diary entries
+    # ------------------------------------------------------------------
+
+    def write_diary(self, agent: str, content: str) -> str:
+        """Write a diary entry for *agent* and return the entry ID.
+
+        Args:
+            agent:   Agent identifier (e.g. "hermes").
+            content: Diary entry content.
+
+        Returns:
+            The generated entry ID.
+        """
+        agent = agent.strip()
+        if not agent:
+            raise ValueError("Agent name cannot be empty")
+        content = content.strip()
+        if not content:
+            raise ValueError("Content cannot be empty")
+        import uuid as _uuid
+
+        entry_id = f"diary-{agent}-{int(time.time())}-{_uuid.uuid4().hex[:8]}"
+        self._conn.execute(
+            "INSERT INTO diary_entries (id, agent, content, timestamp) VALUES (?, ?, ?, ?)",
+            (entry_id, agent, content, time.time()),
+        )
+        self._conn.commit()
+        return entry_id
+
+    def read_diary(self, agent: str, limit: int = 20) -> List[dict]:
+        """Read diary entries for *agent*, newest first.
+
+        Args:
+            agent: Agent identifier.
+            limit: Maximum entries to return.
+
+        Returns:
+            List of dicts with keys {id, content, timestamp}.
+        """
+        agent = agent.strip()
+        if not agent:
+            raise ValueError("Agent name cannot be empty")
+        rows = self._conn.execute(
+            "SELECT id, content, timestamp FROM diary_entries WHERE agent = ? ORDER BY timestamp DESC LIMIT ?",
+            (agent, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Agent discovery
+    # ------------------------------------------------------------------
+
+    def list_agents(self) -> List[dict]:
+        """Discover all agents with ``agent-`` wings and their diary entry counts.
+
+        Returns:
+            List of dicts: ``{name, wing, diary_entries, stats}``.
+            *name* is the agent identifier (wing name minus ``agent-`` prefix).
+            *wing* is the full wing dict.
+            *diary_entries* is the count of diary entries for that agent.
+            *stats* is a dict with ``memory_count`` and ``room_count`` from the wing.
+        """
+        wings = self.list_wings()
+        agent_wings = [w for w in wings if w["name"].startswith("agent-")]
+        results: List[dict] = []
+        for w in agent_wings:
+            agent_name = w["name"][len("agent-"):]
+            diary_count = self._conn.execute(
+                "SELECT COUNT(*) FROM diary_entries WHERE agent = ?",
+                (agent_name,),
+            ).fetchone()[0]
+            results.append({
+                "name": agent_name,
+                "wing": w,
+                "diary_entries": diary_count,
+                "stats": {
+                    "memory_count": w.get("memory_count", 0),
+                    "room_count": w.get("room_count", 0),
+                },
+            })
+        return results
 
     # ------------------------------------------------------------------
     # Lifecycle

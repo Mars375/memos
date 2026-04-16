@@ -334,6 +334,34 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     async def palace_stats_endpoint():
         return {"status": "ok", **_palace.stats()}
 
+    @router.post("/api/v1/palace/diary")
+    async def palace_write_diary(body: dict):
+        """Write a diary entry for an agent."""
+        agent = body.get("agent", "").strip()
+        content = body.get("content", "").strip()
+        if not agent or not content:
+            return {"status": "error", "message": "agent and content are required"}
+        try:
+            entry_id = _palace.write_diary(agent, content)
+            return {"status": "ok", "id": entry_id, "agent": agent}
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @router.get("/api/v1/palace/diary/{agent}")
+    async def palace_read_diary(agent: str, limit: int = 20):
+        """Read diary entries for an agent, newest first."""
+        try:
+            entries = _palace.read_diary(agent, limit=limit)
+            return {"status": "ok", "agent": agent, "entries": entries, "count": len(entries)}
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @router.get("/api/v1/palace/agents")
+    async def palace_list_agents():
+        """Discover all agents with agent- wings in the palace."""
+        agents = _palace.list_agents()
+        return {"status": "ok", "agents": agents, "total": len(agents)}
+
     # ── Context Stack ─────────────────────────────────────────
 
     @router.get("/api/v1/context/wake-up")
