@@ -144,6 +144,33 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
             ],
         }
 
+    @router.get("/api/v1/kg/communities")
+    async def kg_communities(algorithm: str = "louvain"):
+        """Detect entity communities using graph clustering (Louvain)."""
+        try:
+            communities = _kg.detect_communities(algorithm=algorithm)
+            return {"status": "ok", "communities": communities, "total": len(communities)}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @router.get("/api/v1/kg/god-nodes")
+    async def kg_god_nodes(top_k: int = 10):
+        """Return the highest-degree entities in the knowledge graph."""
+        try:
+            nodes = _kg.god_nodes(top_k=top_k)
+            return {"status": "ok", "nodes": nodes, "total": len(nodes)}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
+    @router.get("/api/v1/kg/surprising")
+    async def kg_surprising(top_k: int = 10):
+        """Find edges connecting entities from different communities."""
+        try:
+            connections = _kg.surprising_connections(top_k=top_k)
+            return {"status": "ok", "connections": connections, "total": len(connections)}
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # ── Brain Search ──────────────────────────────────────────
 
     @router.post("/api/v1/brain/search")
@@ -257,11 +284,13 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         return {"status": "ok", "memory_id": memory_id}
 
     @router.get("/api/v1/palace/recall")
-    async def palace_recall_endpoint(query: str, wing: Optional[str] = None, room: Optional[str] = None, top: int = 10):
+    async def palace_recall_endpoint(query: Optional[str] = None, wing: Optional[str] = None, room: Optional[str] = None, top: int = 10):
         from ...palace import PalaceRecall as _PalaceRecall
 
+        # When wing+room are provided, query is optional (use '*' as catch-all)
+        effective_query = query if query else "*"
         pr = _PalaceRecall(_palace)
-        results = pr.palace_recall(memos, query, wing_name=wing, room_name=room, top=top)
+        results = pr.palace_recall(memos, effective_query, wing_name=wing, room_name=room, top=top)
         return {
             "status": "ok",
             "results": [
