@@ -531,4 +531,16 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
+    @router.get("/api/v1/wiki/log")
+    async def wiki_get_log():
+        """Return the wiki activity log (log.md content)."""
+        try:
+            from ...wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            content = wiki.get_log_markdown()
+            return {"status": "ok", "content": content}
+        except Exception as e:
+            return {"status": "error", "error": str(e), "content": ""}
+
     return router

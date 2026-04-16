@@ -351,6 +351,11 @@ TOOLS = [
             "required": ["envelope"],
         },
     },
+    {
+        "name": "wiki_regenerate_index",
+        "description": "Regenerate the Karpathy-style Living Wiki index.md and return its content.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -730,6 +735,13 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text(
                 f"Sync applied ({strategy.value}): {report.applied} applied, {report.skipped} skipped, {len(report.conflicts)} conflicts resolved"
             )
+
+        elif tool == "wiki_regenerate_index":
+            from .wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            content = wiki.regenerate_index()
+            return _text(content)
 
         else:
             return _error(f"Unknown tool: {tool}")

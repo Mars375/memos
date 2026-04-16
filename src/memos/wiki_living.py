@@ -459,7 +459,7 @@ class LivingWikiEngine:
         # Create log.md
         if not self._log_path.exists():
             self._log_path.write_text(
-                "# Living Wiki Activity Log\n\n> Append-only journal of wiki changes.\n\n",
+                "# Wiki Activity Log\n\n> Append-only journal of wiki changes.\n\n",
                 encoding="utf-8",
             )
 
@@ -683,7 +683,11 @@ class LivingWikiEngine:
         # Regenerate index
         self._regenerate_index(db)
         # Append to log.md
-        self._append_log(db, result)
+        self._append_log(
+            "update",
+            f"Created {result.pages_created}, updated {result.pages_updated}, "
+            f"indexed {result.memories_indexed} memories, {result.backlinks_added} backlinks",
+        )
 
         db.commit()
         db.close()
@@ -781,6 +785,11 @@ class LivingWikiEngine:
             db.commit()
             # Regenerate index after single-item update
             self._regenerate_index(db)
+            self._append_log(
+                "update_for_item",
+                f"Created {result.pages_created}, updated {result.pages_updated}, "
+                f"found {result.entities_found} entities",
+            )
         finally:
             db.close()
 
@@ -899,6 +908,12 @@ class LivingWikiEngine:
                     if not has_link:
                         report.missing_backlinks.append((ename, mentioned_name))
 
+        self._append_log(
+            "lint",
+            f"Orphans: {len(report.orphan_pages)}, Empty: {len(report.empty_pages)}, "
+            f"Contradictions: {len(report.contradictions)}, "
+            f"Missing backlinks: {len(report.missing_backlinks)}",
+        )
         db.close()
         return report
 
@@ -1063,23 +1078,35 @@ class LivingWikiEngine:
         self._index_path.write_text(content, encoding="utf-8")
         return content
 
-    def _append_log(self, db: sqlite3.Connection, result: UpdateResult) -> None:
-        """Append update summary to log.md."""
-        ts = time.strftime("%Y-%m-%d %H:%M")
-        entry = (
-            f"\n## {ts} — Update\n\n"
-            f"- Pages created: {result.pages_created}\n"
-            f"- Pages updated: {result.pages_updated}\n"
-            f"- Entities found: {result.entities_found}\n"
-            f"- Memories indexed: {result.memories_indexed}\n"
-            f"- Backlinks added: {result.backlinks_added}\n"
-        )
+    def _append_log(self, action: str, detail: str = "") -> None:
+        """Append chronological entry to log.md.
 
-        current = ""
-        if self._log_path.exists():
+        Format: ``## [YYYY-MM-DD HH:MM] action | detail``
+        Creates log.md with header ``# Wiki Activity Log`` if it does not exist.
+        """
+        ts = time.strftime("%Y-%m-%d %H:%M")
+        entry = f"\n## [{ts}] {action}"
+        if detail:
+            entry += f" | {detail}"
+        entry += "\n"
+
+        if not self._log_path.exists():
+            header = "# Wiki Activity Log\n"
+            self._log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._log_path.write_text(header + entry, encoding="utf-8")
+        else:
             current = self._log_path.read_text(encoding="utf-8")
-        current += entry
-        self._log_path.write_text(current, encoding="utf-8")
+            current += entry
+            self._log_path.write_text(current, encoding="utf-8")
+
+    def get_log_markdown(self) -> str:
+        """Read the log.md file content.
+
+        Returns the header ``# Wiki Activity Log`` if the file does not exist.
+        """
+        if self._log_path.exists():
+            return self._log_path.read_text(encoding="utf-8")
+        return "# Wiki Activity Log\n"
 
     def read_page(self, entity: str) -> Optional[str]:
         """Read a living wiki page by entity name."""
@@ -1235,6 +1262,7 @@ class LivingWikiEngine:
             (entity, entity_type, str(page_path), now, now),
         )
         self._log_action(db, "create", entity, f"Manually created {entity_type} page")
+        self._append_log("create_page", f"Manually created {entity_type} page: {entity}")
         db.commit()
         db.close()
 
