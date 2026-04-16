@@ -35,7 +35,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Server binds to 127.0.0.1 by default; startup logs a warning when no API keys are configured
   4. CORS rejects cross-origin requests from non-localhost origins by default
   5. Pinecone API keys are masked in all log output and error messages
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 01-01-PLAN.md — Fix rate-limiter, simplify hmac, add auth warning (SEC-01, SEC-05, SEC-11)
+- [ ] 01-02-PLAN.md — Wire Pydantic models to all 13 POST endpoints (SEC-02)
+- [ ] 01-03-PLAN.md — Harden binding, CORS, secret masking, sanitization (SEC-06, SEC-07, SEC-09, SEC-10)
 
 ### Phase 2: Crypto and ACL Security
 **Goal**: All data at rest uses battle-tested encryption, and namespace isolation cannot be bypassed
