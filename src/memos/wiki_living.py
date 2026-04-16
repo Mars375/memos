@@ -150,18 +150,33 @@ def extract_entities(text: str) -> List[Tuple[str, str]]:
 
 
 def _frontmatter(meta: Dict[str, Any]) -> str:
-    """Generate YAML frontmatter block."""
-    lines = ["---"]
-    for k, v in meta.items():
-        if isinstance(v, list):
-            lines.append(f"{k}:")
-            for item in v:
-                lines.append(f'  - "{item}"')
-        elif isinstance(v, str):
-            lines.append(f'{k}: "{v}"')
-        else:
-            lines.append(f"{k}: {v}")
-    lines.append("---")
+    """Generate Obsidian-compatible YAML frontmatter block.
+
+    Maps internal meta keys to Obsidian-compatible field names:
+      entity → title, type → type, tags → tags,
+      created → created, updated → updated, memory_count → sources
+    """
+    title = meta.get("entity", meta.get("title", "Untitled"))
+    page_type = meta.get("type", "default")
+    tags_list = meta.get("tags", [])
+    if isinstance(tags_list, list) and tags_list:
+        tags_str = ", ".join(str(t) for t in tags_list)
+    else:
+        tags_str = "auto, entity"
+    created = meta.get("created", time.strftime("%Y-%m-%d"))
+    updated = meta.get("updated", time.strftime("%Y-%m-%d"))
+    sources = meta.get("memory_count", meta.get("sources", 0))
+
+    lines = [
+        "---",
+        f'title: "{title}"',
+        f"type: {page_type}",
+        f"tags: [{tags_str}]",
+        f"created: {created}",
+        f"updated: {updated}",
+        f"sources: {sources}",
+        "---",
+    ]
     return "\n".join(lines)
 
 
@@ -426,6 +441,52 @@ class LivingWikiEngine:
             return stripped[:120]
         return ""
 
+    def _frontmatter(self, page) -> str:
+        """Generate Obsidian-compatible YAML frontmatter for a page object.
+
+        Works with ``LivingPage`` instances or any object exposing
+        ``entity``/``title``, ``entity_type``, ``tags``, ``created_at``/``created``,
+        and ``memory_ids`` attributes.
+        """
+        import datetime
+
+        # Title: prefer .title, fall back to .entity
+        title = getattr(page, "title", None) or getattr(page, "entity", "Untitled")
+
+        # Entity type
+        entity_type = getattr(page, "entity_type", "default")
+
+        # Tags
+        page_tags = getattr(page, "tags", None)
+        if page_tags:
+            tags = ", ".join(str(t) for t in page_tags)
+        else:
+            tags = "auto, entity"
+
+        # Created date
+        created_ts = getattr(page, "created", None) or getattr(page, "created_at", None)
+        if created_ts:
+            created = datetime.datetime.fromtimestamp(created_ts).strftime("%Y-%m-%d")
+        else:
+            created = datetime.datetime.now().strftime("%Y-%m-%d")
+
+        updated = datetime.datetime.now().strftime("%Y-%m-%d")
+
+        # Source count
+        memory_ids = getattr(page, "memory_ids", None)
+        sources = len(memory_ids) if memory_ids else 0
+
+        return (
+            "---\n"
+            f'title: "{title}"\n'
+            f"type: {entity_type}\n"
+            f"tags: [{tags}]\n"
+            f"created: {created}\n"
+            f"updated: {updated}\n"
+            f"sources: {sources}\n"
+            "---\n"
+        )
+
     def _log_action(self, db: sqlite3.Connection, action: str, entity: str = "", detail: str = "") -> None:
         """Log an action to the activity log."""
         db.execute(
@@ -549,15 +610,15 @@ class LivingWikiEngine:
                         existing_content = page_path.read_text(encoding="utf-8")
                         snippet = f"\n## Snippet ({time.strftime('%Y-%m-%d %H:%M')})\n\n> {item.content[:200]}\n"
 
-                        # Update frontmatter count
+                        # Update frontmatter sources count
                         existing_content = re.sub(
-                            r"memory_count: \d+",
-                            lambda m: f"memory_count: {int(m.group().split(': ')[1]) + 1}",
+                            r"sources: \d+",
+                            lambda m: f"sources: {int(m.group().split(': ')[1]) + 1}",
                             existing_content,
                         )
                         existing_content = re.sub(
-                            r'updated: "[^"]*"',
-                            f'updated: "{time.strftime("%Y-%m-%d")}"',
+                            r"updated: \d{4}-\d{2}-\d{2}",
+                            f"updated: {time.strftime('%Y-%m-%d')}",
                             existing_content,
                         )
                         existing_content += snippet
@@ -764,13 +825,13 @@ class LivingWikiEngine:
                         existing_content = page_path.read_text(encoding="utf-8")
                         snippet = f"\n## Snippet ({time.strftime('%Y-%m-%d %H:%M')})\n\n> {item.content[:200]}\n"
                         existing_content = re.sub(
-                            r"memory_count: \d+",
-                            lambda m: f"memory_count: {int(m.group().split(': ')[1]) + 1}",
+                            r"sources: \d+",
+                            lambda m: f"sources: {int(m.group().split(': ')[1]) + 1}",
                             existing_content,
                         )
                         existing_content = re.sub(
-                            r'updated: "[^"]*"',
-                            f'updated: "{time.strftime("%Y-%m-%d")}"',
+                            r"updated: \d{4}-\d{2}-\d{2}",
+                            f"updated: {time.strftime('%Y-%m-%d')}",
                             existing_content,
                         )
                         existing_content += snippet
@@ -848,8 +909,8 @@ class LivingWikiEngine:
 
             # Update the frontmatter updated timestamp
             content = re.sub(
-                r'updated: "[^"]*"',
-                f'updated: "{time.strftime("%Y-%m-%d")}"',
+                r"updated: \d{4}-\d{2}-\d{2}",
+                f"updated: {time.strftime('%Y-%m-%d')}",
                 content,
             )
 
@@ -1331,10 +1392,10 @@ class LivingWikiEngine:
                 # Extract entity from frontmatter or filename
                 entity = page_file.stem.replace("-", " ")
                 etype = "default"
-                fm_match = re.search(r'entity:\s*"([^"]+)"', content)
+                fm_match = re.search(r'title:\s*"([^"]+)"', content)
                 if fm_match:
                     entity = fm_match.group(1)
-                type_match = re.search(r'type:\s*"([^"]+)"', content)
+                type_match = re.search(r"type:\s*(\w+)", content)
                 if type_match:
                     etype = type_match.group(1)
 

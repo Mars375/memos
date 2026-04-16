@@ -337,13 +337,14 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     @router.post("/api/v1/palace/diary")
     async def palace_write_diary(body: dict):
         """Write a diary entry for an agent."""
-        agent = body.get("agent", "").strip()
-        content = body.get("content", "").strip()
+        agent = body.get("agent_name", body.get("agent", "")).strip()
+        content = body.get("entry", body.get("content", "")).strip()
+        tags = body.get("tags")
         if not agent or not content:
-            return {"status": "error", "message": "agent and content are required"}
+            return {"status": "error", "message": "agent_name and entry are required"}
         try:
-            entry_id = _palace.write_diary(agent, content)
-            return {"status": "ok", "id": entry_id, "agent": agent}
+            entry_id = _palace.append_diary(agent, content, tags=tags)
+            return {"status": "ok", "id": entry_id, "agent_name": agent}
         except ValueError as exc:
             return {"status": "error", "message": str(exc)}
 
@@ -352,7 +353,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         """Read diary entries for an agent, newest first."""
         try:
             entries = _palace.read_diary(agent, limit=limit)
-            return {"status": "ok", "agent": agent, "entries": entries, "count": len(entries)}
+            return {"status": "ok", "agent_name": agent, "entries": entries, "count": len(entries)}
         except ValueError as exc:
             return {"status": "error", "message": str(exc)}
 

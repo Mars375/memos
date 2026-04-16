@@ -10,6 +10,7 @@ to reduce semantic noise.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from pathlib import Path
@@ -84,6 +85,7 @@ class PalaceIndex:
                 id        TEXT PRIMARY KEY,
                 agent     TEXT NOT NULL,
                 content   TEXT NOT NULL,
+                tags      TEXT DEFAULT '',
                 timestamp REAL NOT NULL
             );
 
@@ -94,6 +96,12 @@ class PalaceIndex:
             """
         )
         self._conn.commit()
+        # Migration: add 'tags' column if it was not present in older schemas
+        try:
+            self._conn.execute("ALTER TABLE diary_entries ADD COLUMN tags TEXT DEFAULT ''")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # ------------------------------------------------------------------
     # Wings
@@ -377,28 +385,47 @@ class PalaceIndex:
     # Diary entries
     # ------------------------------------------------------------------
 
-    def write_diary(self, agent: str, content: str) -> str:
+    def write_diary(self, agent: str, content: str, tags: Optional[List[str]] = None) -> str:
         """Write a diary entry for *agent* and return the entry ID.
 
         Args:
             agent:   Agent identifier (e.g. "hermes").
             content: Diary entry content.
+            tags:    Optional list of tags.
 
         Returns:
             The generated entry ID.
         """
-        agent = agent.strip()
-        if not agent:
+        return self.append_diary(agent, content, tags=tags)
+
+    def append_diary(self, agent_name: str, entry: str, tags: Optional[List[str]] = None) -> str:
+        """Write a diary entry for *agent_name* and return the entry ID.
+
+        Args:
+            agent_name: Agent identifier (e.g. "hermes").
+            entry:      Diary entry content.
+            tags:       Optional extra tags (``"agent-diary"`` is always prepended).
+
+        Returns:
+            The generated entry ID.
+        """
+        agent_name = agent_name.strip()
+        if not agent_name:
             raise ValueError("Agent name cannot be empty")
-        content = content.strip()
-        if not content:
-            raise ValueError("Content cannot be empty")
+        entry = entry.strip()
+        if not entry:
+            raise ValueError("Entry content cannot be empty")
         import uuid as _uuid
 
-        entry_id = f"diary-{agent}-{int(time.time())}-{_uuid.uuid4().hex[:8]}"
+        all_tags = ["agent-diary"]
+        if tags:
+            all_tags.extend(tags)
+        tags_json = json.dumps(all_tags)
+
+        entry_id = f"diary-{agent_name}-{int(time.time())}-{_uuid.uuid4().hex[:8]}"
         self._conn.execute(
-            "INSERT INTO diary_entries (id, agent, content, timestamp) VALUES (?, ?, ?, ?)",
-            (entry_id, agent, content, time.time()),
+            "INSERT INTO diary_entries (id, agent, content, tags, timestamp) VALUES (?, ?, ?, ?, ?)",
+            (entry_id, agent_name, entry, tags_json, time.time()),
         )
         self._conn.commit()
         return entry_id
@@ -411,16 +438,32 @@ class PalaceIndex:
             limit: Maximum entries to return.
 
         Returns:
-            List of dicts with keys {id, content, timestamp}.
+            List of dicts with keys {id, agent_name, entry, tags, created_at}.
         """
         agent = agent.strip()
         if not agent:
             raise ValueError("Agent name cannot be empty")
         rows = self._conn.execute(
-            "SELECT id, content, timestamp FROM diary_entries WHERE agent = ? ORDER BY timestamp DESC LIMIT ?",
+            "SELECT id, agent, content, tags, timestamp FROM diary_entries WHERE agent = ? ORDER BY timestamp DESC LIMIT ?",
             (agent, limit),
         ).fetchall()
-        return [dict(r) for r in rows]
+        results: List[dict] = []
+        for r in rows:
+            raw_tags = r["tags"] or "[]"
+            try:
+                parsed_tags = json.loads(raw_tags)
+                if not isinstance(parsed_tags, list):
+                    parsed_tags = []
+            except (json.JSONDecodeError, TypeError):
+                parsed_tags = []
+            results.append({
+                "id": r["id"],
+                "agent_name": r["agent"],
+                "entry": r["content"],
+                "tags": parsed_tags,
+                "created_at": r["timestamp"],
+            })
+        return results
 
     # ------------------------------------------------------------------
     # Agent discovery
