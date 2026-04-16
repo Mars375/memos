@@ -230,6 +230,8 @@ class MemOS:
         # Compounding ingest (P8) — auto-update wiki pages on every learn()
         self._compounding_ingest: bool = False
         self._compounding_wiki: Optional[Any] = None
+        self._living_wiki: Optional[Any] = None
+        self._wiki_auto_update: bool = False
 
     def enable_compounding_ingest(self, wiki_dir: Optional[str] = None) -> None:
         """Enable compounding ingest: auto-update wiki pages on every ``learn()`` call.
@@ -246,17 +248,36 @@ class MemOS:
         from .wiki_living import LivingWikiEngine
 
         self._compounding_wiki = LivingWikiEngine(self, wiki_dir=wiki_dir)
+        self._living_wiki = self._compounding_wiki
         self._compounding_ingest = True
+        self._wiki_auto_update = True
 
     def disable_compounding_ingest(self) -> None:
         """Disable compounding ingest."""
         self._compounding_ingest = False
         self._compounding_wiki = None
+        self._living_wiki = None
+        self._wiki_auto_update = False
 
     @property
     def compounding_ingest(self) -> bool:
         """Whether compounding ingest is currently enabled."""
         return self._compounding_ingest
+
+    @property
+    def wiki_auto_update(self) -> bool:
+        """Whether wiki auto-update is enabled on every learn() call."""
+        return self._wiki_auto_update
+
+    @wiki_auto_update.setter
+    def wiki_auto_update(self, value: bool) -> None:
+        """Enable or disable wiki auto-update."""
+        self._wiki_auto_update = value
+
+    @property
+    def living_wiki(self) -> Any:
+        """The LivingWikiEngine instance, or None if not initialized."""
+        return self._living_wiki
 
     @property
     def namespace(self) -> str:
@@ -416,13 +437,13 @@ class MemOS:
             namespace=self._namespace,
         )
 
-        # Compounding ingest (P8): auto-update wiki pages on learn
-        if self._compounding_ingest and self._compounding_wiki is not None:
+        # Auto-update wiki if living wiki is initialized
+        if self._wiki_auto_update and self._living_wiki is not None:
             try:
-                self._compounding_wiki.update_for_item(item)
+                self._living_wiki.update_for_item(item)
             except Exception:
                 logger.warning("Wiki update failed during learn()", exc_info=True)
-                pass  # Never let wiki update break learn()
+                pass  # Wiki update failure should not block learn()
 
         return item
 
