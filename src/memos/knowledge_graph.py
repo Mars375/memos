@@ -85,6 +85,9 @@ class KnowledgeGraph:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._init_schema()
+        # Community detection cache (60 s TTL)
+        self._communities_cache: list[dict] | None = None
+        self._communities_cache_ts: float = 0.0
 
     # ------------------------------------------------------------------
     # Schema
@@ -420,13 +423,18 @@ class KnowledgeGraph:
     def lint(self, min_facts: int = 2) -> dict:
         """Detect knowledge graph quality issues.
 
-        Returns a dict with:
-          - contradictions: list of {subject, predicate, objects} where one
-            subject+predicate points to multiple different objects
+        Returns a structured report dict with:
+          - contradictions: list of {subject, predicate, objects, fact_ids}
+            where one subject+predicate points to multiple different objects
+            (all facts currently valid / not invalidated)
           - orphans: list of entity names that appear in exactly one triple
             (degree == 1, likely dangling references)
           - sparse: list of entity names with fewer than `min_facts` active facts
-          - summary: {contradictions, orphans, sparse, total_entities, active_facts}
+          - suggested_facts: list of {subject, predicate, object, reason, via}
+            for potential new facts inferred from transitive relationships
+            that don't already exist as explicit facts
+          - summary: {contradictions, orphans, sparse, suggested_facts,
+            total_entities, active_facts}
         """
         # Active facts only
         rows = self._conn.execute(
@@ -434,13 +442,21 @@ class KnowledgeGraph:
         ).fetchall()
         facts = [_row_to_dict(r) for r in rows]
 
-        # --- Contradictions: same (subject, predicate) → multiple objects ---
+        # --- Contradictions: same (subject, predicate) → multiple objects,
+        #     all currently valid (no invalidated_at) ---
         sp_to_objects: dict[tuple, set] = defaultdict(set)
+        sp_to_fact_ids: dict[tuple, list[str]] = defaultdict(list)
         for f in facts:
             sp_to_objects[(f["subject"], f["predicate"])].add(f["object"])
+            sp_to_fact_ids[(f["subject"], f["predicate"])].append(f["id"])
 
         contradictions = [
-            {"subject": s, "predicate": p, "objects": sorted(objs)}
+            {
+                "subject": s,
+                "predicate": p,
+                "objects": sorted(objs),
+                "fact_ids": sp_to_fact_ids[(s, p)],
+            }
             for (s, p), objs in sp_to_objects.items()
             if len(objs) > 1
         ]
@@ -458,15 +474,80 @@ class KnowledgeGraph:
             sparse_counts[f["subject"]] += 1
         sparse = sorted(e for e, count in sparse_counts.items() if count < min_facts)
 
+        # --- Suggested new facts based on transitive relationships ---
+        # Build adjacency: predicate → {subject: [objects]}
+        pred_adj: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+        for f in facts:
+            pred_adj[f["predicate"]][f["subject"]].append(f["object"])
+
+        # Existing facts as a set for fast lookup
+        existing_facts: set[tuple[str, str, str]] = set()
+        for f in facts:
+            existing_facts.add((f["subject"], f["predicate"], f["object"]))
+
+        suggested: list[dict] = []
+        seen_suggestions: set[tuple[str, str, str]] = set()
+
+        for predicate, adj in pred_adj.items():
+            # For each predicate, find transitive chains: A→B and B→C suggests A→C
+            for a, b_list in adj.items():
+                for b in b_list:
+                    c_list = adj.get(b, [])
+                    for c in c_list:
+                        if c == a:
+                            continue  # skip self-loops
+                        key = (a, predicate, c)
+                        if key in existing_facts or key in seen_suggestions:
+                            continue
+                        seen_suggestions.add(key)
+                        suggested.append({
+                            "subject": a,
+                            "predicate": predicate,
+                            "object": c,
+                            "reason": "transitive_inference",
+                            "via": [a, b, c],
+                        })
+
+        # Also suggest cross-predicate transitivity for common patterns
+        # e.g., if A "works_at" B and B "located_in" C → suggest A "located_in" C
+        _TRANSITIVE_PAIRS = [
+            ("works_at", "located_in", "located_in"),
+            ("member_of", "part_of", "member_of"),
+            ("owns", "located_in", "located_in"),
+            ("manages", "works_on", "works_on"),
+        ]
+        for pred1, pred2, result_pred in _TRANSITIVE_PAIRS:
+            adj1 = pred_adj.get(pred1, {})
+            adj2 = pred_adj.get(pred2, {})
+            for a, b_list in adj1.items():
+                for b in b_list:
+                    c_list = adj2.get(b, [])
+                    for c in c_list:
+                        if c == a:
+                            continue
+                        key = (a, result_pred, c)
+                        if key in existing_facts or key in seen_suggestions:
+                            continue
+                        seen_suggestions.add(key)
+                        suggested.append({
+                            "subject": a,
+                            "predicate": result_pred,
+                            "object": c,
+                            "reason": "cross_predicate_transitive",
+                            "via": [a, b, c],
+                        })
+
         total_entities = len(degree)
         return {
             "contradictions": contradictions,
             "orphans": orphans,
             "sparse": sparse,
+            "suggested_facts": suggested,
             "summary": {
                 "contradictions": len(contradictions),
                 "orphans": len(orphans),
                 "sparse": len(sparse),
+                "suggested_facts": len(suggested),
                 "total_entities": total_entities,
                 "active_facts": len(facts),
             },
@@ -625,17 +706,34 @@ class KnowledgeGraph:
 
         return paths_found
 
-    def detect_communities(self, algorithm: str = "louvain") -> List[dict]:
-        """Detect entity communities using graph clustering.
+    def detect_communities(self, algorithm: str = "label_propagation") -> List[dict]:
+        """Detect entity communities using label-propagation clustering.
 
-        Builds a DiGraph from active facts, converts to undirected,
-        and runs community detection (Louvain by default).
+        Pure Python implementation — no external dependencies.
+        Builds an undirected adjacency list from all active facts and
+        runs iterative label-propagation: each node adopts the most
+        common label among its neighbours.  Converges in ~10 iterations.
+
+        Results are cached for 60 seconds.
+
+        Args:
+            algorithm: Kept for API compatibility. Only ``"label_propagation"``
+                is supported.
 
         Returns:
             List of community dicts with keys:
-                id, members, size, hub, hub_degree
+                id (str), label (str), nodes (list[str]),
+                size (int), top_entity (str)
         """
-        import networkx as nx
+        # Check cache (60 s TTL)
+        now = time.time()
+        if self._communities_cache is not None and (now - self._communities_cache_ts) < 60:
+            return self._communities_cache
+
+        if algorithm not in ("label_propagation", "louvain"):
+            raise ValueError(
+                f"Unsupported algorithm: {algorithm!r}. Use 'label_propagation'."
+            )
 
         # Fetch all active facts
         rows = self._conn.execute(
@@ -643,41 +741,69 @@ class KnowledgeGraph:
         ).fetchall()
 
         if not rows:
+            self._communities_cache = []
+            self._communities_cache_ts = now
             return []
 
-        # Build directed graph, then convert to undirected
-        G = nx.DiGraph()
+        # Build undirected adjacency list
+        adj: dict[str, set[str]] = defaultdict(set)
+        all_nodes: set[str] = set()
         for r in rows:
-            G.add_edge(r["subject"], r["object"])
-        U = G.to_undirected()
+            s, o = r["subject"], r["object"]
+            all_nodes.add(s)
+            all_nodes.add(o)
+            adj[s].add(o)
+            adj[o].add(s)
 
-        # Run Louvain community detection
-        if algorithm == "louvain":
-            communities_sets = nx.community.louvain_communities(U)
-        else:
-            raise ValueError(f"Unsupported algorithm: {algorithm!r}. Use 'louvain'.")
+        # Initialise labels — each node is its own community
+        labels: dict[str, str] = {node: node for node in all_nodes}
+
+        # Label propagation (deterministic: sorted order, ties broken
+        # lexicographically so that tests are reproducible).
+        node_list = sorted(all_nodes)
+        for _ in range(10):
+            changed = False
+            for node in node_list:
+                neighbours = adj.get(node)
+                if not neighbours:
+                    continue
+                # Tally neighbour labels
+                counts: dict[str, int] = defaultdict(int)
+                for nb in neighbours:
+                    counts[labels[nb]] += 1
+                max_count = max(counts.values())
+                best = min(lab for lab, c in counts.items() if c == max_count)
+                if best != labels[node]:
+                    labels[node] = best
+                    changed = True
+            if not changed:
+                break
+
+        # Group nodes by their final label
+        groups: dict[str, list[str]] = defaultdict(list)
+        for node in all_nodes:
+            groups[labels[node]].append(node)
 
         result: list[dict] = []
-        for idx, members_set in enumerate(communities_sets):
-            members = sorted(members_set)
-            # Find hub: member with highest degree in this community
-            subG = U.subgraph(members_set)
-            degrees = dict(subG.degree())
-            hub = max(degrees, key=degrees.get) if degrees else None
-            hub_degree = degrees.get(hub, 0) if hub else 0
+        for label, members in groups.items():
+            members.sort()
+            # top_entity = highest-degree node in the community
+            top_entity = max(members, key=lambda n: len(adj.get(n, set())))
             result.append({
-                "id": idx,
-                "members": members,
+                "id": "",
+                "label": label,
+                "nodes": members,
                 "size": len(members),
-                "hub": hub,
-                "hub_degree": hub_degree,
+                "top_entity": top_entity,
             })
 
-        # Sort by size descending
+        # Sort by size descending, assign sequential ids
         result.sort(key=lambda c: c["size"], reverse=True)
-        # Re-index after sort
         for i, c in enumerate(result):
-            c["id"] = i
+            c["id"] = str(i)
+
+        self._communities_cache = result
+        self._communities_cache_ts = now
         return result
 
     def god_nodes(self, top_k: int = 10) -> List[dict]:
@@ -726,8 +852,8 @@ class KnowledgeGraph:
         # Build entity → community id map
         entity_to_community: dict[str, int] = {}
         for comm in communities:
-            for member in comm["members"]:
-                entity_to_community[member] = comm["id"]
+            for member in comm["nodes"]:
+                entity_to_community[member] = int(comm["id"])
 
         # Get all active facts
         rows = self._conn.execute(
