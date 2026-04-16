@@ -44,50 +44,83 @@ _FACT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
     # ── Fine-grained SVO patterns (verb-specific) ──────────────────────
-    ("deployed_on", re.compile(
-        rf"{_SUBJ}\s+deployed\s+{_THING_NC}\s+on\s+{_OBJC}",
-        re.I,
-    )),
-    ("uses", re.compile(
-        rf"{_SUBJ}\s+uses?\s+{_OBJC}",
-        re.I,
-    )),
-    ("runs_on", re.compile(
-        rf"{_SUBJ}\s+runs?\s+on\s+{_OBJC}",
-        re.I,
-    )),
-    ("manages", re.compile(
-        rf"{_SUBJ}\s+manages?\s+{_OBJC}",
-        re.I,
-    )),
-    ("depends_on", re.compile(
-        rf"{_SUBJ}\s+depends?\s+on\s+{_OBJC}",
-        re.I,
-    )),
-    ("contains", re.compile(
-        rf"{_SUBJ}\s+contains?\s+{_OBJC}",
-        re.I,
-    )),
-    ("located_in", re.compile(
-        rf"{_SUBJ}\s+(?:is\s+)?located\s+in\s+{_OBJC}",
-        re.I,
-    )),
-    ("part_of", re.compile(
-        rf"{_SUBJ}\s+(?:is\s+)?(?:a\s+)?part\s+of\s+{_OBJC}",
-        re.I,
-    )),
-    ("connected_to", re.compile(
-        rf"{_SUBJ}\s+(?:is\s+)?connected\s+to\s+{_OBJC}",
-        re.I,
-    )),
-    ("built_with", re.compile(
-        rf"{_SUBJ}\s+(?:is\s+|was\s+)?built\s+with\s+{_OBJC}",
-        re.I,
-    )),
-    ("hosts", re.compile(
-        rf"{_SUBJ}\s+hosts?\s+{_OBJC}",
-        re.I,
-    )),
+    (
+        "deployed_on",
+        re.compile(
+            rf"{_SUBJ}\s+deployed\s+{_THING_NC}\s+on\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "uses",
+        re.compile(
+            rf"{_SUBJ}\s+uses?\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "runs_on",
+        re.compile(
+            rf"{_SUBJ}\s+runs?\s+on\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "manages",
+        re.compile(
+            rf"{_SUBJ}\s+manages?\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "depends_on",
+        re.compile(
+            rf"{_SUBJ}\s+depends?\s+on\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "contains",
+        re.compile(
+            rf"{_SUBJ}\s+contains?\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "located_in",
+        re.compile(
+            rf"{_SUBJ}\s+(?:is\s+)?located\s+in\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "part_of",
+        re.compile(
+            rf"{_SUBJ}\s+(?:is\s+)?(?:a\s+)?part\s+of\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "connected_to",
+        re.compile(
+            rf"{_SUBJ}\s+(?:is\s+)?connected\s+to\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "built_with",
+        re.compile(
+            rf"{_SUBJ}\s+(?:is\s+|was\s+)?built\s+with\s+{_OBJC}",
+            re.I,
+        ),
+    ),
+    (
+        "hosts",
+        re.compile(
+            rf"{_SUBJ}\s+hosts?\s+{_OBJC}",
+            re.I,
+        ),
+    ),
     # ── Active verb SVO (broader catch) ────────────────────────────────
     (
         "active_verb",

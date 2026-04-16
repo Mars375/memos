@@ -80,12 +80,8 @@ class TestCrossReferences:
 
         # Check DB backlinks are bidirectional
         db = engine._get_db()
-        ab = db.execute(
-            "SELECT 1 FROM backlinks WHERE source_entity = 'Alice' AND target_entity = 'Bob'"
-        ).fetchone()
-        ba = db.execute(
-            "SELECT 1 FROM backlinks WHERE source_entity = 'Bob' AND target_entity = 'Alice'"
-        ).fetchone()
+        ab = db.execute("SELECT 1 FROM backlinks WHERE source_entity = 'Alice' AND target_entity = 'Bob'").fetchone()
+        ba = db.execute("SELECT 1 FROM backlinks WHERE source_entity = 'Bob' AND target_entity = 'Alice'").fetchone()
         db.close()
         assert ab is not None
         assert ba is not None

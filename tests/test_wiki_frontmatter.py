@@ -15,6 +15,7 @@ from memos.wiki_living import LivingPage, LivingWikiEngine, _frontmatter
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mem():
     m = MemOS()
@@ -31,6 +32,7 @@ def engine(mem, tmp_path):
 # ---------------------------------------------------------------------------
 # Module-level _frontmatter() tests
 # ---------------------------------------------------------------------------
+
 
 class TestModuleFrontmatter:
     """Tests for the module-level _frontmatter(meta) function."""
@@ -109,6 +111,7 @@ class TestModuleFrontmatter:
 # Instance method _frontmatter(self, page) tests
 # ---------------------------------------------------------------------------
 
+
 class TestInstanceFrontmatter:
     """Tests for LivingWikiEngine._frontmatter(self, page) method."""
 
@@ -147,6 +150,7 @@ class TestInstanceFrontmatter:
             entity_type="topic",
             path=Path("/tmp/tagged.md"),
         )
+
         # LivingPage doesn't have a tags field, but let's use a mock-like object
         class TaggedPage:
             entity = "Tagged"
@@ -154,6 +158,7 @@ class TestInstanceFrontmatter:
             tags = ["python", "ml"]
             memory_ids = ["m1"]
             created_at = None
+
         fm = engine._frontmatter(TaggedPage())
         assert "tags: [python, ml]" in fm
         assert "sources: 1" in fm
@@ -182,6 +187,7 @@ class TestInstanceFrontmatter:
 # ---------------------------------------------------------------------------
 # Integration: pages written to disk contain valid frontmatter
 # ---------------------------------------------------------------------------
+
 
 class TestFrontmatterIntegration:
     """Tests that pages written by the engine contain valid Obsidian frontmatter."""

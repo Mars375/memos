@@ -17,6 +17,7 @@ def kg():
 
 # ── Test 1: Empty graph → empty list ────────────────────────────
 
+
 class TestEmptyGraph:
     def test_god_nodes_empty(self, kg: KnowledgeGraph):
         assert kg.god_nodes() == []
@@ -26,6 +27,7 @@ class TestEmptyGraph:
 
 
 # ── Test 2: Correct degree calculation ──────────────────────────
+
 
 class TestDegreeCalculation:
     def test_single_fact(self, kg: KnowledgeGraph):
@@ -80,6 +82,7 @@ class TestDegreeCalculation:
 
 # ── Test 3: top_k parameter ────────────────────────────────────
 
+
 class TestTopK:
     def test_top_k_limits_results(self, kg: KnowledgeGraph):
         for i in range(20):
@@ -110,6 +113,7 @@ class TestTopK:
 
 
 # ── Test 4: top_predicates ─────────────────────────────────────
+
 
 class TestTopPredicates:
     def test_top_predicates_most_common(self, kg: KnowledgeGraph):
@@ -156,6 +160,7 @@ class TestTopPredicates:
 
 
 # ── Test 5: Return structure completeness ───────────────────────
+
 
 class TestReturnStructure:
     def test_all_keys_present(self, kg: KnowledgeGraph):

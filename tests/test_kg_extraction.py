@@ -10,6 +10,7 @@ from memos.kg_bridge import KGBridge
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _extract(text: str) -> list[tuple[str, str, str]]:
     """Shortcut: extract facts from a single string."""
     return KGBridge.extract_facts(text)
@@ -24,6 +25,7 @@ def _first(text: str) -> tuple[str, str, str] | None:
 # ===========================================================================
 # Existing patterns — regression
 # ===========================================================================
+
 
 class TestExistingPatterns:
     """Ensure the original 4 patterns still work after reordering."""
@@ -59,6 +61,7 @@ class TestExistingPatterns:
 # New pattern: active_verb (broader catch for verbs without dedicated patterns)
 # ===========================================================================
 
+
 class TestActiveVerb:
     """X supports/implements/provides/etc Y — broader verb catch."""
 
@@ -80,8 +83,7 @@ class TestActiveVerb:
         assert f[0] == subject
         assert f[2] == object_
         # These verbs are caught by active_verb or fine-grained patterns
-        assert f[1] in ("active_verb", "uses", "manages", "runs_on",
-                        "deployed_on", "hosts", "contains", "depends_on")
+        assert f[1] in ("active_verb", "uses", "manages", "runs_on", "deployed_on", "hosts", "contains", "depends_on")
 
     def test_no_match_for_non_listed_verb(self):
         """A line with none of the listed verbs should NOT match active_verb."""
@@ -93,6 +95,7 @@ class TestActiveVerb:
 # ===========================================================================
 # Fine-grained verb patterns (extracted by opencode run)
 # ===========================================================================
+
 
 class TestFineGrainedVerbs:
     """Dedicated patterns for common verbs: uses, manages, runs_on, etc."""
@@ -174,6 +177,7 @@ class TestFineGrainedVerbs:
 # New pattern: is_type_of
 # ===========================================================================
 
+
 class TestIsTypeOf:
     """X is a/an TYPE of Y"""
 
@@ -211,6 +215,7 @@ class TestIsTypeOf:
 # New pattern: located
 # ===========================================================================
 
+
 class TestLocated:
     """X is located/running/hosted on/in Y"""
 
@@ -241,6 +246,7 @@ class TestLocated:
 # ===========================================================================
 # New pattern: version
 # ===========================================================================
+
 
 class TestVersion:
     """X version N"""
@@ -273,6 +279,7 @@ class TestVersion:
 # New pattern: general_svo (fallback)
 # ===========================================================================
 
+
 class TestGeneralSVO:
     """Capitalized + verb-ed + Capitalized fallback."""
 
@@ -303,6 +310,7 @@ class TestGeneralSVO:
 # New pattern: located_in (fine-grained)
 # ===========================================================================
 
+
 class TestLocatedIn:
     """X located in Y (with optional 'is')."""
 
@@ -326,14 +334,12 @@ class TestLocatedIn:
 # Multi-line / multi-fact extraction
 # ===========================================================================
 
+
 class TestMultiFact:
     """Multiple facts across multiple lines."""
 
     def test_two_different_patterns(self):
-        text = (
-            "Kubernetes manages Pods\n"
-            "Redis is located on AWS\n"
-        )
+        text = "Kubernetes manages Pods\nRedis is located on AWS\n"
         facts = _extract(text)
         predicates = {f[1] for f in facts}
         assert "manages" in predicates
@@ -354,21 +360,14 @@ class TestMultiFact:
         assert facts[0][1] == "version"
 
     def test_arrow_and_version(self):
-        text = (
-            "Python version 3.12\n"
-            "FastAPI → Django\n"
-        )
+        text = "Python version 3.12\nFastAPI → Django\n"
         facts = _extract(text)
         assert len(facts) == 2
         predicates = {f[1] for f in facts}
         assert predicates == {"version", "arrow"}
 
     def test_three_lines_three_facts(self):
-        text = (
-            "Prometheus monitors Grafana\n"
-            "PostgreSQL version 15.4\n"
-            "Backend built with Rust\n"
-        )
+        text = "Prometheus monitors Grafana\nPostgreSQL version 15.4\nBackend built with Rust\n"
         facts = _extract(text)
         assert len(facts) == 3
         predicates = {f[1] for f in facts}

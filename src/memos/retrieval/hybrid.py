@@ -250,9 +250,7 @@ class HybridRetriever:
             "and candidate documents, return a ranked list of document indices "
             "(most relevant first) as a JSON array of integers.\n\n"
             f"Query: {query}\n\n"
-            "Candidates:\n"
-            + "\n".join(summaries)
-            + "\n\nReturn ONLY a JSON array of integers, e.g. [2, 0, 3, 1]."
+            "Candidates:\n" + "\n".join(summaries) + "\n\nReturn ONLY a JSON array of integers, e.g. [2, 0, 3, 1]."
         )
 
         try:

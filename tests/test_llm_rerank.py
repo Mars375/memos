@@ -115,9 +115,7 @@ def test_llm_rerank_failing_llm_falls_back() -> None:
     retriever = HybridRetriever()
     candidates = [_make_candidate(i, f"doc {i}") for i in range(3)]
 
-    result = retriever.llm_rerank(
-        "query", candidates, top_k=3, llm_client=FailingLLMClient()
-    )
+    result = retriever.llm_rerank("query", candidates, top_k=3, llm_client=FailingLLMClient())
 
     # Should fall back to original order
     assert len(result) == 3
@@ -152,16 +150,12 @@ def test_parse_llm_ordering_json_array() -> None:
 
 
 def test_parse_llm_ordering_json_in_text() -> None:
-    result = HybridRetriever._parse_llm_ordering(
-        "Here is my ranking: [1, 3, 0, 2] for the query.", max_idx=4
-    )
+    result = HybridRetriever._parse_llm_ordering("Here is my ranking: [1, 3, 0, 2] for the query.", max_idx=4)
     assert result == [1, 3, 0, 2]
 
 
 def test_parse_llm_ordering_fallback_integers() -> None:
-    result = HybridRetriever._parse_llm_ordering(
-        "2 0 3 1", max_idx=4
-    )
+    result = HybridRetriever._parse_llm_ordering("2 0 3 1", max_idx=4)
     assert result == [2, 0, 3, 1]
 
 

@@ -79,8 +79,16 @@ class TestDetectCommunities:
         assert len(all_nodes) == len(unique)
         # All expected entities present
         expected = {
-            "Alice", "Bob", "Carol", "ProjectX", "ProjectY",
-            "Infrastructure", "Dave", "Eve", "Frank", "ProjectZ",
+            "Alice",
+            "Bob",
+            "Carol",
+            "ProjectX",
+            "ProjectY",
+            "Infrastructure",
+            "Dave",
+            "Eve",
+            "Frank",
+            "ProjectZ",
         }
         assert unique == expected
 
@@ -209,8 +217,7 @@ class TestSurprisingConnections:
             assert subj_comm is not None
             assert obj_comm is not None
             assert subj_comm != obj_comm, (
-                f"Expected cross-community but both in community {subj_comm}: "
-                f"{c['subject']} -> {c['object']}"
+                f"Expected cross-community but both in community {subj_comm}: {c['subject']} -> {c['object']}"
             )
 
     def test_sorted_by_surprise_score_descending(self, kg):
@@ -244,8 +251,6 @@ class TestSurprisingConnections:
         connections = kg.surprising_connections()
         # cross-community edge endpoints
         # Dave should appear as a subject in some cross-community edges
-        dave_edges = [
-            c for c in connections if c["subject"] == "Dave" or c["object"] == "Dave"
-        ]
+        dave_edges = [c for c in connections if c["subject"] == "Dave" or c["object"] == "Dave"]
         # Dave has two facts that may be cross-community
         assert len(dave_edges) >= 1

@@ -89,8 +89,7 @@ class TestSuggestedFactsTransitive:
         report = kg.lint()
 
         # No same-predicate transitive suggestion for these different predicates
-        same_pred = [s for s in report["suggested_facts"]
-                     if s["predicate"] == "works_at" and s["object"] == "SF"]
+        same_pred = [s for s in report["suggested_facts"] if s["predicate"] == "works_at" and s["object"] == "SF"]
         # works_at doesn't chain with itself here
         assert len(same_pred) == 0
 
@@ -102,9 +101,11 @@ class TestSuggestedFactsCrossPredicate:
         kg.add_fact("OpenAI", "located_in", "SF")
         report = kg.lint()
 
-        cross = [s for s in report["suggested_facts"]
-                 if s["reason"] == "cross_predicate_transitive"
-                 and s["subject"] == "Alice" and s["object"] == "SF"]
+        cross = [
+            s
+            for s in report["suggested_facts"]
+            if s["reason"] == "cross_predicate_transitive" and s["subject"] == "Alice" and s["object"] == "SF"
+        ]
         assert len(cross) == 1
         assert cross[0]["predicate"] == "located_in"
         assert cross[0]["via"] == ["Alice", "OpenAI", "SF"]
@@ -116,8 +117,7 @@ class TestSuggestedFactsCrossPredicate:
         kg.add_fact("Alice", "located_in", "SF")  # already exists
         report = kg.lint()
 
-        cross = [s for s in report["suggested_facts"]
-                 if s["subject"] == "Alice" and s["predicate"] == "located_in"]
+        cross = [s for s in report["suggested_facts"] if s["subject"] == "Alice" and s["predicate"] == "located_in"]
         assert len(cross) == 0
 
 

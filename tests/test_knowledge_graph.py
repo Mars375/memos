@@ -71,9 +71,15 @@ class TestDetectCommunitiesThreeComponents:
 
         # All 9 entities should be covered
         assert all_nodes == {
-            "alice", "bob", "carol",
-            "dave", "eve",
-            "frank", "grace", "heidi", "ivan",
+            "alice",
+            "bob",
+            "carol",
+            "dave",
+            "eve",
+            "frank",
+            "grace",
+            "heidi",
+            "ivan",
         }
 
     def test_components_have_correct_sizes(self, kg):
@@ -114,7 +120,7 @@ class TestLabelPropagationConvergence:
         """A clique converges to a single community."""
         entities = ["alpha", "beta", "gamma", "delta"]
         for i, s in enumerate(entities):
-            for o in entities[i + 1:]:
+            for o in entities[i + 1 :]:
                 kg.add_fact(s, "linked", o)
 
         communities = kg.detect_communities()

@@ -1117,9 +1117,7 @@ class LivingWikiEngine:
 
             # -- Orphan: no inbound links from other pages --
             if not inbound.get(ename):
-                issues.append(
-                    {"type": "orphan", "severity": "warning", "page": ename, "detail": "No inbound links"}
-                )
+                issues.append({"type": "orphan", "severity": "warning", "page": ename, "detail": "No inbound links"})
 
             # -- Empty: page file is mostly template --
             if page_path.exists():
@@ -1146,9 +1144,7 @@ class LivingWikiEngine:
                         {"type": "empty", "severity": "warning", "page": ename, "detail": "Page has no real content"}
                     )
             else:
-                issues.append(
-                    {"type": "empty", "severity": "warning", "page": ename, "detail": "Page file missing"}
-                )
+                issues.append({"type": "empty", "severity": "warning", "page": ename, "detail": "Page file missing"})
 
             # -- Stale: not updated in 30 days --
             if edata["updated_at"] and (now - edata["updated_at"]) > thirty_days:
@@ -1279,15 +1275,11 @@ class LivingWikiEngine:
         now_fmt = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
 
         # ── Gather data ──────────────────────────────────────────
-        entities = db.execute(
-            "SELECT name, entity_type, page_path, created_at, updated_at FROM entities"
-        ).fetchall()
+        entities = db.execute("SELECT name, entity_type, page_path, created_at, updated_at FROM entities").fetchall()
 
         # Count backlinks per entity (incoming links = relevance signal)
         backlink_counts: Dict[str, int] = {}
-        for row in db.execute(
-            "SELECT target_entity, COUNT(*) as cnt FROM backlinks GROUP BY target_entity"
-        ).fetchall():
+        for row in db.execute("SELECT target_entity, COUNT(*) as cnt FROM backlinks GROUP BY target_entity").fetchall():
             backlink_counts[row["target_entity"]] = row["cnt"]
 
         # Count memory sources per entity
@@ -1358,9 +1350,7 @@ class LivingWikiEngine:
         lines.append("")
 
         # ── Recent Changes Section ────────────────────────────────
-        recent = db.execute(
-            "SELECT ts, action, entity, detail FROM activity_log ORDER BY id DESC LIMIT 10"
-        ).fetchall()
+        recent = db.execute("SELECT ts, action, entity, detail FROM activity_log ORDER BY id DESC LIMIT 10").fetchall()
         if recent:
             lines.append("## 🕐 Recent Changes\n")
             lines.append("")
@@ -1383,9 +1373,13 @@ class LivingWikiEngine:
             for item in items:
                 slug = self._safe_slug(item["name"])
                 summary = self._get_page_summary(item["name"])
-                created_date = time.strftime("%Y-%m-%d", time.localtime(item["created_at"])) if item["created_at"] else "N/A"
+                created_date = (
+                    time.strftime("%Y-%m-%d", time.localtime(item["created_at"])) if item["created_at"] else "N/A"
+                )
                 src_count = source_counts.get(item["name"], 0)
-                updated_date = time.strftime("%Y-%m-%d", time.localtime(item["updated_at"])) if item["updated_at"] else "N/A"
+                updated_date = (
+                    time.strftime("%Y-%m-%d", time.localtime(item["updated_at"])) if item["updated_at"] else "N/A"
+                )
 
                 # Freshness indicator
                 age = ""

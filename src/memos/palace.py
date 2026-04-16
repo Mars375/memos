@@ -456,13 +456,15 @@ class PalaceIndex:
                     parsed_tags = []
             except (json.JSONDecodeError, TypeError):
                 parsed_tags = []
-            results.append({
-                "id": r["id"],
-                "agent_name": r["agent"],
-                "entry": r["content"],
-                "tags": parsed_tags,
-                "created_at": r["timestamp"],
-            })
+            results.append(
+                {
+                    "id": r["id"],
+                    "agent_name": r["agent"],
+                    "entry": r["content"],
+                    "tags": parsed_tags,
+                    "created_at": r["timestamp"],
+                }
+            )
         return results
 
     # ------------------------------------------------------------------
@@ -483,20 +485,22 @@ class PalaceIndex:
         agent_wings = [w for w in wings if w["name"].startswith("agent-")]
         results: List[dict] = []
         for w in agent_wings:
-            agent_name = w["name"][len("agent-"):]
+            agent_name = w["name"][len("agent-") :]
             diary_count = self._conn.execute(
                 "SELECT COUNT(*) FROM diary_entries WHERE agent = ?",
                 (agent_name,),
             ).fetchone()[0]
-            results.append({
-                "name": agent_name,
-                "wing": w,
-                "diary_entries": diary_count,
-                "stats": {
-                    "memory_count": w.get("memory_count", 0),
-                    "room_count": w.get("room_count", 0),
-                },
-            })
+            results.append(
+                {
+                    "name": agent_name,
+                    "wing": w,
+                    "diary_entries": diary_count,
+                    "stats": {
+                        "memory_count": w.get("memory_count", 0),
+                        "room_count": w.get("room_count", 0),
+                    },
+                }
+            )
         return results
 
     # ------------------------------------------------------------------
@@ -549,7 +553,7 @@ class PalaceIndex:
         results: List[dict] = []
         for w in rows:
             wing_id = w["id"]
-            agent_name = w["name"][len("agent:"):]
+            agent_name = w["name"][len("agent:") :]
             # Find the diary room id for this wing
             diary_room_row = self._conn.execute(
                 "SELECT id FROM rooms WHERE wing_id = ? AND name = 'diary'",
@@ -567,12 +571,14 @@ class PalaceIndex:
                 (wing_id,),
             ).fetchone()
             last_activity = last_activity_row[0] if last_activity_row else None
-            results.append({
-                "name": agent_name,
-                "wing_id": wing_id,
-                "diary_count": diary_count,
-                "last_activity": last_activity,
-            })
+            results.append(
+                {
+                    "name": agent_name,
+                    "wing_id": wing_id,
+                    "diary_count": diary_count,
+                    "last_activity": last_activity,
+                }
+            )
         return results
 
     # ------------------------------------------------------------------

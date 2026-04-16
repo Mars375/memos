@@ -354,7 +354,9 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         return {"status": "ok", "memory_id": memory_id}
 
     @router.get("/api/v1/palace/recall")
-    async def palace_recall_endpoint(query: Optional[str] = None, wing: Optional[str] = None, room: Optional[str] = None, top: int = 10):
+    async def palace_recall_endpoint(
+        query: Optional[str] = None, wing: Optional[str] = None, room: Optional[str] = None, top: int = 10
+    ):
         from ...palace import PalaceRecall as _PalaceRecall
 
         # When wing+room are provided, query is optional (use '*' as catch-all)

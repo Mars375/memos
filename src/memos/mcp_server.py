@@ -831,7 +831,6 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text("\n".join(lines))
 
         elif tool == "diary_write":
-
             agent = args.get("agent", "").strip()
             content = args.get("content", "").strip()
             if not agent or not content:
@@ -843,7 +842,6 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text(f"Diary entry saved [{entry_id}] for agent '{agent}'")
 
         elif tool == "diary_read":
-
             agent = args.get("agent", "").strip()
             if not agent:
                 return _error("agent is required")
@@ -899,10 +897,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             lines = [f"Found {len(agents)} agent(s):"]
             for a in agents:
                 activity = f", last_activity={a['last_activity']}" if a.get("last_activity") else ""
-                lines.append(
-                    f"  {a['name']}: wing_id={a['wing_id']}, "
-                    f"diary_count={a['diary_count']}{activity}"
-                )
+                lines.append(f"  {a['name']}: wing_id={a['wing_id']}, diary_count={a['diary_count']}{activity}")
             return _text("\n".join(lines))
 
         else:

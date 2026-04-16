@@ -151,9 +151,7 @@ def test_brain_search_with_analytics_boost(tmp_path) -> None:
     # Should return memories (at least one)
     assert len(result.memories) >= 1
     # The python memory should be boosted
-    python_mem = next(
-        (m for m in result.memories if "Python" in m.content), None
-    )
+    python_mem = next((m for m in result.memories if "Python" in m.content), None)
     assert python_mem is not None
 
 

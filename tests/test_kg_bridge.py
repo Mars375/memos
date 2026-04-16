@@ -8,6 +8,7 @@ from memos.kg_bridge import KGBridge
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _extract(text: str) -> list[tuple[str, str, str]]:
     """Run extract_facts on a single-line string and return all triples."""
     return KGBridge.extract_facts(text)
@@ -23,13 +24,14 @@ def _first(text: str) -> tuple[str, str, str] | None:
 # New fine-grained SVO patterns
 # ===========================================================================
 
+
 class TestDeployedOn:
     def test_basic(self) -> None:
         f = _first("Loïc deployed MemOS on Cortex")
         assert f is not None
-        assert f[0] == "Loïc"           # subject
-        assert "deploy" in f[1]          # predicate
-        assert "Cortex" in f[2]          # object includes destination
+        assert f[0] == "Loïc"  # subject
+        assert "deploy" in f[1]  # predicate
+        assert "Cortex" in f[2]  # object includes destination
 
     def test_three_part(self) -> None:
         f = _first("Alice deployed MyApp on Kubernetes")
@@ -175,6 +177,7 @@ class TestHosts:
 # General SVO fallback
 # ===========================================================================
 
+
 class TestGeneralSVOfallback:
     def test_unknown_past_verb(self) -> None:
         f = _first("Alice discovered MemOS")
@@ -194,6 +197,7 @@ class TestGeneralSVOfallback:
 # Active verb catch-all (broader pattern for verbs without own entry)
 # ===========================================================================
 
+
 class TestActiveVerb:
     def test_supports(self) -> None:
         f = _first("MemOS supports Plugins")
@@ -211,6 +215,7 @@ class TestActiveVerb:
 # ===========================================================================
 # Task-required specific test case
 # ===========================================================================
+
 
 class TestDeployedOnCortex:
     """Test that 'Loïc deployed MemOS on Cortex' extracts correctly."""
@@ -244,6 +249,7 @@ class TestDeployedOnCortex:
 # ===========================================================================
 # Backward compatibility — existing patterns still work
 # ===========================================================================
+
 
 class TestBackwardCompat:
     def test_is(self) -> None:
@@ -295,6 +301,7 @@ class TestBackwardCompat:
 # ===========================================================================
 # Edge cases
 # ===========================================================================
+
 
 class TestEdgeCases:
     def test_multiline_extracts_per_line(self) -> None:

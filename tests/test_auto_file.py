@@ -25,8 +25,7 @@ def brain_env(tmp_path: Path):
         tags=["people", "memos"],
     )
     memos.learn(
-        "Bob collaborates with Alice on graph search algorithms. "
-        "Together they built the hybrid retrieval engine.",
+        "Bob collaborates with Alice on graph search algorithms. Together they built the hybrid retrieval engine.",
         tags=["people", "graph"],
     )
 

@@ -278,9 +278,7 @@ class BrainSearch:
             return []
 
         # Get all active facts
-        rows = self._kg._conn.execute(
-            "SELECT * FROM triples WHERE invalidated_at IS NULL"
-        ).fetchall()
+        rows = self._kg._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL").fetchall()
 
         # Compute predicate degree (how many facts use each predicate)
         predicate_degree: dict[str, int] = {}
@@ -309,14 +307,16 @@ class BrainSearch:
                 f"Cross-domain link: {subject} in community {subj_comm} "
                 f"is connected to {obj} in community {obj_comm} via {pred}"
             )
-            results.append({
-                "subject": subject,
-                "object": obj,
-                "predicate": pred,
-                "confidence": confidence,
-                "score": score,
-                "reason": reason,
-            })
+            results.append(
+                {
+                    "subject": subject,
+                    "object": obj,
+                    "predicate": pred,
+                    "confidence": confidence,
+                    "score": score,
+                    "reason": reason,
+                }
+            )
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_n]
@@ -380,9 +380,7 @@ class BrainSearch:
             for j in range(i + 1, len(top3)):
                 e1 = top3[i]["entity"]
                 e2 = top3[j]["entity"]
-                score = round(
-                    0.5 * (top3[i]["degree"] / max_degree + top3[j]["degree"] / max_degree), 4
-                )
+                score = round(0.5 * (top3[i]["degree"] / max_degree + top3[j]["degree"] / max_degree), 4)
                 _add(
                     f"What is the relationship between {e1} and {e2}?",
                     "god_node_relationship",
@@ -437,9 +435,7 @@ class BrainSearch:
             return []
 
         # Count facts per entity
-        rows = self._kg._conn.execute(
-            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
-        ).fetchall()
+        rows = self._kg._conn.execute("SELECT subject, object FROM triples WHERE invalidated_at IS NULL").fetchall()
         fact_count: dict[str, int] = {}
         for r in rows:
             fact_count[r["subject"]] = fact_count.get(r["subject"], 0) + 1
@@ -456,9 +452,7 @@ class BrainSearch:
 
     def _find_orphan_entities(self) -> list[str]:
         """Find entities that appear in only a single KG fact (degree == 1)."""
-        rows = self._kg._conn.execute(
-            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
-        ).fetchall()
+        rows = self._kg._conn.execute("SELECT subject, object FROM triples WHERE invalidated_at IS NULL").fetchall()
 
         degree: dict[str, int] = {}
         for r in rows:

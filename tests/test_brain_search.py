@@ -704,4 +704,3 @@ async def test_brain_suggestions_api_n_param(brain_env):
     data = response.json()
     assert data["status"] == "ok"
     assert len(data["questions"]) <= 2
-

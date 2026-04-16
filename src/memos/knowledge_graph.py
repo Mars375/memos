@@ -500,13 +500,15 @@ class KnowledgeGraph:
                         if key in existing_facts or key in seen_suggestions:
                             continue
                         seen_suggestions.add(key)
-                        suggested.append({
-                            "subject": a,
-                            "predicate": predicate,
-                            "object": c,
-                            "reason": "transitive_inference",
-                            "via": [a, b, c],
-                        })
+                        suggested.append(
+                            {
+                                "subject": a,
+                                "predicate": predicate,
+                                "object": c,
+                                "reason": "transitive_inference",
+                                "via": [a, b, c],
+                            }
+                        )
 
         # Also suggest cross-predicate transitivity for common patterns
         # e.g., if A "works_at" B and B "located_in" C → suggest A "located_in" C
@@ -529,13 +531,15 @@ class KnowledgeGraph:
                         if key in existing_facts or key in seen_suggestions:
                             continue
                         seen_suggestions.add(key)
-                        suggested.append({
-                            "subject": a,
-                            "predicate": result_pred,
-                            "object": c,
-                            "reason": "cross_predicate_transitive",
-                            "via": [a, b, c],
-                        })
+                        suggested.append(
+                            {
+                                "subject": a,
+                                "predicate": result_pred,
+                                "object": c,
+                                "reason": "cross_predicate_transitive",
+                                "via": [a, b, c],
+                            }
+                        )
 
         total_entities = len(degree)
         return {
@@ -731,14 +735,10 @@ class KnowledgeGraph:
             return self._communities_cache
 
         if algorithm not in ("label_propagation", "louvain"):
-            raise ValueError(
-                f"Unsupported algorithm: {algorithm!r}. Use 'label_propagation'."
-            )
+            raise ValueError(f"Unsupported algorithm: {algorithm!r}. Use 'label_propagation'.")
 
         # Fetch all active facts
-        rows = self._conn.execute(
-            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
-        ).fetchall()
+        rows = self._conn.execute("SELECT subject, object FROM triples WHERE invalidated_at IS NULL").fetchall()
 
         if not rows:
             self._communities_cache = []
@@ -789,13 +789,15 @@ class KnowledgeGraph:
             members.sort()
             # top_entity = highest-degree node in the community
             top_entity = max(members, key=lambda n: len(adj.get(n, set())))
-            result.append({
-                "id": "",
-                "label": label,
-                "nodes": members,
-                "size": len(members),
-                "top_entity": top_entity,
-            })
+            result.append(
+                {
+                    "id": "",
+                    "label": label,
+                    "nodes": members,
+                    "size": len(members),
+                    "top_entity": top_entity,
+                }
+            )
 
         # Sort by size descending, assign sequential ids
         result.sort(key=lambda c: c["size"], reverse=True)
@@ -847,13 +849,15 @@ class KnowledgeGraph:
             f_obj = object_count.get(entity, 0)
             preds = predicate_counts.get(entity, {})
             top_3 = [p for p, _ in sorted(preds.items(), key=lambda x: x[1], reverse=True)][:3]
-            result.append({
-                "entity": entity,
-                "degree": deg,
-                "facts_as_subject": f_subj,
-                "facts_as_object": f_obj,
-                "top_predicates": top_3,
-            })
+            result.append(
+                {
+                    "entity": entity,
+                    "degree": deg,
+                    "facts_as_subject": f_subj,
+                    "facts_as_object": f_obj,
+                    "top_predicates": top_3,
+                }
+            )
         return result
 
     def surprising_connections(self, top_k: int = 10) -> List[dict]:
@@ -882,9 +886,7 @@ class KnowledgeGraph:
                 entity_to_community[member] = int(comm["id"])
 
         # Get all active facts
-        rows = self._conn.execute(
-            "SELECT * FROM triples WHERE invalidated_at IS NULL"
-        ).fetchall()
+        rows = self._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL").fetchall()
         facts = [_row_to_dict(r) for r in rows]
 
         # Compute degree map for scoring
@@ -910,14 +912,16 @@ class KnowledgeGraph:
                     f"'{f['subject']}' (community {subj_comm}) → "
                     f"'{f['object']}' (community {obj_comm})"
                 )
-                surprising.append({
-                    "id": f["id"],
-                    "subject": f["subject"],
-                    "predicate": f["predicate"],
-                    "object": f["object"],
-                    "surprise_score": surprise_score,
-                    "reason": reason,
-                })
+                surprising.append(
+                    {
+                        "id": f["id"],
+                        "subject": f["subject"],
+                        "predicate": f["predicate"],
+                        "object": f["object"],
+                        "surprise_score": surprise_score,
+                        "reason": reason,
+                    }
+                )
 
         # Sort by surprise_score descending
         surprising.sort(key=lambda x: x["surprise_score"], reverse=True)
