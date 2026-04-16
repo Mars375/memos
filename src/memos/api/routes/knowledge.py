@@ -145,8 +145,8 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         }
 
     @router.get("/api/v1/kg/communities")
-    async def kg_communities(algorithm: str = "louvain"):
-        """Detect entity communities using graph clustering (Louvain)."""
+    async def kg_communities(algorithm: str = "label_propagation"):
+        """Detect entity communities using label-propagation clustering."""
         try:
             communities = _kg.detect_communities(algorithm=algorithm)
             return {"status": "ok", "communities": communities, "total": len(communities)}
@@ -190,6 +190,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
                 min_score=float(body.get("min_score", 0.0)),
                 retrieval_mode=body.get("retrieval_mode", "hybrid"),
                 max_context_chars=int(body.get("max_context_chars", 2000)),
+                auto_file=bool(body.get("auto_file", False)),
             )
             payload = result.to_dict()
             payload["status"] = "ok"

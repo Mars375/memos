@@ -157,6 +157,7 @@ class BrainSearch:
         min_score: float = 0.0,
         retrieval_mode: str = "hybrid",
         max_context_chars: int = 2000,
+        auto_file: bool = False,
     ) -> BrainSearchResult:
         memories_raw = list(
             self._memos.recall(
@@ -179,7 +180,7 @@ class BrainSearch:
             kg_facts=kg_facts,
             max_chars=max_context_chars,
         )
-        return BrainSearchResult(
+        result = BrainSearchResult(
             query=query,
             memories=memories[:top_k],
             wiki_pages=wiki_pages[:top_k],
@@ -187,6 +188,12 @@ class BrainSearch:
             entities=entities,
             context=context,
         )
+
+        # Auto-file: if the answer is substantial, create a wiki page
+        if auto_file and len(context) > 200:
+            self._auto_file_wiki(query, result)
+
+        return result
 
     def entity_detail(
         self,
@@ -668,3 +675,68 @@ class BrainSearch:
         start = max(0, idx - window)
         end = min(len(content), idx + len(query) + window)
         return content[start:end].replace("\n", " ").strip()
+
+    def _auto_file_wiki(self, query: str, result: BrainSearchResult) -> str | None:
+        """Auto-create a wiki page from a substantial search result.
+
+        Creates a wiki page named after the query, populated with the fused
+        context, top memories, KG facts, and entity links.
+
+        Parameters
+        ----------
+        query:
+            The search query (used as the wiki page entity name).
+        result:
+            The search result to file.
+
+        Returns
+        -------
+        The slug of the created page, or None if no page was created.
+        """
+        # Build content for the wiki page
+        lines = [f"# {query}", ""]
+        lines.append("## Search Result")
+        lines.append("")
+        lines.append(f"> Auto-filed from brain search for: *{query}*")
+        lines.append("")
+
+        # Add entities
+        if result.entities:
+            lines.append("## Entities")
+            lines.append("")
+            for entity in result.entities[:10]:
+                slug = self._wiki._safe_slug(entity)
+                lines.append(f"- [[{slug}|{entity}]]")
+            lines.append("")
+
+        # Add top memories
+        if result.memories:
+            lines.append("## Relevant Memories")
+            lines.append("")
+            for mem in result.memories[:5]:
+                lines.append(f"- [{mem.score:.2f}] {mem.content[:200]}")
+            lines.append("")
+
+        # Add KG facts
+        if result.kg_facts:
+            lines.append("## Knowledge Graph Facts")
+            lines.append("")
+            for fact in result.kg_facts[:5]:
+                lines.append(f"- {fact.subject} —{fact.predicate}→ {fact.object} ({fact.confidence_label})")
+            lines.append("")
+
+        # Add full context
+        lines.append("## Fused Context")
+        lines.append("")
+        lines.append(result.context)
+        lines.append("")
+
+        content = "\n".join(lines)
+
+        # Create the page via the wiki engine
+        page_result = self._wiki.create_page(
+            entity=query,
+            entity_type="topic",
+            content=content,
+        )
+        return page_result.get("slug") if page_result.get("status") == "created" else None
