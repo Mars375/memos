@@ -223,6 +223,37 @@ def _extract_and_store_facts(content: str, kg: Any) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Agent wing auto-creation
+# ---------------------------------------------------------------------------
+
+
+def hook_ensure_agent_wing(tool: str, args: dict, memos: Any) -> None:
+    """PRE-hook: auto-create a palace wing for the calling agent's namespace.
+
+    When an agent calls ``memory_save`` (learn) or ``memory_search`` (recall)
+    via MCP, this hook ensures a wing named ``agent-{namespace}`` exists in
+    the palace index.  The namespace is extracted from ``args["namespace"]``
+    (or defaults to ``"default"``).
+
+    This hook does **not** short-circuit — it always returns ``None`` so the
+    tool call proceeds normally.  Wing creation is idempotent.
+    """
+    namespace = args.get("namespace") or "default"
+    wing_name = f"agent-{namespace}"
+
+    palace = getattr(memos, "_palace", None)
+    if palace is None:
+        return None
+
+    try:
+        palace.create_wing(wing_name, description=f"Auto-created wing for agent namespace '{namespace}'")
+    except Exception:
+        logger.warning("Failed to auto-create agent wing %s", wing_name, exc_info=True)
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -230,6 +261,7 @@ def _extract_and_store_facts(content: str, kg: Any) -> list[str]:
 def create_default_registry(
     auto_context: bool = False,
     auto_kg: bool = False,
+    auto_agent_wing: bool = False,
 ) -> MCPHookRegistry:
     """Create a registry with optional built-in hooks enabled.
 
@@ -239,10 +271,16 @@ def create_default_registry(
         If True, prepend wake-up context to every memory_search result.
     auto_kg:
         If True, auto-extract KG facts after every memory_save.
+    auto_agent_wing:
+        If True, auto-create a palace wing for the agent namespace on
+        every ``memory_save`` / ``memory_search`` call.
     """
     registry = MCPHookRegistry()
     if auto_context:
         registry.register_post("memory_search", hook_prepend_context)
     if auto_kg:
         registry.register_post("memory_save", hook_auto_capture_kg)
+    if auto_agent_wing:
+        registry.register_pre("memory_save", hook_ensure_agent_wing)
+        registry.register_pre("memory_search", hook_ensure_agent_wing)
     return registry

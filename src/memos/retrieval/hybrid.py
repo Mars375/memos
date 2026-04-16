@@ -125,20 +125,41 @@ class HybridRetriever:
     Args:
         alpha: Weight for semantic score in the blend (0–1, default 0.7).
                Higher alpha = more semantic, lower = more keyword-driven.
+        keyword_boost: Multiplicative boost applied when query keywords
+                       overlap with document content (default 1.5).
     """
 
     VALID_MODES = ("semantic", "keyword", "hybrid")
 
-    def __init__(self, alpha: float = 0.7) -> None:
+    def __init__(self, alpha: float = 0.7, keyword_boost: float = 1.5) -> None:
         if not (0.0 <= alpha <= 1.0):
             raise ValueError(f"alpha must be between 0.0 and 1.0, got {alpha!r}")
+        if keyword_boost < 0.0:
+            raise ValueError(f"keyword_boost must be non-negative, got {keyword_boost!r}")
         self.alpha = alpha
+        self.keyword_boost = keyword_boost
+
+    @staticmethod
+    def _keyword_overlap(query: str, content: str) -> float:
+        """Return the fraction of query tokens that appear in content tokens.
+
+        Returns a value in [0.0, 1.0] where 1.0 means every query word
+        appears in the content.
+        """
+        q_tokens = set(_tokenize(query))
+        if not q_tokens:
+            return 0.0
+        c_tokens = set(_tokenize(content))
+        return len(q_tokens & c_tokens) / len(q_tokens)
 
     def rerank(self, query: str, candidates: list[Any]) -> list[Any]:
         """Re-rank *candidates* (list of RecallResult) using hybrid scoring.
 
         The input semantic scores are blended with BM25 scores computed over
-        the candidate corpus.  Returns the list sorted by descending hybrid score.
+        the candidate corpus.  An additional keyword-overlap boost is applied
+        so documents that share more words with the query are promoted.
+
+        Returns the list sorted by descending hybrid score.
         """
         if not candidates:
             return candidates
@@ -152,6 +173,17 @@ class HybridRetriever:
         norm_bm25 = _normalize(raw_bm25)
 
         blended = [self.alpha * s + (1 - self.alpha) * b for s, b in zip(norm_semantic, norm_bm25)]
+
+        # Apply keyword-overlap boost
+        if self.keyword_boost != 1.0:
+            boosted = []
+            for score, cand in zip(blended, candidates):
+                overlap = self._keyword_overlap(query, cand.item.content)
+                # Scale the boost factor by the overlap fraction so partial
+                # matches get a partial boost.
+                factor = 1.0 + (self.keyword_boost - 1.0) * overlap
+                boosted.append(score * factor)
+            blended = boosted
 
         # Attach blended score and sort
         for r, score in zip(candidates, blended):

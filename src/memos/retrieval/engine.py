@@ -89,6 +89,31 @@ class RetrievalEngine:
         """Wire a persistent embedding cache for cross-session reuse."""
         self._persistent_cache = cache
 
+    # ------------------------------------------------------------------
+    # Temporal proximity boost
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _temporal_boost(created_at: float) -> float:
+        """Return a recency boost based on how recently a memory was created.
+
+        Tiers:
+            < 1 day  → 0.2
+            < 7 days → 0.1
+            < 30 days → 0.05
+            older    → 0.0
+        """
+        import time as _time
+
+        age_days = (_time.time() - created_at) / SECONDS_PER_DAY
+        if age_days < 1.0:
+            return 0.2
+        if age_days < 7.0:
+            return 0.1
+        if age_days < 30.0:
+            return 0.05
+        return 0.0
+
     def index(self, item: MemoryItem) -> None:
         """Index a memory item for retrieval."""
         # Pre-compute embedding for semantic search
@@ -164,6 +189,9 @@ class RetrievalEngine:
             age_days = (time.time() - item.created_at) / SECONDS_PER_DAY
             recency_bonus = max(0, RECENCY_BONUS_WEIGHT * (1 - age_days / RECENCY_FADE_DAYS))
 
+            # Temporal proximity boost (tiered: 0.2 / 0.1 / 0.05)
+            temporal_boost = self._temporal_boost(item.created_at)
+
             # Final score
             final_score = (
                 self._semantic_weight * sem_score
@@ -171,6 +199,7 @@ class RetrievalEngine:
                 + tag_bonus
                 + importance_boost
                 + recency_bonus
+                + temporal_boost
             )
 
             if final_score > 0:
@@ -233,7 +262,10 @@ class RetrievalEngine:
             age_days = (_time.time() - item.created_at) / SECONDS_PER_DAY
             recency_bonus = max(0, RECENCY_BONUS_WEIGHT * (1 - age_days / RECENCY_FADE_DAYS))
 
-            final_score = min(score + importance_boost + recency_bonus, 1.0)
+            # Temporal proximity boost (tiered: 0.2 / 0.1 / 0.05)
+            temporal_boost = self._temporal_boost(item.created_at)
+
+            final_score = min(score + importance_boost + recency_bonus + temporal_boost, 1.0)
 
             match_reason = "semantic" if score > 0.5 else "keyword"
             breakdown = ScoreBreakdown(
