@@ -218,6 +218,20 @@ TOOLS = [
         },
     },
     {
+        "name": "brain_suggest",
+        "description": "Suggest exploration questions based on knowledge graph structure — hub entities, cross-community connections, and orphan entities.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_k": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Number of suggested questions to return",
+                },
+            },
+        },
+    },
+    {
         "name": "memory_decay",
         "description": "Apply importance decay to memories. Dry-run by default. Use apply=true to persist changes.",
         "inputSchema": {
@@ -597,6 +611,24 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             text.append("Context:")
             text.append(payload["context"])
             return _text("\n".join(text))
+
+        elif tool == "brain_suggest":
+            from .brain import BrainSearch
+            from .knowledge_graph import KnowledgeGraph
+
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance
+            searcher = BrainSearch(memos, kg_instance)
+            top_k = int(args.get("top_k", 5))
+            suggestions = searcher.suggest_questions(top_k=top_k)
+            if not suggestions:
+                return _text("No suggestions available (empty knowledge graph).")
+            lines = [f"Suggested questions ({len(suggestions)}):"]
+            for sq in suggestions:
+                lines.append(f"  [{sq.category}] {sq.question} (score={sq.score:.2f})")
+            return _text("\n".join(lines))
 
         elif tool == "memory_decay":
             items = memos._store.list_all(namespace=memos._namespace)

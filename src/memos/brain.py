@@ -75,6 +75,14 @@ class BrainSearchResult:
 
 
 @dataclass
+class SuggestedQuestion:
+    question: str
+    category: str
+    score: float
+    entities: list[str]
+
+
+@dataclass
 class EntityNeighbor:
     entity: str
     relation_count: int
@@ -223,6 +231,81 @@ class BrainSearch:
             edges=edges,
             layers=neighborhood["layers"],
         )
+
+    def suggest_questions(self, top_k: int = 5) -> list[SuggestedQuestion]:
+        """Generate suggested exploration questions based on the KG structure.
+
+        Combines three question sources:
+        1. Hub exploration from god nodes (high-degree entities)
+        2. Cross-community questions from surprising connections
+        3. Orphan entity exploration (entities mentioned only once)
+
+        Returns up to *top_k* suggestions sorted by relevance score.
+        """
+        candidates: list[SuggestedQuestion] = []
+
+        # 1. Hub exploration questions from god nodes
+        god_nodes = self._kg.god_nodes(top_k=20)
+        max_degree = max((n["degree"] for n in god_nodes), default=1) or 1
+        for node in god_nodes:
+            entity = node["entity"]
+            degree = node["degree"]
+            score = round(degree / max_degree, 4)
+            candidates.append(
+                SuggestedQuestion(
+                    question=f"What is connected to {entity}?",
+                    category="hub_exploration",
+                    score=score,
+                    entities=[entity],
+                )
+            )
+
+        # 2. Cross-community questions from surprising connections
+        surprising = self._kg.surprising_connections(top_k=20)
+        max_surprise = max((c["surprise_score"] for c in surprising), default=1.0) or 1.0
+        for conn in surprising:
+            subject = conn["subject"]
+            obj = conn["object"]
+            surprise = conn["surprise_score"]
+            score = round(surprise / max_surprise, 4)
+            candidates.append(
+                SuggestedQuestion(
+                    question=f"How does {subject} relate to {obj}?",
+                    category="cross_community",
+                    score=score,
+                    entities=[subject, obj],
+                )
+            )
+
+        # 3. Orphan entities (degree == 1) — suggest exploration
+        orphans = self._find_orphan_entities()
+        for entity in orphans:
+            candidates.append(
+                SuggestedQuestion(
+                    question=f"Tell me more about {entity}",
+                    category="orphan_exploration",
+                    score=0.3,
+                    entities=[entity],
+                )
+            )
+
+        # Sort by score descending, then alphabetically for stable order
+        candidates.sort(key=lambda q: (-q.score, q.question))
+        return candidates[:top_k]
+
+    def _find_orphan_entities(self) -> list[str]:
+        """Find entities that appear in only a single KG fact (degree == 1)."""
+        rows = self._kg._conn.execute(
+            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
+        ).fetchall()
+
+        degree: dict[str, int] = {}
+        for r in rows:
+            degree[r["subject"]] = degree.get(r["subject"], 0) + 1
+            degree[r["object"]] = degree.get(r["object"], 0) + 1
+
+        orphans = sorted(entity for entity, deg in degree.items() if deg == 1)
+        return orphans[:20]
 
     def _score_memories(self, results: list[Any]) -> list[ScoredMemory]:
         max_score = max((float(getattr(r, "score", 0.0)) for r in results), default=1.0) or 1.0

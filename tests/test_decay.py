@@ -429,4 +429,4 @@ def test_mcp_tools_list_includes_decay():
     names = {t["name"] for t in TOOLS}
     assert "memory_decay" in names
     assert "memory_reinforce" in names
-    assert len(TOOLS) == 15  # + brain_search
+    assert len(TOOLS) == 19  # + brain_search, brain_suggest

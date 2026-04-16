@@ -224,3 +224,113 @@ def test_brain_search_cli(tmp_path: Path, capsys):
     assert "Memories:" in out
     assert "Wiki pages:" in out
     assert "KG facts:" in out
+
+
+# ── Suggest Questions ────────────────────────────────────────────
+
+
+def test_suggest_questions_hub_exploration(brain_env):
+    memos, kg, wiki_root, _kg_path = brain_env
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+
+    suggestions = searcher.suggest_questions(top_k=5)
+
+    assert len(suggestions) >= 1
+    hub_questions = [sq for sq in suggestions if sq.category == "hub_exploration"]
+    assert len(hub_questions) >= 1
+    assert any("What is connected to" in sq.question for sq in hub_questions)
+    assert any("Alice" in sq.question or "OpenAI" in sq.question for sq in hub_questions)
+
+
+def test_suggest_questions_orphan_entities(tmp_path: Path):
+    """Entities that appear in only one fact should be flagged as orphans."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    memos.learn("Rare project Zephyr is interesting.", tags=["project"])
+
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+    wiki.update(force=True)
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    kg.add_fact("Zephyr", "is_a", "project", confidence_label="EXTRACTED")
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=10)
+
+    orphan_qs = [sq for sq in suggestions if sq.category == "orphan_exploration"]
+    assert len(orphan_qs) >= 1
+    assert any("Zephyr" in sq.question for sq in orphan_qs)
+
+
+def test_suggest_questions_respects_top_k(brain_env):
+    memos, kg, wiki_root, _kg_path = brain_env
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+
+    suggestions = searcher.suggest_questions(top_k=2)
+    assert len(suggestions) <= 2
+
+
+def test_suggest_questions_sorted_by_score(brain_env):
+    memos, kg, wiki_root, _kg_path = brain_env
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+
+    suggestions = searcher.suggest_questions(top_k=10)
+    scores = [sq.score for sq in suggestions]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_suggest_questions_empty_kg(tmp_path: Path):
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=5)
+
+    assert suggestions == []
+
+
+@pytest.mark.asyncio
+async def test_brain_suggest_api(brain_env):
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    memos, _kg, wiki_root, kg_path = brain_env
+    app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/brain/suggest", params={"top_k": 5})
+
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "suggestions" in data
+    assert data["total"] >= 1
+    for sq in data["suggestions"]:
+        assert "question" in sq
+        assert "category" in sq
+        assert "score" in sq
+        assert "entities" in sq
+
+
+def test_brain_suggest_mcp_dispatch(brain_env):
+    memos, kg, wiki_root, _kg_path = brain_env
+    memos._kg = kg
+    response = _dispatch(memos, "brain_suggest", {"top_k": 5})
+
+    assert not response.get("isError")
+    text = response["content"][0]["text"]
+    assert "Suggested questions" in text
+    assert "hub_exploration" in text

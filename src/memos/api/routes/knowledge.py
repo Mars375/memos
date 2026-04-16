@@ -232,6 +232,30 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
+    @router.get("/api/v1/brain/suggest")
+    async def brain_suggest(top_k: int = 5, wiki_dir: str | None = None):
+        """Suggest exploration questions based on the knowledge graph structure."""
+        from ...brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            suggestions = searcher.suggest_questions(top_k=top_k)
+            return {
+                "status": "ok",
+                "suggestions": [
+                    {
+                        "question": sq.question,
+                        "category": sq.category,
+                        "score": sq.score,
+                        "entities": sq.entities,
+                    }
+                    for sq in suggestions
+                ],
+                "total": len(suggestions),
+            }
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # ── Palace ────────────────────────────────────────────────
 
     @router.get("/api/v1/palace/wings")
