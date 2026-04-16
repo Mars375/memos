@@ -397,6 +397,31 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as e:
             return {"status": "error", "error": str(e), "pages": [], "total": 0}
 
+    @router.post("/api/v1/wiki/pages")
+    async def wiki_create_page(body: dict):
+        """Create a new living wiki page.
+
+        Request body:
+            entity (str): Name of the entity / page.
+            entity_type (str, optional): One of person, project, concept, topic, resource, contact, default.
+            content (str, optional): Initial body content appended after template.
+        """
+        entity = body.get("entity", "").strip()
+        if not entity:
+            return {"status": "error", "error": "'entity' is required"}
+        try:
+            from ...wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            result = wiki.create_page(
+                entity=entity,
+                entity_type=body.get("entity_type", "default"),
+                content=body.get("content", ""),
+            )
+            return {**result}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     @router.get("/api/v1/wiki/page/{slug}")
     async def wiki_read_page(slug: str):
         """Read a single living wiki page by slug or entity name."""

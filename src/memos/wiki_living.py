@@ -292,6 +292,26 @@ class LivingPage:
     size_bytes: int = 0
     is_orphan: bool = False
     has_contradictions: bool = False
+    _slug_cache: Optional[str] = field(default=None, repr=False)
+
+    @property
+    def slug(self) -> str:
+        """Filesystem-safe slug for this page (derived from entity name)."""
+        if self._slug_cache is not None:
+            return self._slug_cache
+        import re as _re
+
+        slug = self.entity.lower().strip()
+        slug = _re.sub(r"[^\w\s-]", "", slug)
+        slug = _re.sub(r"[\s_]+", "-", slug)
+        slug = slug.strip("-")
+        self._slug_cache = slug or "unnamed"
+        return self._slug_cache
+
+    @property
+    def memory_count(self) -> int:
+        """Number of memories linked to this page."""
+        return len(self.memory_ids)
 
 
 @dataclass
@@ -1011,6 +1031,70 @@ class LivingWikiEngine:
             }
             for row in rows
         ]
+
+    def create_page(
+        self,
+        entity: str,
+        entity_type: str = "default",
+        content: str = "",
+    ) -> Dict[str, Any]:
+        """Create a new living wiki page manually.
+
+        Parameters
+        ----------
+        entity:
+            The entity / page name.
+        entity_type:
+            Page template type (person, project, concept, topic, resource, contact, default).
+        content:
+            Optional initial body content (appended after the template).
+
+        Returns
+        -------
+        Dict with status, slug, and path.
+        """
+        import time as _time
+
+        self.init()
+        db = self._get_db()
+
+        slug = self._safe_slug(entity)
+        page_path = self._wiki_dir / "pages" / f"{slug}.md"
+
+        # Check if page already exists
+        existing = db.execute("SELECT name FROM entities WHERE name = ?", (entity,)).fetchone()
+        if existing is not None:
+            db.close()
+            return {"status": "already_exists", "slug": slug, "entity": entity, "path": str(page_path)}
+
+        # Generate from template
+        meta = {
+            "entity": entity,
+            "type": entity_type,
+            "created": _time.strftime("%Y-%m-%d", _time.localtime()),
+            "updated": _time.strftime("%Y-%m-%d", _time.localtime()),
+            "memory_count": 0,
+            "tags": [],
+        }
+        template_fn = _PAGE_TEMPLATES.get(entity_type, _PAGE_TEMPLATES["default"])
+        page_content = template_fn(entity, meta)
+
+        if content:
+            page_content += f"\n{content}\n"
+
+        page_path.parent.mkdir(parents=True, exist_ok=True)
+        page_path.write_text(page_content, encoding="utf-8")
+
+        now = _time.time()
+        db.execute(
+            "INSERT INTO entities (name, entity_type, page_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (entity, entity_type, str(page_path), now, now),
+        )
+        self._log_action(db, "create", entity, f"Manually created {entity_type} page")
+        db.commit()
+        db.close()
+
+        return {"status": "created", "slug": slug, "entity": entity, "path": str(page_path)}
 
     def list_pages(self) -> List[LivingPage]:
         """List all living wiki pages with metadata."""
