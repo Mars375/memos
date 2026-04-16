@@ -1,0 +1,6 @@
+[     379ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8100/favicon.ico:0
+[     396ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8100/api/v1/ns/stats:0
+[   60244ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8100/api/v1/ns/stats:0
+[  108213ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8100/api/v1/ns/stats:0
+[  120231ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8100/api/v1/ns/stats:0
+[  180241ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8100/api/v1/ns/stats:0

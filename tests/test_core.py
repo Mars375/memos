@@ -249,3 +249,11 @@ class TestBM25:
         full = _bm25_score("docker container", "docker container nginx")
         partial = _bm25_score("docker container", "docker")
         assert full > partial
+
+
+def test_ingest_url_signature_includes_skip_sanitization():
+    import inspect
+    from memos.core import MemOS
+
+    sig = inspect.signature(MemOS.ingest_url)
+    assert "skip_sanitization" in sig.parameters

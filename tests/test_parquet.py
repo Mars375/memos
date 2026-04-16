@@ -279,3 +279,46 @@ class TestParquetIOUnit:
         m2 = MemOS(backend="memory", sanitize=False)
         imported = m2.import_parquet(str(path))
         assert imported["imported"] == 30
+
+
+class TestParquetMissingPyarrow:
+    """Verify graceful error when pyarrow is not installed."""
+
+    def test_export_raises_import_error_with_message(self, tmp_path, monkeypatch):
+        """_check_pyarrow should raise ImportError with install hint."""
+        import memos.parquet_io as pio
+
+        # Simulate pyarrow missing by making the import fail
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "pyarrow":
+                raise ModuleNotFoundError("No module named 'pyarrow'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        m = MemOS(backend="memory", sanitize=False)
+        m.learn("test")
+
+        with pytest.raises(ImportError, match="pyarrow is required"):
+            m.export_parquet(str(tmp_path / "fail.parquet"))
+
+    def test_import_raises_import_error_with_message(self, tmp_path, monkeypatch):
+        """import_parquet should also raise ImportError with install hint."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "pyarrow":
+                raise ModuleNotFoundError("No module named 'pyarrow'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        m = MemOS(backend="memory", sanitize=False)
+        with pytest.raises(ImportError, match="pyarrow is required"):
+            m.import_parquet(str(tmp_path / "nonexistent.parquet"))

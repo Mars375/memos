@@ -303,7 +303,7 @@ class CompactionEngine:
 
             # Create a modified copy to avoid in-place mutation issues
             archived_tags = list(item.tags) + ["archived"]
-            archived_meta = dict(item.metadata)
+            archived_meta = dict(item.metadata or {})
             archived_meta["archived_at"] = time.time()
             archived_meta["original_importance"] = item.importance
 

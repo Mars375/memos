@@ -94,6 +94,8 @@ def export_parquet(
     Returns:
         Summary dict with count, path, size_bytes.
     """
+    _check_pyarrow()
+
     import pyarrow as pa
     import pyarrow.parquet as pq
 
@@ -152,6 +154,8 @@ def import_parquet(
     Returns:
         List of MemoryItem objects parsed from the file.
     """
+    _check_pyarrow()
+
     import pyarrow.parquet as pq
 
     path = Path(path)

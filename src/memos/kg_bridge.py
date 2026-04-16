@@ -10,14 +10,97 @@ from .knowledge_graph import KnowledgeGraph
 
 _ENTITY_PATTERN = re.compile(r"\b(?:[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)+|[A-Z]{2,})\b")
 
+# Shared entity groups: support accented chars (e.g. "Loïc") and multi-word names
+_SUBJ = r"(?P<subject>[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*)"
+_OBJC = r"(?P<object>[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*)"
+# Non-capturing version for intermediate tokens (no named group, avoids redefinition)
+_THING_NC = r"(?:[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*|[\w.-]+)"
+
 _FACT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # ── Structural / exact patterns (highest priority) ──────────────────
+    ("arrow", re.compile(r"(?P<subject>[^→\n]{1,80}?)\s*→\s*(?P<object>[^.\n;]{1,120})")),
+    ("from_to", re.compile(r"from:\s*(?P<subject>[^\n;]{1,80}?)\s+to:\s*(?P<object>[^.\n;]{1,120})", re.I)),
+    # ── Version ─────────────────────────────────────────────────────────
     (
-        "is",
+        "version",
         re.compile(
-            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+is\s+(?P<object>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*|[\w.-]+)",
+            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+version\s+(?P<object>\d+(?:\.\d+)*)",
             re.I,
         ),
     ),
+    # ── Specific "is" variants (must come before generic "is") ──────────
+    (
+        "is_type_of",
+        re.compile(
+            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+is\s+a(?:n)?\s+\w+\s+of\s+(?P<object>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)",
+            re.I,
+        ),
+    ),
+    (
+        "located",
+        re.compile(
+            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+is\s+(?:located|running|hosted|deployed|based)\s+(?:on|in|at)\s+(?P<object>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)",
+            re.I,
+        ),
+    ),
+    # ── Fine-grained SVO patterns (verb-specific) ──────────────────────
+    ("deployed_on", re.compile(
+        rf"{_SUBJ}\s+deployed\s+{_THING_NC}\s+on\s+{_OBJC}",
+        re.I,
+    )),
+    ("uses", re.compile(
+        rf"{_SUBJ}\s+uses?\s+{_OBJC}",
+        re.I,
+    )),
+    ("runs_on", re.compile(
+        rf"{_SUBJ}\s+runs?\s+on\s+{_OBJC}",
+        re.I,
+    )),
+    ("manages", re.compile(
+        rf"{_SUBJ}\s+manages?\s+{_OBJC}",
+        re.I,
+    )),
+    ("depends_on", re.compile(
+        rf"{_SUBJ}\s+depends?\s+on\s+{_OBJC}",
+        re.I,
+    )),
+    ("contains", re.compile(
+        rf"{_SUBJ}\s+contains?\s+{_OBJC}",
+        re.I,
+    )),
+    ("located_in", re.compile(
+        rf"{_SUBJ}\s+(?:is\s+)?located\s+in\s+{_OBJC}",
+        re.I,
+    )),
+    ("part_of", re.compile(
+        rf"{_SUBJ}\s+(?:is\s+)?(?:a\s+)?part\s+of\s+{_OBJC}",
+        re.I,
+    )),
+    ("connected_to", re.compile(
+        rf"{_SUBJ}\s+(?:is\s+)?connected\s+to\s+{_OBJC}",
+        re.I,
+    )),
+    ("built_with", re.compile(
+        rf"{_SUBJ}\s+(?:is\s+|was\s+)?built\s+with\s+{_OBJC}",
+        re.I,
+    )),
+    ("hosts", re.compile(
+        rf"{_SUBJ}\s+hosts?\s+{_OBJC}",
+        re.I,
+    )),
+    # ── Active verb SVO (broader catch) ────────────────────────────────
+    (
+        "active_verb",
+        re.compile(
+            r"(?P<subject>[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*)\s+"
+            r"(?:supports?|implements?|provides?|"
+            r"includes?|leverages?|"
+            r"monitors?|powers?|drives?|generates?|orchestrates?|configures?)\s+"
+            r"(?P<object>[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*)",
+            re.I,
+        ),
+    ),
+    # ── Generic patterns ────────────────────────────────────────────────
     (
         "works_at",
         re.compile(
@@ -25,8 +108,21 @@ _FACT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
             re.I,
         ),
     ),
-    ("arrow", re.compile(r"(?P<subject>[^→\n]{1,80}?)\s*→\s*(?P<object>[^.\n;]{1,120})")),
-    ("from_to", re.compile(r"from:\s*(?P<subject>[^\n;]{1,80}?)\s+to:\s*(?P<object>[^.\n;]{1,120})", re.I)),
+    (
+        "is",
+        re.compile(
+            r"(?P<subject>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*)\s+is\s+(?P<object>[A-Z][\w.-]*(?:\s+[A-Z][\w.-]*)*|[\w.-]+)",
+            re.I,
+        ),
+    ),
+    # ── General SVO fallback (Capitalized + verb-ed + Capitalized) ──────
+    (
+        "general_svo",
+        re.compile(
+            r"(?P<subject>[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*)\s+[a-z]+\w*ed\s+(?P<object>[\wÀ-ÿ][\w.-]*(?:\s+[\wÀ-ÿ][\w.-]*)*)",
+            re.I,
+        ),
+    ),
 ]
 
 

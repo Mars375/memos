@@ -8,7 +8,7 @@ import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -394,9 +394,10 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         }
 
     @router.get("/api/v1/snapshot")
-    async def api_snapshot(at: float) -> dict:
-        versions = memos.snapshot_at(at)
-        return {"timestamp": at, "total": len(versions), "memories": [v.to_dict() for v in versions[:200]]}
+    async def api_snapshot(at: Optional[float] = None) -> dict:
+        ts = at if at is not None else time.time()
+        versions = memos.snapshot_at(ts)
+        return {"timestamp": ts, "total": len(versions), "memories": [v.to_dict() for v in versions[:200]]}
 
     @router.get("/api/v1/recall/at")
     async def api_recall_at(q: str, at: float, top: int = 5, min_score: float = 0.0) -> dict:
@@ -615,13 +616,25 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     @router.get("/api/v1/export/parquet", response_model=None)
     async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd") -> FileResponse:
         """Export all memories as a downloadable Parquet file."""
-        with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
-            result = memos.export_parquet(tmp.name, include_metadata=include_metadata, compression=compression)
-            return FileResponse(
-                tmp.name,
-                media_type="application/octet-stream",
-                filename=f"memos-export-{int(time.time())}.parquet",
-                headers={"X-Memos-Total": str(result["total"]), "X-Memos-Size": str(result["size_bytes"])},
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".parquet", delete=False) as tmp:
+                result = memos.export_parquet(tmp.name, include_metadata=include_metadata, compression=compression)
+                return FileResponse(
+                    tmp.name,
+                    media_type="application/octet-stream",
+                    filename=f"memos-export-{int(time.time())}.parquet",
+                    headers={"X-Memos-Total": str(result["total"]), "X-Memos-Size": str(result["size_bytes"])},
+                )
+        except ImportError as exc:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "error",
+                    "message": str(exc),
+                    "hint": "Install with: pip install memos-os[parquet]",
+                },
             )
 
     return router

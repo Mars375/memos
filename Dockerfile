@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps for ChromaDB
+# Install system deps for ChromaDB + pyarrow
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential && \
     rm -rf /var/lib/apt/lists/*
@@ -12,7 +12,7 @@ COPY src/ src/
 COPY tests/ tests/
 COPY tools/ tools/
 
-RUN pip install --no-cache-dir ".[server,chroma,local,dev]"
+RUN pip install --no-cache-dir ".[server,chroma,local,dev,parquet]"
 
 # Default: local backend (JSON + sentence-transformers, zero external deps)
 ENV MEMOS_BACKEND=local

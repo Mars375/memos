@@ -1148,6 +1148,7 @@ class MemOS:
         importance: float = DEFAULT_IMPORTANCE,
         max_chunk: int = DEFAULT_MAX_CHUNK_SIZE,
         dry_run: bool = False,
+        skip_sanitization: bool = False,
     ) -> "IngestResult":
         """Fetch a URL, extract its contents, and store it as memories."""
         from .ingest.url import URLIngestor
@@ -1161,6 +1162,21 @@ class MemOS:
 
         if not dry_run:
             for chunk in result.chunks:
+                if skip_sanitization:
+                    # Bypass sanitizer: store as a MemoryItem directly
+                    try:
+                        item = MemoryItem(
+                            id=generate_id(chunk["content"]),
+                            content=chunk["content"],
+                            tags=chunk.get("tags", []),
+                            importance=chunk.get("importance", importance),
+                            metadata=chunk.get("metadata", {}),
+                        )
+                        self._store.upsert(item, namespace=self._namespace)
+                        continue
+                    except Exception as e:
+                        result.errors.append(f"Failed to store chunk (skip_sanitization): {e}")
+                        continue
                 try:
                     self.learn(
                         chunk["content"],

@@ -260,7 +260,7 @@ GET    /api/v1/recall/stream        SSE streaming recall
 GET    /api/v1/search               Keyword search
 GET    /api/v1/stats                Memory statistics
 GET    /api/v1/tags                 List all tags
-DELETE /api/v1/tags/{tag}           Delete tag from all memories
+POST   /api/v1/tags/delete          Delete tag from all memories (body: {"tag": "..."})
 DELETE /api/v1/memory/{id}          Delete a memory
 POST   /api/v1/prune                Decay-based cleanup
 GET    /api/v1/graph                Knowledge graph (nodes + edges for D3.js)

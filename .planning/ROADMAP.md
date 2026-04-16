@@ -32,14 +32,14 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Success Criteria** (what must be TRUE):
   1. A request exceeding rate limits receives 429 BEFORE the handler executes (no side effects)
   2. All 13 POST endpoints reject payloads missing required fields or with wrong types (Pydantic validation errors)
-  3. Server binds to 127.0.0.1 by default; startup logs a warning when no API keys are configured
-  4. CORS rejects cross-origin requests from non-localhost origins by default
-  5. Pinecone API keys are masked in all log output and error messages
+  3. MCP serve fallback uses 127.0.0.1 (not 0.0.0.0); REST serve already correct. Startup logs a warning when no API keys are configured
+  4. MCP CORS rejects non-localhost origins by default (REST API has no CORS — more secure)
+  5. SecretMaskingFilter installed on pinecone_backend logger (defense-in-depth; keys already never logged)
 **Plans**: 3 plans
 Plans:
 - [ ] 01-01-PLAN.md — Fix rate-limiter, simplify hmac, add auth warning (SEC-01, SEC-05, SEC-11)
 - [ ] 01-02-PLAN.md — Wire Pydantic models to all 13 POST endpoints (SEC-02)
-- [ ] 01-03-PLAN.md — Harden binding, CORS, secret masking, sanitization (SEC-06, SEC-07, SEC-09, SEC-10)
+- [ ] 01-03-PLAN.md — Fix MCP binding fallback, MCP CORS, key masking filter, sanitization toggle coherence (SEC-06, SEC-07, SEC-09, SEC-10)
 
 ### Phase 2: Crypto and ACL Security
 **Goal**: All data at rest uses battle-tested encryption, and namespace isolation cannot be bypassed

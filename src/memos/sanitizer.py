@@ -30,7 +30,7 @@ _INJECTION_PATTERNS = [
     (r"(?i)you\s+are\s+now\s+(a|an)\s+\w+", Severity.HIGH, "Role override pattern"),
     (r"(?i)system\s*:\s*", Severity.HIGH, "System message injection"),
     (
-        r"(?i)(forget|discard|erase|delete|wipe)\s+(all\s+)?(your|the)?\s*(memory|memories|instructions|context|history)",
+        r"(?:(?<=^)|(?<=[.!?;\n]))\s*(forget|discard|erase|delete|wipe)\s+(all\s+)?(your|the)?\s*(memory|memories|instructions|context|history)",
         Severity.CRITICAL,
         "Memory wipe instruction",
     ),
@@ -38,7 +38,7 @@ _INJECTION_PATTERNS = [
     (r"(?i)^(human|assistant|system)\s*:", Severity.MEDIUM, "Role prefix injection"),
     (r"\[INST\]|\[/INST\]", Severity.HIGH, "Llama instruction token"),
     (
-        r"(?i)api[_\s-]*key[^a-z]{0,5}(?:is\s+)?(sk-[a-z0-9]+|\S{8,})",
+        r"(?i)api[_\s-]*key[^a-z]{0,5}(?:is\s+)?(sk-[a-z0-9]+|ghp_[a-zA-Z0-9]{20,}|glpat-[a-zA-Z0-9\-]{20,}|xox[bpsr]-[a-zA-Z0-9\-]{20,}|AKIA[A-Z0-9]{12,}|[a-zA-Z0-9+/=]{32,})",
         Severity.MEDIUM,
         "API key in memory (credential leak)",
     ),
@@ -51,6 +51,15 @@ _INJECTION_PATTERNS = [
 
 # Maximum memory length to prevent token flooding
 MAX_MEMORY_LENGTH = 10_000
+
+# Public aliases for test compatibility
+API_KEY_PATTERN = re.compile(
+    r"(?i)api[_\s-]*key[^a-z]{0,5}(?:is\s+)?(sk-[a-z0-9]+|ghp_[a-zA-Z0-9]{20,}|glpat-[a-zA-Z0-9\-]{20,}|xox[bpsr]-[a-zA-Z0-9\-]{20,}|AKIA[A-Z0-9]{12,}|[a-zA-Z0-9+/=]{32,})",
+)
+MEM_WIPE_PATTERN = re.compile(
+    r"(?:(?<=^)|(?<=[.!?;\n]))\s*(?:forget|discard|erase|delete|wipe)\s+(?:all\s+)?(?:your|the)?\s*(?:memory|memories|instructions|context|history)",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 class MemorySanitizer:

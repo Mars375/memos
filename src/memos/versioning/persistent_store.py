@@ -215,7 +215,7 @@ class SqliteVersionStore(PersistentVersionStore):
                     content=item.content,
                     tags=list(item.tags),
                     importance=item.importance,
-                    metadata=dict(item.metadata),
+                    metadata=dict(item.metadata or {}),
                     created_at=now,
                     source=source,
                 )

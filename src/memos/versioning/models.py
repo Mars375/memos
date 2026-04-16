@@ -37,7 +37,7 @@ class MemoryVersion:
             created_at=self.created_at,
             accessed_at=self.created_at,
             access_count=0,
-            metadata=dict(self.metadata),
+            metadata=dict(self.metadata or {}),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -49,7 +49,7 @@ class MemoryVersion:
             "content": self.content,
             "tags": list(self.tags),
             "importance": self.importance,
-            "metadata": dict(self.metadata),
+            "metadata": dict(self.metadata or {}),
             "created_at": self.created_at,
             "source": self.source,
         }
@@ -84,7 +84,7 @@ class MemoryVersion:
             content=item.content,
             tags=list(item.tags),
             importance=item.importance,
-            metadata=dict(item.metadata),
+            metadata=dict(item.metadata or {}),
             created_at=time.time(),
             source=source,
         )

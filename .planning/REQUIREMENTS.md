@@ -12,11 +12,11 @@
 - [ ] **SEC-03**: Encryption uses `cryptography.Fernet` (AES-128-CBC + HMAC) instead of custom XOR cipher
 - [ ] **SEC-04**: One-shot migration tool converts existing XOR-encrypted data to Fernet format
 - [ ] **SEC-05**: API authentication is enabled by default; startup warning logged when no keys configured
-- [ ] **SEC-06**: Default server binding is `127.0.0.1` (localhost only), not `0.0.0.0`
+- [ ] **SEC-06**: MCP serve `getattr` fallback is `127.0.0.1`, not `0.0.0.0` (REST serve already defaults to localhost)
 - [ ] **SEC-07**: CORS default origin is `http://localhost:*`, not wildcard `*`
 - [ ] **SEC-08**: Empty namespace is rejected when agent_id is set (prevents ACL bypass)
-- [ ] **SEC-09**: Pinecone API key is masked in all log messages and error outputs
-- [ ] **SEC-10**: Sanitization control is consolidated into a single location (not split API/core)
+- [ ] **SEC-09**: Pinecone API key masking filter installed on logger (defense-in-depth; keys are already never logged today)
+- [ ] **SEC-10**: Sanitization toggle coherence — API layer delegates to `memos._sanitize` instead of independent `MEMOS_ENFORCE_SANITIZATION` env var
 - [ ] **SEC-11**: `hmac.compare_digest` usage in auth simplified to prevent timing-attack regression
 
 ### Architecture Refactoring

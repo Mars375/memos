@@ -58,6 +58,21 @@ function buildKGEdges(nodes, kgFacts) {
     const words = (n.content || '').match(/\b[A-Z][a-z]{2,}\b/g) || [];
     words.forEach(w => { entityToNode[w.toLowerCase()] = entityToNode[w.toLowerCase()] || n.id; });
   });
+  // Pass 3: match KG entity names against node content substrings (case-insensitive)
+  const factEntityNames = new Set();
+  kgFacts.forEach(f => {
+    if (f.subject) factEntityNames.add(f.subject.toLowerCase());
+    if (f.object) factEntityNames.add(f.object.toLowerCase());
+  });
+  factEntityNames.forEach(entity => {
+    if (entityToNode[entity]) return;
+    for (const n of nodes) {
+      if ((n.content || '').toLowerCase().includes(entity)) {
+        entityToNode[entity] = entityToNode[entity] || n.id;
+        break;
+      }
+    }
+  });
   const edges = []; const seen = new Set();
   kgFacts.forEach(f => {
     const s = entityToNode[(f.subject || '').toLowerCase()];

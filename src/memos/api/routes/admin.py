@@ -73,6 +73,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
             importance=float(body.get("importance", 0.5)),
             max_chunk=int(body.get("max_chunk", 2000)),
             dry_run=bool(body.get("dry_run", False)),
+            skip_sanitization=bool(body.get("skip_sanitization", False)),
         )
         head_meta = result.chunks[0].get("metadata", {}) if result.chunks else {}
         payload = {
