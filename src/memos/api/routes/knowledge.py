@@ -273,6 +273,35 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
+    @router.get("/api/v1/brain/suggestions")
+    async def brain_suggestions(n: int = 5, wiki_dir: str | None = None):
+        """Suggest exploration questions based on KG gaps and unexplored areas.
+
+        Generates questions from god nodes, small communities, ambiguous facts,
+        and wiki entities with few facts. Returns natural-language strings.
+        """
+        from ...brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            suggestions = searcher.suggest_questions(top_k=n)
+            return {
+                "status": "ok",
+                "questions": [sq.question for sq in suggestions],
+                "details": [
+                    {
+                        "question": sq.question,
+                        "category": sq.category,
+                        "score": sq.score,
+                        "entities": sq.entities,
+                    }
+                    for sq in suggestions
+                ],
+                "total": len(suggestions),
+            }
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     # ── Palace ────────────────────────────────────────────────
 
     @router.get("/api/v1/palace/wings")

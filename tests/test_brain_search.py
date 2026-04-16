@@ -516,3 +516,192 @@ async def test_surprising_connections_api(tmp_path: Path):
     assert "connections" in data
     assert "total" in data
 
+
+# ── Enhanced Suggest Questions (Task 5.2) ────────────────────────
+
+
+def test_suggest_god_node_relationship_questions(brain_env):
+    """Top 3 god nodes should generate pairwise relationship questions."""
+    memos, kg, wiki_root, _kg_path = brain_env
+    # Add more facts so there are at least 3 god nodes
+    kg.add_fact("Alice", "uses", "Python", confidence_label="EXTRACTED")
+    kg.add_fact("OpenAI", "located_in", "SanFrancisco", confidence_label="EXTRACTED")
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=20)
+
+    god_rel = [sq for sq in suggestions if sq.category == "god_node_relationship"]
+    assert len(god_rel) >= 1
+    for sq in god_rel:
+        assert "What is the relationship between" in sq.question
+        assert " and " in sq.question
+
+
+def test_suggest_small_community_questions(tmp_path: Path):
+    """Communities with 1-2 members should generate exploration questions."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    memos.learn("Zephyr is a small research project.", tags=["project"])
+
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+    wiki.update(force=True)
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    # Two isolated facts → each entity forms its own 1-2 node community
+    kg.add_fact("Zephyr", "is_a", "project", confidence_label="EXTRACTED")
+    kg.add_fact("Orion", "is_a", "tool", confidence_label="EXTRACTED")
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=20)
+
+    small_comm = [sq for sq in suggestions if sq.category == "small_community"]
+    assert len(small_comm) >= 1
+    for sq in small_comm:
+        assert "What else is connected to" in sq.question
+
+    kg.close()
+
+
+def test_suggest_ambiguous_fact_questions(tmp_path: Path):
+    """Facts with AMBIGUOUS confidence should generate verification questions."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    memos.learn("Maybe Pluto is a planet.", tags=["space"])
+
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+    wiki.update(force=True)
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    kg.add_fact("Pluto", "is_a", "planet", confidence_label="AMBIGUOUS")
+    kg.add_fact("Pluto", "orbits", "Sun", confidence_label="EXTRACTED")
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=20)
+
+    ambig = [sq for sq in suggestions if sq.category == "ambiguous_verification"]
+    assert len(ambig) >= 1
+    assert any("Is it true that" in sq.question for sq in ambig)
+    assert any("Pluto" in sq.question for sq in ambig)
+
+    kg.close()
+
+
+def test_suggest_wiki_sparse_entity_questions(tmp_path: Path):
+    """Entities with wiki pages but few KG facts should generate questions."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    memos.learn("RareEntity is mentioned in documents.", tags=["entity"])
+
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+    wiki.update(force=True)
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    # Only one fact about RareEntity → sparse
+    kg.add_fact("RareEntity", "mentioned_in", "documents", confidence_label="EXTRACTED")
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=20)
+
+    sparse_qs = [sq for sq in suggestions if sq.category == "wiki_sparse"]
+    assert len(sparse_qs) >= 1
+    assert any("What do we know about" in sq.question for sq in sparse_qs)
+
+    kg.close()
+
+
+def test_suggest_questions_empty_kg_returns_empty(tmp_path: Path):
+    """An empty KG should return empty suggestions."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=5)
+
+    assert suggestions == []
+    kg.close()
+
+
+def test_suggest_questions_n_parameter_limits_results(brain_env):
+    """The n/top_k parameter should limit the number of returned questions."""
+    memos, kg, wiki_root, _kg_path = brain_env
+    kg.add_fact("Alice", "uses", "Python", confidence_label="EXTRACTED")
+    kg.add_fact("OpenAI", "located_in", "SanFrancisco", confidence_label="EXTRACTED")
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    suggestions = searcher.suggest_questions(top_k=2)
+    assert len(suggestions) <= 2
+
+    suggestions = searcher.suggest_questions(top_k=1)
+    assert len(suggestions) <= 1
+
+
+@pytest.mark.asyncio
+async def test_brain_suggestions_api(brain_env):
+    """Test the GET /api/v1/brain/suggestions endpoint."""
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    memos, _kg, wiki_root, kg_path = brain_env
+    app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/brain/suggestions", params={"n": 5})
+
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "questions" in data
+    assert "details" in data
+    assert data["total"] >= 1
+    # questions is a list of strings
+    assert isinstance(data["questions"], list)
+    for q in data["questions"]:
+        assert isinstance(q, str)
+    # details has structured data
+    for d in data["details"]:
+        assert "question" in d
+        assert "category" in d
+        assert "score" in d
+        assert "entities" in d
+
+
+@pytest.mark.asyncio
+async def test_brain_suggestions_api_n_param(brain_env):
+    """The n parameter should limit results in the API."""
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    memos, _kg, wiki_root, kg_path = brain_env
+    app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/api/v1/brain/suggestions", params={"n": 2})
+
+    data = response.json()
+    assert data["status"] == "ok"
+    assert len(data["questions"]) <= 2
+

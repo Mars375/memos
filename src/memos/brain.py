@@ -324,14 +324,31 @@ class BrainSearch:
     def suggest_questions(self, top_k: int = 5) -> list[SuggestedQuestion]:
         """Generate suggested exploration questions based on the KG structure.
 
-        Combines three question sources:
+        Combines seven question sources:
         1. Hub exploration from god nodes (high-degree entities)
         2. Cross-community questions from surprising connections
         3. Orphan entity exploration (entities mentioned only once)
+        4. God-node relationship questions (top 3 god node pairs)
+        5. Small-community exploration (communities with 1-2 members)
+        6. Ambiguous fact verification (facts with AMBIGUOUS confidence)
+        7. Wiki entities with few facts (under-explored entities)
 
         Returns up to *top_k* suggestions sorted by relevance score.
         """
         candidates: list[SuggestedQuestion] = []
+        seen_questions: set[str] = set()
+
+        def _add(question: str, category: str, score: float, entities: list[str]) -> None:
+            if question not in seen_questions:
+                seen_questions.add(question)
+                candidates.append(
+                    SuggestedQuestion(
+                        question=question,
+                        category=category,
+                        score=score,
+                        entities=list(entities),
+                    )
+                )
 
         # 1. Hub exploration questions from god nodes
         god_nodes = self._kg.god_nodes(top_k=20)
@@ -340,14 +357,7 @@ class BrainSearch:
             entity = node["entity"]
             degree = node["degree"]
             score = round(degree / max_degree, 4)
-            candidates.append(
-                SuggestedQuestion(
-                    question=f"What is connected to {entity}?",
-                    category="hub_exploration",
-                    score=score,
-                    entities=[entity],
-                )
-            )
+            _add(f"What is connected to {entity}?", "hub_exploration", score, [entity])
 
         # 2. Cross-community questions from surprising connections
         surprising = self._kg.surprising_connections(top_k=20)
@@ -357,30 +367,92 @@ class BrainSearch:
             obj = conn["object"]
             surprise = conn["surprise_score"]
             score = round(surprise / max_surprise, 4)
-            candidates.append(
-                SuggestedQuestion(
-                    question=f"How does {subject} relate to {obj}?",
-                    category="cross_community",
-                    score=score,
-                    entities=[subject, obj],
-                )
-            )
+            _add(f"How does {subject} relate to {obj}?", "cross_community", score, [subject, obj])
 
         # 3. Orphan entities (degree == 1) — suggest exploration
         orphans = self._find_orphan_entities()
         for entity in orphans:
-            candidates.append(
-                SuggestedQuestion(
-                    question=f"Tell me more about {entity}",
-                    category="orphan_exploration",
-                    score=0.3,
-                    entities=[entity],
+            _add(f"Tell me more about {entity}", "orphan_exploration", 0.3, [entity])
+
+        # 4. God-node relationship questions (top 3 god node pairs)
+        top3 = god_nodes[:3]
+        for i in range(len(top3)):
+            for j in range(i + 1, len(top3)):
+                e1 = top3[i]["entity"]
+                e2 = top3[j]["entity"]
+                score = round(
+                    0.5 * (top3[i]["degree"] / max_degree + top3[j]["degree"] / max_degree), 4
                 )
+                _add(
+                    f"What is the relationship between {e1} and {e2}?",
+                    "god_node_relationship",
+                    score,
+                    [e1, e2],
+                )
+
+        # 5. Small-community exploration (communities with 1-2 members)
+        communities = self._kg.detect_communities()
+        for comm in communities:
+            if comm["size"] <= 2:
+                for member in comm["nodes"]:
+                    _add(
+                        f"What else is connected to {member}?",
+                        "small_community",
+                        0.4,
+                        [member],
+                    )
+
+        # 6. Ambiguous fact verification
+        ambiguous_facts = self._kg.query_by_label("AMBIGUOUS", active_only=True)
+        for fact in ambiguous_facts:
+            _add(
+                f"Is it true that {fact['subject']} {fact['predicate']} {fact['object']}?",
+                "ambiguous_verification",
+                0.6,
+                [fact["subject"], fact["object"]],
+            )
+
+        # 7. Wiki entities with few facts
+        wiki_sparse = self._find_wiki_sparse_entities()
+        for entity, fact_count in wiki_sparse:
+            _add(
+                f"What do we know about {entity}?",
+                "wiki_sparse",
+                0.35,
+                [entity],
             )
 
         # Sort by score descending, then alphabetically for stable order
         candidates.sort(key=lambda q: (-q.score, q.question))
         return candidates[:top_k]
+
+    def _find_wiki_sparse_entities(self) -> list[tuple[str, int]]:
+        """Find entities that have wiki pages but few KG facts."""
+        try:
+            pages = self._wiki.list_pages()
+        except Exception:
+            return []
+
+        if not pages:
+            return []
+
+        # Count facts per entity
+        rows = self._kg._conn.execute(
+            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
+        ).fetchall()
+        fact_count: dict[str, int] = {}
+        for r in rows:
+            fact_count[r["subject"]] = fact_count.get(r["subject"], 0) + 1
+            fact_count[r["object"]] = fact_count.get(r["object"], 0) + 1
+
+        sparse = []
+        for page in pages:
+            entity = page.entity
+            count = fact_count.get(entity, 0)
+            if count <= 2:
+                sparse.append((entity, count))
+        sparse.sort(key=lambda x: x[1])
+        return sparse[:20]
 
     def _find_orphan_entities(self) -> list[str]:
         """Find entities that appear in only a single KG fact (degree == 1)."""
