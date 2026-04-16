@@ -507,4 +507,28 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as e:
             return {"status": "error", "error": str(e), "results": []}
 
+    @router.get("/api/v1/wiki/index")
+    async def wiki_get_index():
+        """Return the auto-generated wiki index (index.md content)."""
+        try:
+            from ...wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            content = wiki.generate_index()
+            return {"status": "ok", "content": content}
+        except Exception as e:
+            return {"status": "error", "error": str(e), "content": ""}
+
+    @router.post("/api/v1/wiki/regenerate-index")
+    async def wiki_regenerate_index():
+        """Regenerate the Karpathy-style wiki index.md and return its content."""
+        try:
+            from ...wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            content = wiki.regenerate_index()
+            return {"status": "ok", "content": content}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
     return router

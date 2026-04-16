@@ -402,6 +402,30 @@ class LivingWikiEngine:
         slug = slug.strip("-")
         return slug or "unnamed"
 
+    def _get_page_summary(self, entity_name: str) -> str:
+        """Extract a one-line summary from a wiki page.
+
+        Scans the page content for the first non-empty, non-frontmatter,
+        non-heading, non-comment line and returns it (truncated to 120 chars).
+        """
+        slug = self._safe_slug(entity_name)
+        page_path = self._wiki_dir / "pages" / f"{slug}.md"
+        if not page_path.exists():
+            return ""
+        content = page_path.read_text(encoding="utf-8")
+        in_frontmatter = False
+        for line in content.splitlines():
+            stripped = line.strip()
+            if stripped == "---":
+                in_frontmatter = not in_frontmatter
+                continue
+            if in_frontmatter:
+                continue
+            if stripped.startswith("#") or stripped.startswith("<!--") or not stripped:
+                continue
+            return stripped[:120]
+        return ""
+
     def _log_action(self, db: sqlite3.Connection, action: str, entity: str = "", detail: str = "") -> None:
         """Log an action to the activity log."""
         db.execute(
@@ -755,6 +779,8 @@ class LivingWikiEngine:
 
             result.entities_found += len(entities)
             db.commit()
+            # Regenerate index after single-item update
+            self._regenerate_index(db)
         finally:
             db.close()
 
@@ -876,43 +902,161 @@ class LivingWikiEngine:
         db.close()
         return report
 
-    def regenerate_index(self) -> str:
-        """Regenerate the index.md catalog page."""
+    def generate_index(self) -> str:
+        """Generate index.md — all wiki pages grouped by entity_type.
+
+        Lists every wiki page with ``[[wikilinks]]`` and one-line summaries,
+        grouped by entity_type (mapped to Karpathy-style categories).
+        Writes the result to ``wiki_dir / index.md`` and returns the markdown
+        content.
+        """
         self.init()
         db = self._get_db()
         content = self._regenerate_index(db)
         db.close()
         return content
 
+    # Alias for backward compatibility
+    regenerate_index = generate_index
+
     def _regenerate_index(self, db: sqlite3.Connection) -> str:
-        """Internal: regenerate index.md from DB."""
-        entities = db.execute("SELECT name, entity_type, updated_at FROM entities ORDER BY name").fetchall()
+        """Internal: regenerate index.md from DB (Karpathy-style).
 
-        lines = [
-            "# Living Wiki Index\n",
-            f"> {len(entities)} entities · Updated {time.strftime('%Y-%m-%d %H:%M')}\n",
-            "",
-        ]
+        Produces a rich index with:
+        - Statistics section at top
+        - Recent Changes section
+        - Pages grouped by category (Entities, Concepts, Sources, Topics)
+        - Each page with [[wiki-link]], one-line summary, and metadata
+        - Sorted by relevance (most linked first, then by recency)
+        """
+        now = time.time()
+        now_fmt = time.strftime("%Y-%m-%d %H:%M", time.localtime(now))
 
-        # Group by type
-        by_type: Dict[str, List[Any]] = {}
-        for row in entities:
-            by_type.setdefault(row["entity_type"], []).append(row)
+        # ── Gather data ──────────────────────────────────────────
+        entities = db.execute(
+            "SELECT name, entity_type, page_path, created_at, updated_at FROM entities"
+        ).fetchall()
 
-        for etype, items in sorted(by_type.items()):
-            lines.append(f"## {etype.title()} ({len(items)})\n")
+        # Count backlinks per entity (incoming links = relevance signal)
+        backlink_counts: Dict[str, int] = {}
+        for row in db.execute(
+            "SELECT target_entity, COUNT(*) as cnt FROM backlinks GROUP BY target_entity"
+        ).fetchall():
+            backlink_counts[row["target_entity"]] = row["cnt"]
+
+        # Count memory sources per entity
+        source_counts: Dict[str, int] = {}
+        for row in db.execute(
+            "SELECT entity_name, COUNT(*) as cnt FROM entity_memories GROUP BY entity_name"
+        ).fetchall():
+            source_counts[row["entity_name"]] = row["cnt"]
+
+        # Count total backlinks
+        total_backlinks = db.execute("SELECT COUNT(*) FROM backlinks").fetchone()[0]
+        total_memory_links = db.execute("SELECT COUNT(*) FROM entity_memories").fetchone()[0]
+
+        # ── Map entity_type → Karpathy category ──────────────────
+        _CATEGORY_MAP = {
+            "person": "Entities",
+            "contact": "Entities",
+            "project": "Entities",
+            "concept": "Concepts",
+            "topic": "Topics",
+            "resource": "Sources",
+            "default": "Concepts",
+        }
+
+        # ── Sort by relevance (most linked → most recent) ────────
+        def _sort_key(row):
+            bl = backlink_counts.get(row["name"], 0)
+            updated = row["updated_at"] or 0
+            return (-bl, -updated)
+
+        sorted_entities = sorted(entities, key=_sort_key)
+
+        # ── Group by category ────────────────────────────────────
+        categories: Dict[str, List[Any]] = {
+            "Entities": [],
+            "Concepts": [],
+            "Sources": [],
+            "Topics": [],
+        }
+        uncategorized: List[Any] = []
+
+        for row in sorted_entities:
+            cat = _CATEGORY_MAP.get(row["entity_type"])
+            if cat and cat in categories:
+                categories[cat].append(row)
+            else:
+                uncategorized.append(row)
+
+        # If there are uncategorized entities, put them under Concepts
+        if uncategorized:
+            categories["Concepts"].extend(uncategorized)
+
+        # ── Build index content ───────────────────────────────────
+        lines: List[str] = []
+        lines.append("# 📚 Living Wiki Index\n")
+        lines.append("> Auto-generated Karpathy-style catalog of entities and concepts.\n")
+
+        # ── Statistics Section ────────────────────────────────────
+        lines.append("")
+        lines.append("## 📊 Statistics\n")
+        lines.append("")
+        lines.append(f"| Metric | Value |")
+        lines.append(f"|--------|-------|")
+        lines.append(f"| Total Pages | {len(entities)} |")
+        lines.append(f"| Total Memory Links | {total_memory_links} |")
+        lines.append(f"| Total Wiki Links | {total_backlinks} |")
+        lines.append(f"| Last Updated | {now_fmt} |")
+        lines.append("")
+
+        # ── Recent Changes Section ────────────────────────────────
+        recent = db.execute(
+            "SELECT ts, action, entity, detail FROM activity_log ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+        if recent:
+            lines.append("## 🕐 Recent Changes\n")
+            lines.append("")
+            for entry in recent:
+                ts_fmt = time.strftime("%Y-%m-%d %H:%M", time.localtime(entry["ts"]))
+                action = entry["action"]
+                entity = entry["entity"]
+                detail = entry["detail"]
+                entity_slug = self._safe_slug(entity) if entity else ""
+                entity_link = f"[[{entity_slug}|{entity}]]" if entity else ""
+                lines.append(f"- `{ts_fmt}` **{action}** {entity_link} — {detail}")
+            lines.append("")
+
+        # ── Category Sections ─────────────────────────────────────
+        for cat_name, items in categories.items():
+            if not items:
+                continue
+            lines.append(f"## {cat_name} ({len(items)})\n")
+            lines.append("")
             for item in items:
                 slug = self._safe_slug(item["name"])
+                summary = self._get_page_summary(item["name"])
+                created_date = time.strftime("%Y-%m-%d", time.localtime(item["created_at"])) if item["created_at"] else "N/A"
+                src_count = source_counts.get(item["name"], 0)
+                updated_date = time.strftime("%Y-%m-%d", time.localtime(item["updated_at"])) if item["updated_at"] else "N/A"
+
+                # Freshness indicator
                 age = ""
                 if item["updated_at"]:
-                    delta = time.time() - item["updated_at"]
+                    delta = now - item["updated_at"]
                     if delta < 86400:
                         age = " 🟢"
                     elif delta < 7 * 86400:
                         age = " 🟡"
                     else:
                         age = " 🔴"
-                lines.append(f"- [[pages/{slug}|{item['name']}]]{age}")
+
+                link = f"[[{slug}|{item['name']}]]"
+                suffix = f" — {summary}" if summary else ""
+                meta = f" *(created: {created_date}, sources: {src_count}, updated: {updated_date})*"
+                lines.append(f"- {link}{age}{suffix}")
+                lines.append(f"  {meta}")
             lines.append("")
 
         content = "\n".join(lines)
