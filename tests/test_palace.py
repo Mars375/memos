@@ -274,3 +274,60 @@ class TestDiaryAPIEndpoints:
         data = resp.json()
         assert data["status"] == "ok"
         assert data["agent_name"] == "legacy-agent"
+
+
+# ---------------------------------------------------------------------------
+# MCP dispatch: palace_list_agents (Task 4.3)
+# ---------------------------------------------------------------------------
+
+
+class TestMCPListAgents:
+    def test_dispatch_palace_list_agents_no_agents(self):
+        """MCP dispatch returns 'no agents' when palace is empty."""
+        from unittest.mock import MagicMock
+
+        from memos.mcp_server import _dispatch
+
+        memos = MagicMock(spec=[])
+        palace = PalaceIndex(":memory:")
+        memos._palace = palace
+
+        r = _dispatch(memos, "palace_list_agents", {})
+        assert not r.get("isError")
+        assert "No agents found" in r["content"][0]["text"]
+        palace.close()
+
+    def test_dispatch_palace_list_agents_with_agents(self):
+        """MCP dispatch returns formatted agent list."""
+        from unittest.mock import MagicMock
+
+        from memos.mcp_server import _dispatch
+
+        memos = MagicMock(spec=[])
+        palace = PalaceIndex(":memory:")
+        memos._palace = palace
+
+        # Provision two agent wings
+        palace.ensure_agent_wing("hermes")
+        palace.ensure_agent_wing("athena")
+
+        r = _dispatch(memos, "palace_list_agents", {})
+        assert not r.get("isError")
+        text = r["content"][0]["text"]
+        assert "Found 2 agent(s)" in text
+        assert "hermes" in text
+        assert "athena" in text
+        assert "wing_id=" in text
+        assert "diary_count=0" in text
+        palace.close()
+
+    def test_dispatch_palace_list_agents_no_palace(self):
+        """MCP dispatch returns error when no palace is attached."""
+        from unittest.mock import MagicMock
+
+        from memos.mcp_server import _dispatch
+
+        memos = MagicMock(spec=[])  # no _palace attribute
+        r = _dispatch(memos, "palace_list_agents", {})
+        assert r.get("isError")
+        assert "Palace index not available" in r["content"][0]["text"]

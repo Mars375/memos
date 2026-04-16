@@ -407,8 +407,8 @@ TOOLS = [
     },
     {
         "name": "palace_list_agents",
-        "description": "Discover all agents with agent- wings in the memory palace, including diary entry counts and wing stats.",
-        "inputSchema": {"type": "object", "properties": {}},
+        "description": "List all registered agents and their activity. Returns name, wing_id, diary_count, last_activity.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
 ]
 
@@ -869,14 +869,15 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             palace = getattr(memos, "_palace", None)
             if palace is None:
                 return _error("Palace index not available")
-            agents = palace.list_agents()
+            agents = palace.list_agent_wings()
             if not agents:
                 return _text("No agents found in palace.")
             lines = [f"Found {len(agents)} agent(s):"]
             for a in agents:
+                activity = f", last_activity={a['last_activity']}" if a.get("last_activity") else ""
                 lines.append(
-                    f"  {a['name']}: {a['diary_entries']} diary entries, "
-                    f"{a['stats']['memory_count']} memories, {a['stats']['room_count']} rooms"
+                    f"  {a['name']}: wing_id={a['wing_id']}, "
+                    f"diary_count={a['diary_count']}{activity}"
                 )
             return _text("\n".join(lines))
 

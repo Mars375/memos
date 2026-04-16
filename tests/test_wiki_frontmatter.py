@@ -102,8 +102,8 @@ class TestModuleFrontmatter:
         assert parsed["title"] == "Complete Test"
         assert parsed["type"] == "project"
         assert parsed["sources"] == 5
-        assert parsed["created"] == "2024-01-01"
-        assert parsed["updated"] == "2025-06-15"
+        assert str(parsed["created"]) == "2024-01-01"
+        assert str(parsed["updated"]) == "2025-06-15"
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ class TestInstanceFrontmatter:
         assert parsed["type"] == "project"
         assert parsed["sources"] == 3
         # created should be a date string
-        assert re.match(r"\d{4}-\d{2}-\d{2}", parsed["created"])
+        assert re.match(r"\d{4}-\d{2}-\d{2}", str(parsed["created"]))
 
 
 # ---------------------------------------------------------------------------
