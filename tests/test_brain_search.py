@@ -334,3 +334,185 @@ def test_brain_suggest_mcp_dispatch(brain_env):
     text = response["content"][0]["text"]
     assert "Suggested questions" in text
     assert "hub_exploration" in text
+
+
+# ── Surprising Connections ──────────────────────────────────────
+
+
+def test_surprising_connections_empty_graph(tmp_path: Path):
+    """An empty knowledge graph should return no connections."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    result = searcher.surprising_connections(top_n=5)
+
+    assert result == []
+    kg.close()
+
+
+def test_surprising_connections_single_community(tmp_path: Path):
+    """If all entities are in the same community there are no cross-domain links."""
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    # A→B→C forms a single connected component / one community
+    kg.add_fact("A", "related_to", "B", confidence=0.9)
+    kg.add_fact("B", "related_to", "C", confidence=0.8)
+    memos._kg = kg
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    result = searcher.surprising_connections(top_n=5)
+
+    assert result == []
+    kg.close()
+
+
+def test_surprising_connections_cross_domain(tmp_path: Path):
+    """Facts linking entities in different communities should be found and scored."""
+    from unittest.mock import patch
+
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    # Community 1 (tech): Alice —works_at→ OpenAI, Alice —uses→ Python
+    kg.add_fact("Alice", "works_at", "OpenAI", confidence=0.95)
+    kg.add_fact("Alice", "uses", "Python", confidence=0.9)
+    # Community 2 (biology): Bob —studies→ Cells, Bob —works_at→ LabCorp
+    kg.add_fact("Bob", "studies", "Cells", confidence=0.85)
+    kg.add_fact("Bob", "works_at", "LabCorp", confidence=0.8)
+    # Cross-domain link: Alice —collaborates_with→ Bob
+    kg.add_fact("Alice", "collaborates_with", "Bob", confidence=0.7)
+    memos._kg = kg
+
+    # Mock communities so Alice/OpenAI/Python are in one and Bob/Cells/LabCorp in another
+    fake_communities = [
+        {"id": "0", "label": "tech", "nodes": ["Alice", "OpenAI", "Python"], "size": 3, "top_entity": "Alice"},
+        {"id": "1", "label": "bio", "nodes": ["Bob", "Cells", "LabCorp"], "size": 3, "top_entity": "Bob"},
+    ]
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    with patch.object(kg, "detect_communities", return_value=fake_communities):
+        result = searcher.surprising_connections(top_n=5)
+
+    # Should find the cross-domain fact
+    assert len(result) >= 1
+
+    # Find the cross-domain fact about Alice and Bob
+    cross = [r for r in result if r["subject"] == "Alice" and r["object"] == "Bob"]
+    assert len(cross) == 1
+
+    fact = cross[0]
+    assert fact["predicate"] == "collaborates_with"
+    assert fact["confidence"] == 0.7
+    assert fact["score"] > 0
+
+    # Verify scoring formula: 2.0 * confidence * (1 / degree_of_predicate)
+    # "collaborates_with" appears once → edge_rarity = 1.0
+    # score = 2.0 * 0.7 * 1.0 = 1.4
+    assert fact["score"] == pytest.approx(1.4, abs=1e-4)
+
+    kg.close()
+
+
+def test_surprising_connections_reason_is_descriptive(tmp_path: Path):
+    """The reason string should be human-readable and mention communities."""
+    from unittest.mock import patch
+
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    # Two separate communities
+    kg.add_fact("Alice", "works_at", "OpenAI", confidence=0.9)
+    kg.add_fact("Bob", "studies", "Cells", confidence=0.9)
+    kg.add_fact("Alice", "mentors", "Bob", confidence=0.8)
+    memos._kg = kg
+
+    fake_communities = [
+        {"id": "0", "label": "tech", "nodes": ["Alice", "OpenAI"], "size": 2, "top_entity": "Alice"},
+        {"id": "1", "label": "bio", "nodes": ["Bob", "Cells"], "size": 2, "top_entity": "Bob"},
+    ]
+
+    searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
+    with patch.object(kg, "detect_communities", return_value=fake_communities):
+        result = searcher.surprising_connections(top_n=5)
+
+    assert len(result) >= 1
+    reason = result[0]["reason"]
+    assert "Cross-domain link:" in reason
+    assert "Alice" in reason
+    assert "Bob" in reason
+    assert "mentors" in reason
+    assert "community" in reason.lower()
+
+    kg.close()
+
+
+@pytest.mark.asyncio
+async def test_surprising_connections_api(tmp_path: Path):
+    """Test the GET /api/v1/brain/connections endpoint."""
+    from unittest.mock import patch
+
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    persist_path = tmp_path / "store.json"
+    kg_path = tmp_path / "kg.db"
+    wiki_root = tmp_path / "wiki"
+
+    memos = MemOS(backend="json", persist_path=str(persist_path))
+    wiki = LivingWikiEngine(memos, wiki_dir=str(wiki_root))
+    wiki.init()
+
+    kg = KnowledgeGraph(db_path=str(kg_path))
+    kg.add_fact("Alice", "works_at", "OpenAI", confidence=0.9)
+    kg.add_fact("Bob", "studies", "Cells", confidence=0.9)
+    kg.add_fact("Alice", "mentors", "Bob", confidence=0.8)
+    kg.close()
+
+    fake_communities = [
+        {"id": "0", "label": "tech", "nodes": ["Alice", "OpenAI"], "size": 2, "top_entity": "Alice"},
+        {"id": "1", "label": "bio", "nodes": ["Bob", "Cells"], "size": 2, "top_entity": "Bob"},
+    ]
+
+    app = create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    # Patch detect_communities on the KG module level so the endpoint picks it up
+    import memos.knowledge_graph as _kg_mod
+
+    with patch.object(_kg_mod.KnowledgeGraph, "detect_communities", return_value=fake_communities):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/brain/connections", params={"top": 5})
+
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "connections" in data
+    assert "total" in data
+

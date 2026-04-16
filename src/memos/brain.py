@@ -247,6 +247,80 @@ class BrainSearch:
             layers=neighborhood["layers"],
         )
 
+    def surprising_connections(self, top_n: int = 5) -> list[dict[str, Any]]:
+        """Find surprising cross-domain connections between communities.
+
+        Uses community detection to identify facts whose subject and object
+        belong to *different* communities (cross-domain links).  Each such
+        fact is scored with a composite formula:
+
+            composite = cross_community_bonus(2.0)
+                        × fact_confidence
+                        × edge_rarity(1.0 / degree_of_predicate)
+
+        Returns up to *top_n* results sorted by score descending.
+        Each result is a dict with keys:
+            subject, object, predicate, confidence, score, reason
+        """
+        communities = self._kg.detect_communities()
+        if not communities:
+            return []
+
+        # Build entity → community map
+        entity_to_comm: dict[str, str] = {}
+        for comm in communities:
+            for member in comm["nodes"]:
+                entity_to_comm[member] = comm.get("label", comm.get("id", ""))
+
+        # Short-circuit: if there is only one community, no cross-domain links
+        unique_communities = set(entity_to_comm.values())
+        if len(unique_communities) <= 1:
+            return []
+
+        # Get all active facts
+        rows = self._kg._conn.execute(
+            "SELECT * FROM triples WHERE invalidated_at IS NULL"
+        ).fetchall()
+
+        # Compute predicate degree (how many facts use each predicate)
+        predicate_degree: dict[str, int] = {}
+        for r in rows:
+            p = r["predicate"]
+            predicate_degree[p] = predicate_degree.get(p, 0) + 1
+
+        # Find cross-community facts and score them
+        CROSS_COMMUNITY_BONUS = 2.0
+        results: list[dict[str, Any]] = []
+        for r in rows:
+            subject = r["subject"]
+            obj = r["object"]
+            subj_comm = entity_to_comm.get(subject)
+            obj_comm = entity_to_comm.get(obj)
+            if subj_comm is None or obj_comm is None:
+                continue
+            if subj_comm == obj_comm:
+                continue
+            confidence = float(r["confidence"])
+            pred = r["predicate"]
+            pred_deg = predicate_degree.get(pred, 1)
+            edge_rarity = 1.0 / pred_deg
+            score = round(CROSS_COMMUNITY_BONUS * confidence * edge_rarity, 6)
+            reason = (
+                f"Cross-domain link: {subject} in community {subj_comm} "
+                f"is connected to {obj} in community {obj_comm} via {pred}"
+            )
+            results.append({
+                "subject": subject,
+                "object": obj,
+                "predicate": pred,
+                "confidence": confidence,
+                "score": score,
+                "reason": reason,
+            })
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return results[:top_n]
+
     def suggest_questions(self, top_k: int = 5) -> list[SuggestedQuestion]:
         """Generate suggested exploration questions based on the KG structure.
 

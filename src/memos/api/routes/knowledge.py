@@ -233,6 +233,22 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as exc:
             return {"status": "error", "message": str(exc)}
 
+    @router.get("/api/v1/brain/connections")
+    async def brain_surprising_connections(top: int = 5, wiki_dir: str | None = None):
+        """Find surprising cross-domain connections between communities."""
+        from ...brain import BrainSearch
+
+        try:
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            connections = searcher.surprising_connections(top_n=top)
+            return {
+                "status": "ok",
+                "connections": connections,
+                "total": len(connections),
+            }
+        except Exception as exc:
+            return {"status": "error", "message": str(exc)}
+
     @router.get("/api/v1/brain/suggest")
     async def brain_suggest(top_k: int = 5, wiki_dir: str | None = None):
         """Suggest exploration questions based on the knowledge graph structure."""
