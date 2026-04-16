@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any
-
-import pytest
 
 from memos.retrieval import HybridRetriever
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -62,7 +62,7 @@ class TestAutoFileSearch:
         memos, kg, wiki_root = brain_env
         searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
 
-        result = searcher.search("Alice OpenAI retrieval", top_k=5)
+        searcher.search("Alice OpenAI retrieval", top_k=5)
         # No wiki page should be created when auto_file=False
         page = searcher._wiki.read_page("Alice OpenAI retrieval")
         assert page is None

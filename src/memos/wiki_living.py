@@ -1108,10 +1108,7 @@ class LivingWikiEngine:
             if tgt in inbound:
                 inbound[tgt].add(row["source_entity"])
 
-        # Get all memory IDs currently in store
-        store = self._memos._store
-        namespace = self._memos._namespace
-        all_mem_ids = {item.id for item in store.list_all(namespace=namespace)}
+        # all memory IDs available for cross-reference checks
 
         # ── Per-page checks ───────────────────────────────────────
         for ename, edata in all_entities.items():
@@ -1352,8 +1349,8 @@ class LivingWikiEngine:
         lines.append("")
         lines.append("## 📊 Statistics\n")
         lines.append("")
-        lines.append(f"| Metric | Value |")
-        lines.append(f"|--------|-------|")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
         lines.append(f"| Total Pages | {len(entities)} |")
         lines.append(f"| Total Memory Links | {total_memory_links} |")
         lines.append(f"| Total Wiki Links | {total_backlinks} |")

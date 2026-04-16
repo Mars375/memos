@@ -9,8 +9,7 @@ import pytest
 import yaml
 
 from memos.core import MemOS
-from memos.wiki_living import LivingWikiEngine, LivingPage, _frontmatter
-
+from memos.wiki_living import LivingPage, LivingWikiEngine, _frontmatter
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -143,7 +142,7 @@ class TestInstanceFrontmatter:
         assert "tags: [auto, entity]" in fm
 
     def test_with_living_page_custom_tags(self, engine):
-        page = LivingPage(
+        LivingPage(
             entity="Tagged",
             entity_type="topic",
             path=Path("/tmp/tagged.md"),

@@ -8,17 +8,15 @@ Task 4.1 — Per-agent wing auto-creation hook
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from memos.mcp_hooks import (
-    MCPHookRegistry,
     create_default_registry,
     hook_ensure_agent_wing,
 )
 from memos.retrieval.engine import RetrievalEngine
-
 
 # ===========================================================================
 # Task 2.1 — Keyword boosting in HybridRetriever

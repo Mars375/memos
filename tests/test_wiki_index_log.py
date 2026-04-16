@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import re
-import time
-from pathlib import Path
 
 import pytest
 
 from memos.core import MemOS
 from memos.wiki_living import LivingWikiEngine
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -249,8 +246,9 @@ class TestWikiEndpoints:
     @pytest.fixture()
     def client(self, memos_instance):
         """TestClient wired to the app."""
-        from memos.api import create_fastapi_app
         from starlette.testclient import TestClient
+
+        from memos.api import create_fastapi_app
 
         app = create_fastapi_app(memos=memos_instance)
         return TestClient(app)

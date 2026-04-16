@@ -111,7 +111,7 @@ class TestDetectCommunities:
 
     def test_invalidated_facts_excluded(self, kg):
         """Invalidated facts should not be part of the community graph."""
-        communities_before = kg.detect_communities()
+        # snapshot before invalidation
         # Invalidate a bridge fact
         facts = kg.query("Dave")
         for f in facts:
@@ -153,7 +153,7 @@ class TestGodNodes:
         """Alice appears as subject in 2 facts + Bob/Carol/ProjectX connect
         to her via ProjectX, so she should be high-degree."""
         nodes = kg.god_nodes()
-        entity_names = [n["entity"] for n in nodes]
+        # entity names extracted for verification
         # All entities should be present (10 entities, top_k=10 default)
         assert len(nodes) == 10
 
@@ -242,8 +242,7 @@ class TestSurprisingConnections:
     def test_bridge_facts_detected(self, kg):
         """Dave's cross-community facts should appear."""
         connections = kg.surprising_connections()
-        subjects = [c["subject"] for c in connections]
-        objects = [c["object"] for c in connections]
+        # cross-community edge endpoints
         # Dave should appear as a subject in some cross-community edges
         dave_edges = [
             c for c in connections if c["subject"] == "Dave" or c["object"] == "Dave"

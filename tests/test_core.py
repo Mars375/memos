@@ -253,6 +253,7 @@ class TestBM25:
 
 def test_ingest_url_signature_includes_skip_sanitization():
     import inspect
+
     from memos.core import MemOS
 
     sig = inspect.signature(MemOS.ingest_url)

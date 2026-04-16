@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import time
 
 import pytest
 
 from memos.palace import PalaceIndex
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -80,7 +78,7 @@ class TestAppendDiary:
         assert "agent-diary" in entries[0]["tags"]
 
     def test_write_diary_with_tags(self, palace: PalaceIndex):
-        entry_id = palace.write_diary("hermes", "Tagged legacy", tags=["old-api"])
+        palace.write_diary("hermes", "Tagged legacy", tags=["old-api"])
         entries = palace.read_diary("hermes")
         assert "old-api" in entries[0]["tags"]
 
@@ -157,7 +155,7 @@ class TestAgentWingIntegration:
 
     def test_diary_and_wing_coexist(self, palace: PalaceIndex):
         palace.ensure_agent_wing("hermes")
-        entry_id = palace.append_diary("hermes", "Diary with wing")
+        palace.append_diary("hermes", "Diary with wing")
         entries = palace.read_diary("hermes")
         assert len(entries) == 1
         assert entries[0]["entry"] == "Diary with wing"

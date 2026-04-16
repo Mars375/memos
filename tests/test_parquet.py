@@ -286,7 +286,6 @@ class TestParquetMissingPyarrow:
 
     def test_export_raises_import_error_with_message(self, tmp_path, monkeypatch):
         """_check_pyarrow should raise ImportError with install hint."""
-        import memos.parquet_io as pio
 
         # Simulate pyarrow missing by making the import fail
         import builtins

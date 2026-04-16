@@ -831,7 +831,6 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text("\n".join(lines))
 
         elif tool == "diary_write":
-            from .palace import PalaceIndex
 
             agent = args.get("agent", "").strip()
             content = args.get("content", "").strip()
@@ -844,7 +843,6 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text(f"Diary entry saved [{entry_id}] for agent '{agent}'")
 
         elif tool == "diary_read":
-            from .palace import PalaceIndex
 
             agent = args.get("agent", "").strip()
             if not agent:

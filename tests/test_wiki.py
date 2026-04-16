@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from memos.core import MemOS
-from memos.wiki_living import LivingWikiEngine, extract_entities
+from memos.wiki_living import LivingWikiEngine
 
 
 @pytest.fixture

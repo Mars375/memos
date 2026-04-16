@@ -138,7 +138,7 @@ class TestCascadingInUpdateForItem:
 
         # Second item mentioning Alice + new entity Bob
         item2 = m.learn("Alice and Bob collaborate on deep learning research", tags=["team"])
-        result = engine.update_for_item(item2)
+        engine.update_for_item(item2)
 
         # Both should be refreshed
         alice_page = engine.read_page("Alice")

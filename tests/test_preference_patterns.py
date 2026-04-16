@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from memos.analytics import RecallAnalytics, _extract_keywords
-
 
 # ---------------------------------------------------------------------------
 # _extract_keywords helper
