@@ -701,6 +701,10 @@ class LivingWikiEngine:
         Creates or updates entity pages for every entity and tag found in
         *item*.  Skips the item if it was already indexed.
 
+        After creating/updating the main entity pages, cascades updates to
+        all mentioned entities via :meth:`_refresh_entity_page` and builds
+        bidirectional cross-references via :meth:`_update_cross_references`.
+
         Parameters
         ----------
         item:
@@ -725,6 +729,8 @@ class LivingWikiEngine:
             entities = extract_entities(item.content)
             for tag in item.tags or []:
                 entities.append((tag, "topic"))
+
+            entity_names: List[str] = []
 
             for ename, etype in entities:
                 row = db.execute("SELECT name FROM entities WHERE name = ?", (ename,)).fetchone()
@@ -780,8 +786,18 @@ class LivingWikiEngine:
                     "(entity_name, memory_id, snippet, added_at) VALUES (?, ?, ?, ?)",
                     (ename, item.id, item.content[:100], time.time()),
                 )
+                entity_names.append(ename)
 
             result.entities_found += len(entities)
+
+            # ── Cascading updates ─────────────────────────────────
+            # Refresh every secondary entity page with the new context
+            for ename in entity_names:
+                self._refresh_entity_page(ename, trigger=item.id, db=db)
+
+            # Add bidirectional cross-references between co-mentioned entities
+            self._update_cross_references(entity_names, db=db)
+
             db.commit()
             # Regenerate index after single-item update
             self._regenerate_index(db)
@@ -794,6 +810,168 @@ class LivingWikiEngine:
             db.close()
 
         return result
+
+    def _refresh_entity_page(
+        self, entity: str, trigger: str | None = None, db: sqlite3.Connection | None = None
+    ) -> None:
+        """Refresh a single entity's wiki page with current context.
+
+        Updates the page with any new graph neighbor information and
+        records the refresh in the activity log.
+
+        Parameters
+        ----------
+        entity:
+            The entity name whose page should be refreshed.
+        trigger:
+            Optional memory ID that triggered this refresh, used for
+            logging and provenance tracking.
+        db:
+            Optional existing DB connection (avoids lock contention).
+        """
+        slug = self._safe_slug(entity)
+        page_path = self._wiki_dir / "pages" / f"{slug}.md"
+        if not page_path.exists():
+            return
+
+        own_db = db is None
+        if own_db:
+            db = self._get_db()
+
+        try:
+            # Verify the entity exists in the DB
+            row = db.execute("SELECT name FROM entities WHERE name = ?", (entity,)).fetchone()
+            if row is None:
+                return
+
+            content = page_path.read_text(encoding="utf-8")
+
+            # Update the frontmatter updated timestamp
+            content = re.sub(
+                r'updated: "[^"]*"',
+                f'updated: "{time.strftime("%Y-%m-%d")}"',
+                content,
+            )
+
+            # Append a "Related Context" section noting the trigger
+            if trigger:
+                trigger_note = f"\n## Related Context\n\n> Triggered by memory `{trigger}`\n"
+                # Only add if not already present for this trigger
+                if trigger not in content:
+                    content += trigger_note
+
+            # Update graph neighbors section
+            kg = getattr(self._memos, "_kg", None)
+            if kg is not None:
+                try:
+                    neighbor_edges = kg.neighbors(entity, depth=1, direction="both")["edges"]
+                except Exception:
+                    neighbor_edges = []
+                if neighbor_edges:
+                    seen_neighbors: Dict[str, Set[str]] = {}
+                    for edge in neighbor_edges:
+                        other = edge["object"] if edge["subject"] == entity else edge["subject"]
+                        seen_neighbors.setdefault(other, set()).add(edge["predicate"])
+                    neighbor_lines = (
+                        "\n## Graph Neighbors\n\n"
+                        + "\n".join(
+                            f"- [[{self._safe_slug(other)}|{other}]] ({', '.join(sorted(predicates))})"
+                            for other, predicates in sorted(seen_neighbors.items())
+                        )
+                        + "\n"
+                    )
+                    if "## Graph Neighbors" in content:
+                        content = re.sub(
+                            r"## Graph Neighbors\n.*?(?=\n## |\Z)",
+                            neighbor_lines.strip("\n"),
+                            content,
+                            flags=re.DOTALL,
+                        )
+                    else:
+                        content += neighbor_lines
+
+            page_path.write_text(content, encoding="utf-8")
+            db.execute("UPDATE entities SET updated_at = ? WHERE name = ?", (time.time(), entity))
+
+            detail = f"Refreshed page (trigger: {trigger})" if trigger else "Refreshed page"
+            self._log_action(db, "refresh", entity, detail)
+            if own_db:
+                db.commit()
+        finally:
+            if own_db:
+                db.close()
+
+    def _update_cross_references(
+        self,
+        entities: List[str],
+        db: sqlite3.Connection | None = None,
+    ) -> int:
+        """Add bidirectional backlinks between related entity pages.
+
+        For every pair of entities in the list, creates backlinks in both
+        directions if they don't already exist, and appends ``[[wikilinks]]``
+        to the page content.
+
+        Parameters
+        ----------
+        entities:
+            List of entity names to cross-reference.
+        db:
+            Optional existing DB connection (avoids re-opening).
+
+        Returns
+        -------
+        Number of new backlinks added.
+        """
+        if len(entities) < 2:
+            return 0
+
+        own_db = db is None
+        if own_db:
+            db = self._get_db()
+
+        added = 0
+        try:
+            for i, e1 in enumerate(entities):
+                for e2 in entities[i + 1 :]:
+                    # Bidirectional backlinks
+                    for src, tgt in [(e1, e2), (e2, e1)]:
+                        existing = db.execute(
+                            "SELECT 1 FROM backlinks WHERE source_entity = ? AND target_entity = ?",
+                            (src, tgt),
+                        ).fetchone()
+                        if existing is None:
+                            db.execute(
+                                "INSERT OR IGNORE INTO backlinks (source_entity, target_entity) VALUES (?, ?)",
+                                (src, tgt),
+                            )
+                            added += 1
+
+                            # Append wikilink to source page
+                            slug = self._safe_slug(src)
+                            page_path = self._wiki_dir / "pages" / f"{slug}.md"
+                            if page_path.exists():
+                                content = page_path.read_text(encoding="utf-8")
+                                link_line = f"- [[{self._safe_slug(tgt)}|{tgt}]]"
+                                # Check if already present in content
+                                if link_line not in content:
+                                    if "## Backlinks" in content:
+                                        # Append to existing backlinks section
+                                        content = content.replace(
+                                            "## Backlinks\n",
+                                            f"## Backlinks\n\n{link_line}\n",
+                                            1,
+                                        )
+                                    else:
+                                        content += f"\n## Backlinks\n\n{link_line}\n"
+                                    page_path.write_text(content, encoding="utf-8")
+            if own_db:
+                db.commit()
+        finally:
+            if own_db:
+                db.close()
+
+        return added
 
     def lint(self) -> LintReport:
         """Detect orphan pages, contradictions, empty pages, and stale content.
