@@ -1,5 +1,67 @@
 # Changelog
 
+## v2.3.0 (2026-04-17) — Intelligence Layer
+
+Five major feature sets inspired by Karpathy's LLM Wiki, Graphify, and MemPalace.
+
+### Feature 1: Enriched Knowledge Graph Extraction
+- **15+ SVO regex patterns** in `kg_bridge.py` — `deployed_on`, `uses`, `runs_on`, `manages`, `depends_on`, `contains`, `located_in`, `part_of`, `connected_to`, `built_with`, `hosts` + general SVO fallback
+- **Community detection** — label-propagation clustering on KG adjacency, 60s cache, zero external deps
+- **God nodes** — top-degree hub entities with `degree`, `facts_as_subject`, `facts_as_object`, `top_predicates`
+- New endpoints: `GET /api/v1/kg/communities`, `GET /api/v1/kg/god-nodes`
+- New MCP tools: `kg_communities`, `kg_god_nodes`
+
+### Feature 2: Hybrid Retrieval v2
+- **Temporal proximity boosting** — continuous linear decay within configurable window (default 1h), weighted at 0.05
+- **Importance-weighted scoring** — memory importance factor wired into retrieval pipeline
+- **Preference pattern extraction** — repeated query topics tracked and boosted
+- **LLM reranking pipeline** — optional post-retrieval rerank with configurable model, graceful fallback
+
+### Feature 3: Wiki Auto-Compilation (Karpathy-inspired)
+- **Auto-update on learn/ingest** — every `learn()` triggers wiki page creation/update for extracted entities
+- **Karpathy-style index.md** — categorized (Entities, Concepts, Sources, Topics), freshness indicators (🟢🟡🔴), relevance sorting, statistics header, recent changes
+- **Query answers → wiki pages** — brain search results optionally filed as wiki pages
+- **Wiki lint** — orphan pages, missing cross-references, stale pages (>30d), empty pages, contradiction detection ("X is Y" vs "X is not Y")
+- New endpoints: `POST /api/v1/wiki/regenerate-index`, `GET /api/v1/wiki/lint`, `GET /api/v1/wiki/log`
+- New MCP tools: `wiki_regenerate_index`, `wiki_lint`
+
+### Feature 4: Agent Diaries
+- **Agent wing auto-provisioning** — `ensure_agent_wing()` creates `agent:<name>` wing with `diary`, `context`, `learnings` rooms (idempotent)
+- **Diary append/read** — per-agent journal entries with tags, ordered newest-first
+- **Agent discovery** — `palace_list_agents` MCP tool for cross-agent awareness without prompt bloat
+- New endpoints: `POST /api/v1/palace/agents`, `GET /api/v1/palace/agents`, `POST /api/v1/palace/diary`, `GET /api/v1/palace/diary/{agent}`
+- New MCP tools: `palace_diary_append`, `palace_diary_read`, `palace_list_agents`
+
+### Feature 5: Dashboard Intelligence
+- **Surprising connections** — cross-domain KG edges scored by community distance × confidence × predicate rarity
+- **Suggested questions** — auto-generated from god nodes, small communities, ambiguous facts, wiki-sparse entities
+- New endpoints: `GET /api/v1/brain/connections`, `GET /api/v1/brain/suggestions`
+
+### Bug Fixes (from v2.2.0 audit)
+- **Parquet export** — graceful error when `pyarrow` missing instead of 500 crash
+- **Wiki LivingPage** — fixed missing `slug` attribute, added `POST /api/v1/wiki/pages`
+- **URL sanitizer** — less aggressive regex, `skip_sanitization` parameter for trusted sources
+- **Palace recall** — `query` parameter now optional when `wing` + `room` provided
+- **Snapshot** — `at` parameter now defaults to current time
+- **Dashboard KG coverage** — fixed always-0% metric
+
+### Stats
+- **1975 tests** passing (+265 from v2.2.0)
+- 10 new API endpoints, 7 new MCP tools
+- 23 commits since v2.2.0
+
+---
+
+## v2.2.0 (2026-04-16) — Standalone Stability
+
+### Improvements
+- Standalone Docker image with zero external dependencies (JSON + MiniLM)
+- Health check endpoint, rate limiting, Swagger UI
+- Memory CRUD, Knowledge Graph, Context system, Memory Palace, Brain search
+- Dashboard with force-graph, wiki view, palace view, timeline
+
+---
+
 ## v1.1.0 (2026-04-15) — Hardened & Modular
 
 ### Security
