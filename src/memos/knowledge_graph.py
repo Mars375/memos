@@ -625,6 +625,152 @@ class KnowledgeGraph:
 
         return paths_found
 
+    def detect_communities(self, algorithm: str = "louvain") -> List[dict]:
+        """Detect entity communities using graph clustering.
+
+        Builds a DiGraph from active facts, converts to undirected,
+        and runs community detection (Louvain by default).
+
+        Returns:
+            List of community dicts with keys:
+                id, members, size, hub, hub_degree
+        """
+        import networkx as nx
+
+        # Fetch all active facts
+        rows = self._conn.execute(
+            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        # Build directed graph, then convert to undirected
+        G = nx.DiGraph()
+        for r in rows:
+            G.add_edge(r["subject"], r["object"])
+        U = G.to_undirected()
+
+        # Run Louvain community detection
+        if algorithm == "louvain":
+            communities_sets = nx.community.louvain_communities(U)
+        else:
+            raise ValueError(f"Unsupported algorithm: {algorithm!r}. Use 'louvain'.")
+
+        result: list[dict] = []
+        for idx, members_set in enumerate(communities_sets):
+            members = sorted(members_set)
+            # Find hub: member with highest degree in this community
+            subG = U.subgraph(members_set)
+            degrees = dict(subG.degree())
+            hub = max(degrees, key=degrees.get) if degrees else None
+            hub_degree = degrees.get(hub, 0) if hub else 0
+            result.append({
+                "id": idx,
+                "members": members,
+                "size": len(members),
+                "hub": hub,
+                "hub_degree": hub_degree,
+            })
+
+        # Sort by size descending
+        result.sort(key=lambda c: c["size"], reverse=True)
+        # Re-index after sort
+        for i, c in enumerate(result):
+            c["id"] = i
+        return result
+
+    def god_nodes(self, top_k: int = 10) -> List[dict]:
+        """Return the highest-degree entities in the knowledge graph.
+
+        Counts appearances of each entity as both subject and object
+        across all active facts.
+
+        Returns:
+            List of dicts with keys: entity, degree
+        """
+        rows = self._conn.execute(
+            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
+        ).fetchall()
+
+        degree: dict[str, int] = defaultdict(int)
+        for r in rows:
+            degree[r["subject"]] += 1
+            degree[r["object"]] += 1
+
+        sorted_entities = sorted(degree.items(), key=lambda x: x[1], reverse=True)
+        return [
+            {"entity": entity, "degree": deg}
+            for entity, deg in sorted_entities[:top_k]
+        ]
+
+    def surprising_connections(self, top_k: int = 10) -> List[dict]:
+        """Find edges that connect entities from different communities.
+
+        Uses detect_communities() to build an entity→community map,
+        then scores each fact whose subject and object belong to
+        different communities.
+
+        The surprise_score is based on the product of the degrees of
+        the connected entities (cross-community bridges involving
+        high-degree nodes are more surprising).
+
+        Returns:
+            List of dicts with keys:
+                id, subject, predicate, object, surprise_score, reason
+        """
+        communities = self.detect_communities()
+        if not communities:
+            return []
+
+        # Build entity → community id map
+        entity_to_community: dict[str, int] = {}
+        for comm in communities:
+            for member in comm["members"]:
+                entity_to_community[member] = comm["id"]
+
+        # Get all active facts
+        rows = self._conn.execute(
+            "SELECT * FROM triples WHERE invalidated_at IS NULL"
+        ).fetchall()
+        facts = [_row_to_dict(r) for r in rows]
+
+        # Compute degree map for scoring
+        degree: dict[str, int] = defaultdict(int)
+        for f in facts:
+            degree[f["subject"]] += 1
+            degree[f["object"]] += 1
+
+        # Find cross-community edges
+        surprising: list[dict] = []
+        for f in facts:
+            subj_comm = entity_to_community.get(f["subject"])
+            obj_comm = entity_to_community.get(f["object"])
+            if subj_comm is None or obj_comm is None:
+                continue
+            if subj_comm != obj_comm:
+                # Surprise score: product of entity degrees
+                subj_deg = degree.get(f["subject"], 1)
+                obj_deg = degree.get(f["object"], 1)
+                surprise_score = round(subj_deg * obj_deg, 2)
+                reason = (
+                    f"Cross-community bridge: "
+                    f"'{f['subject']}' (community {subj_comm}) → "
+                    f"'{f['object']}' (community {obj_comm})"
+                )
+                surprising.append({
+                    "id": f["id"],
+                    "subject": f["subject"],
+                    "predicate": f["predicate"],
+                    "object": f["object"],
+                    "surprise_score": surprise_score,
+                    "reason": reason,
+                })
+
+        # Sort by surprise_score descending
+        surprising.sort(key=lambda x: x["surprise_score"], reverse=True)
+        return surprising[:top_k]
+
     def shortest_path(
         self,
         entity_a: str,
