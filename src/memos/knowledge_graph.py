@@ -810,25 +810,51 @@ class KnowledgeGraph:
         """Return the highest-degree entities in the knowledge graph.
 
         Counts appearances of each entity as both subject and object
-        across all active facts.
+        across all active facts.  Also reports the break-down of facts
+        where the entity appears as subject vs. object, and the three
+        most common predicates involving the entity.
 
         Returns:
-            List of dicts with keys: entity, degree
+            List of dicts with keys:
+                entity (str), degree (int),
+                facts_as_subject (int), facts_as_object (int),
+                top_predicates (list[str])
         """
         rows = self._conn.execute(
-            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL"
+            "SELECT subject, predicate, object FROM triples WHERE invalidated_at IS NULL"
         ).fetchall()
 
-        degree: dict[str, int] = defaultdict(int)
+        subject_count: dict[str, int] = defaultdict(int)
+        object_count: dict[str, int] = defaultdict(int)
+        predicate_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
         for r in rows:
-            degree[r["subject"]] += 1
-            degree[r["object"]] += 1
+            s, p, o = r["subject"], r["predicate"], r["object"]
+            subject_count[s] += 1
+            object_count[o] += 1
+            predicate_counts[s][p] += 1
+            predicate_counts[o][p] += 1
+
+        degree: dict[str, int] = defaultdict(int)
+        for entity in set(list(subject_count.keys()) + list(object_count.keys())):
+            degree[entity] = subject_count.get(entity, 0) + object_count.get(entity, 0)
 
         sorted_entities = sorted(degree.items(), key=lambda x: x[1], reverse=True)
-        return [
-            {"entity": entity, "degree": deg}
-            for entity, deg in sorted_entities[:top_k]
-        ]
+
+        result: list[dict] = []
+        for entity, deg in sorted_entities[:top_k]:
+            f_subj = subject_count.get(entity, 0)
+            f_obj = object_count.get(entity, 0)
+            preds = predicate_counts.get(entity, {})
+            top_3 = [p for p, _ in sorted(preds.items(), key=lambda x: x[1], reverse=True)][:3]
+            result.append({
+                "entity": entity,
+                "degree": deg,
+                "facts_as_subject": f_subj,
+                "facts_as_object": f_obj,
+                "top_predicates": top_3,
+            })
+        return result
 
     def surprising_connections(self, top_k: int = 10) -> List[dict]:
         """Find edges that connect entities from different communities.
