@@ -821,3 +821,153 @@ async def test_rest_list_agents_empty() -> None:
         assert data["status"] == "ok"
         assert data["total"] == 0
         assert data["agents"] == []
+
+
+# ---------------------------------------------------------------------------
+# 14. Agent wing auto-provisioning — Task 4.1
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_agent_wing_creates_wing_and_rooms(palace: PalaceIndex) -> None:
+    wing = palace.ensure_agent_wing("hermes", description="Hermes agent wing")
+    assert wing is not None
+    assert wing["name"] == "agent:hermes"
+    assert wing["description"] == "Hermes agent wing"
+    # Check 3 default rooms
+    rooms = palace.list_rooms(wing_name="agent:hermes")
+    room_names = {r["name"] for r in rooms}
+    assert room_names == {"diary", "context", "learnings"}
+
+
+def test_ensure_agent_wing_idempotent(palace: PalaceIndex) -> None:
+    wing1 = palace.ensure_agent_wing("athena")
+    wing2 = palace.ensure_agent_wing("athena")
+    assert wing1["id"] == wing2["id"]
+    assert wing1["name"] == wing2["name"]
+    # Still exactly 3 rooms
+    rooms = palace.list_rooms(wing_name="agent:athena")
+    assert len(rooms) == 3
+
+
+def test_ensure_agent_wing_empty_name_raises(palace: PalaceIndex) -> None:
+    with pytest.raises(ValueError, match="Agent name cannot be empty"):
+        palace.ensure_agent_wing("   ")
+
+
+def test_ensure_agent_wing_multiple_agents(palace: PalaceIndex) -> None:
+    palace.ensure_agent_wing("hermes")
+    palace.ensure_agent_wing("athena")
+    rooms_hermes = palace.list_rooms(wing_name="agent:hermes")
+    rooms_athena = palace.list_rooms(wing_name="agent:athena")
+    assert len(rooms_hermes) == 3
+    assert len(rooms_athena) == 3
+
+
+def test_list_agent_wings_empty(palace: PalaceIndex) -> None:
+    assert palace.list_agent_wings() == []
+
+
+def test_list_agent_wings_returns_only_agent_wings(palace: PalaceIndex) -> None:
+    palace.create_wing("project-alpha")
+    palace.ensure_agent_wing("hermes")
+    palace.ensure_agent_wing("athena")
+    agent_wings = palace.list_agent_wings()
+    names = {w["name"] for w in agent_wings}
+    assert names == {"hermes", "athena"}
+    assert len(agent_wings) == 2
+
+
+def test_list_agent_wings_includes_diary_count(palace: PalaceIndex) -> None:
+    palace.ensure_agent_wing("hermes")
+    # Assign some memories to the diary room
+    palace.assign("mem-d1", "agent:hermes", room_name="diary")
+    palace.assign("mem-d2", "agent:hermes", room_name="diary")
+    palace.assign("mem-ctx", "agent:hermes", room_name="context")
+    agent_wings = palace.list_agent_wings()
+    hermes = next(w for w in agent_wings if w["name"] == "hermes")
+    assert hermes["diary_count"] == 2
+
+
+def test_list_agent_wings_includes_last_activity(palace: PalaceIndex) -> None:
+    palace.ensure_agent_wing("hermes")
+    palace.assign("mem-001", "agent:hermes")
+    agent_wings = palace.list_agent_wings()
+    hermes = agent_wings[0]
+    assert hermes["last_activity"] is not None
+    assert isinstance(hermes["last_activity"], float)
+
+
+def test_list_agent_wings_no_activity(palace: PalaceIndex) -> None:
+    palace.ensure_agent_wing("hermes")
+    agent_wings = palace.list_agent_wings()
+    hermes = agent_wings[0]
+    assert hermes["last_activity"] is None
+    assert hermes["diary_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# 15. Agent auto-provisioning REST endpoints — Task 4.1
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_rest_provision_agent() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/v1/palace/agents",
+            json={"name": "hermes", "description": "Test agent"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["wing"]["name"] == "agent:hermes"
+        assert data["wing"]["description"] == "Test agent"
+
+
+@pytest.mark.anyio
+async def test_rest_provision_agent_idempotent() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp1 = await client.post("/api/v1/palace/agents", json={"name": "athena"})
+        resp2 = await client.post("/api/v1/palace/agents", json={"name": "athena"})
+        assert resp1.json()["wing"]["id"] == resp2.json()["wing"]["id"]
+
+
+@pytest.mark.anyio
+async def test_rest_provision_agent_missing_name() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post("/api/v1/palace/agents", json={})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "error"
+
+
+@pytest.mark.anyio
+async def test_rest_provision_and_list_agent_wings() -> None:
+    pytest.importorskip("httpx")
+    from httpx import ASGITransport, AsyncClient
+
+    app = _make_app()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Provision two agents
+        await client.post("/api/v1/palace/agents", json={"name": "hermes"})
+        await client.post("/api/v1/palace/agents", json={"name": "athena"})
+        # The existing GET /api/v1/palace/agents endpoint lists agent- prefix wings
+        # Our new agent: wings won't appear there (different prefix).
+        # Verify via the regular wings endpoint instead.
+        resp = await client.get("/api/v1/palace/wings")
+        assert resp.status_code == 200
+        wings = resp.json()["wings"]
+        wing_names = {w["name"] for w in wings}
+        assert "agent:hermes" in wing_names
+        assert "agent:athena" in wing_names

@@ -46,3 +46,16 @@ let activeRoom = null;
 
 // ── Time-travel state ──────────────────────────────────────────
 let ttActive = false;
+
+// ── Community detection + god nodes state (Task 5.3) ──────────
+let communityMap = {};     // nodeId → communityId (from API)
+let communityColors = {};  // communityId → color string
+let communityNames = {};   // communityId → label/name
+let godNodeIds = new Set(); // set of node IDs that are "god nodes"
+
+const COMMUNITY_PALETTE = [
+  '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
+  '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4',
+  '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000',
+  '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9'
+];

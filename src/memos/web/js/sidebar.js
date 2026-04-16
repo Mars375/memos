@@ -175,3 +175,127 @@ function updateHealthPanel() {
     '\u23F0 Stale (&gt;30d): <b>' + stale + '</b><br>' +
     '\uD83E\uDDE0 KG coverage: <b>' + kgPct + '%</b>';
 }
+
+// ── Task 5.1: Surprising Connections panel ───────────────────────
+async function renderSurprisingConnections() {
+  const container = document.getElementById('surprising-connections');
+  if (!container) return;
+  container.textContent = '';
+  const header = document.createElement('div');
+  header.className = 'ft-row open';
+  header.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;';
+  const icon = document.createElement('span');
+  icon.className = 'ft-icon';
+  icon.textContent = '\uD83E\uDD14';
+  const label = document.createElement('span');
+  label.className = 'ft-label';
+  label.textContent = 'Surprising Connections';
+  header.appendChild(icon);
+  header.appendChild(label);
+  container.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'ft-children open';
+  container.appendChild(list);
+
+  const connections = await fetchSurprisingConnections(5);
+  if (!connections.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'color:var(--text2);font-size:.8em;padding:4px 8px;';
+    empty.textContent = 'No surprising connections found.';
+    list.appendChild(empty);
+    return;
+  }
+  connections.forEach(conn => {
+    const card = document.createElement('div');
+    card.className = 'intelligence-card';
+    card.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;transition:background .15s;';
+    card.onmouseenter = () => { card.style.background = 'var(--bg3)'; };
+    card.onmouseleave = () => { card.style.background = 'var(--bg2)'; };
+
+    const subject = document.createElement('div');
+    subject.style.cssText = 'font-weight:600;font-size:.85em;color:var(--accent);margin-bottom:2px;';
+    subject.textContent = (conn.subject || '') + ' \u2194 ' + (conn.object || '');
+
+    const reason = document.createElement('div');
+    reason.style.cssText = 'font-size:.78em;color:var(--text2);line-height:1.4;';
+    reason.textContent = conn.predicate || conn.reason || 'Unexpected link';
+
+    const score = document.createElement('div');
+    score.style.cssText = 'font-size:.7em;color:var(--text2);margin-top:2px;opacity:.7;';
+    score.textContent = 'surprise: ' + ((conn.surprise_score || 0)).toFixed(2);
+
+    card.appendChild(subject);
+    card.appendChild(reason);
+    card.appendChild(score);
+
+    // Click to highlight the two nodes on the graph
+    card.onclick = () => {
+      const matchS = GD.nodes.find(n =>
+        (n.content || '').toLowerCase().includes((conn.subject || '').toLowerCase()) ||
+        (n.tags || []).some(t => t.toLowerCase() === (conn.subject || '').toLowerCase())
+      );
+      const matchO = GD.nodes.find(n =>
+        (n.content || '').toLowerCase().includes((conn.object || '').toLowerCase()) ||
+        (n.tags || []).some(t => t.toLowerCase() === (conn.object || '').toLowerCase())
+      );
+      highlightNodes = new Set();
+      if (matchS) highlightNodes.add(matchS.id);
+      if (matchO) highlightNodes.add(matchO.id);
+      highlightLinks = new Set();
+      if (fg) {
+        fg.linkColor(fg.linkColor());
+        fg.nodeColor(fg.nodeColor());
+        if (matchS && matchS.x !== undefined) fg.centerAt(matchS.x, matchS.y, 600);
+      }
+    };
+
+    list.appendChild(card);
+  });
+}
+
+// ── Task 5.2: Suggested Questions panel ──────────────────────────
+async function renderSuggestedQuestions() {
+  const container = document.getElementById('suggested-questions');
+  if (!container) return;
+  container.textContent = '';
+  const header = document.createElement('div');
+  header.className = 'ft-row open';
+  header.style.cssText = 'font-weight:600;color:var(--text);margin-bottom:6px;';
+  const icon = document.createElement('span');
+  icon.className = 'ft-icon';
+  icon.textContent = '\uD83D\uDCA1';
+  const label = document.createElement('span');
+  label.className = 'ft-label';
+  label.textContent = 'Suggested Questions';
+  header.appendChild(icon);
+  header.appendChild(label);
+  container.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'ft-children open';
+  container.appendChild(list);
+
+  const questions = await fetchSuggestedQuestions(5);
+  if (!questions.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'color:var(--text2);font-size:.8em;padding:4px 8px;';
+    empty.textContent = 'No suggestions available.';
+    list.appendChild(empty);
+    return;
+  }
+  questions.forEach(q => {
+    const card = document.createElement('div');
+    card.className = 'intelligence-card';
+    card.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:6px;cursor:pointer;font-size:.82em;color:var(--text);transition:background .15s;';
+    card.onmouseenter = () => { card.style.background = 'var(--bg3)'; };
+    card.onmouseleave = () => { card.style.background = 'var(--bg2)'; };
+    card.textContent = typeof q === 'string' ? q : (q.question || q.text || '');
+    card.onclick = () => {
+      const query = typeof q === 'string' ? q : (q.question || q.text || '');
+      document.getElementById('search-box').value = query;
+      onSearch(query);
+    };
+    list.appendChild(card);
+  });
+}

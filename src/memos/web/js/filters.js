@@ -81,6 +81,11 @@ function rebuildLegend() {
       legend.appendChild(row);
     }
   }
+
+  // Task 5.3: Community legend
+  if (colorMode === 'community') {
+    rebuildCommunityLegend();
+  }
 }
 
 function computeTimeRange() {

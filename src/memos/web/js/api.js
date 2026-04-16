@@ -166,6 +166,38 @@ async function openKGOverlay(label) {
   } catch (_) { listEl.textContent = 'Error loading facts.'; }
 }
 
+// ── Task 5.1: Surprising connections ───────────────────────────
+async function fetchSurprisingConnections(topK = 5) {
+  try {
+    const r = await fetch(API + '/kg/surprising?top_k=' + topK).then(res => res.json());
+    return r.connections || [];
+  } catch (_) { return []; }
+}
+
+// ── Task 5.2: Suggested questions ──────────────────────────────
+async function fetchSuggestedQuestions(topK = 5) {
+  try {
+    const r = await fetch(API + '/brain/suggest?top_k=' + topK).then(res => res.json());
+    return r.questions || [];
+  } catch (_) { return []; }
+}
+
+// ── Task 5.3: Community detection ──────────────────────────────
+async function fetchCommunities() {
+  try {
+    const r = await fetch(API + '/kg/communities').then(res => res.json());
+    return r.communities || [];
+  } catch (_) { return []; }
+}
+
+// ── Task 5.3: God nodes ───────────────────────────────────────
+async function fetchGodNodes(topK = 10) {
+  try {
+    const r = await fetch(API + '/brain/god-nodes?top_k=' + topK).then(res => res.json());
+    return r.nodes || [];
+  } catch (_) { return []; }
+}
+
 async function openEntityPanel(entity) {
   const rp = document.getElementById('right-panel');
   document.getElementById('rp-title').textContent = entity;

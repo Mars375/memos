@@ -457,6 +457,82 @@ class PalaceIndex:
         return results
 
     # ------------------------------------------------------------------
+    # Agent wing auto-provisioning
+    # ------------------------------------------------------------------
+
+    _AGENT_DEFAULT_ROOMS = ("diary", "context", "learnings")
+
+    def ensure_agent_wing(self, agent_name: str, description: str = "") -> dict:
+        """Auto-provision a wing for *agent_name* with default rooms.
+
+        Creates a wing named ``agent:<name>`` (if it does not already exist)
+        and ensures the three default rooms — *diary*, *context*, *learnings* —
+        exist inside it.  Fully idempotent: calling twice produces the same
+        result.
+
+        Args:
+            agent_name:  Agent identifier (e.g. ``"hermes"``).
+            description: Optional human-readable description for the wing.
+
+        Returns:
+            The wing dict (same format as :meth:`get_wing`).
+
+        Raises:
+            ValueError: If *agent_name* is empty or whitespace-only.
+        """
+        agent_name = agent_name.strip()
+        if not agent_name:
+            raise ValueError("Agent name cannot be empty")
+        wing_name = f"agent:{agent_name}"
+        self.create_wing(wing_name, description=description)
+        for room_name in self._AGENT_DEFAULT_ROOMS:
+            self.create_room(wing_name, room_name)
+        return self.get_wing(wing_name)  # type: ignore[return-value]
+
+    def list_agent_wings(self) -> List[dict]:
+        """Return all agent wings (those prefixed with ``agent:``).
+
+        Each entry includes:
+
+        - ``name`` — agent identifier (wing name minus the ``agent:`` prefix)
+        - ``wing_id`` — the wing's unique ID
+        - ``diary_count`` — number of memories assigned to the *diary* room
+        - ``last_activity`` — most recent assignment timestamp in that wing
+          (``None`` if no assignments exist)
+        """
+        rows = self._conn.execute(
+            "SELECT id, name, description, created_at FROM wings WHERE name LIKE 'agent:%'"
+        ).fetchall()
+        results: List[dict] = []
+        for w in rows:
+            wing_id = w["id"]
+            agent_name = w["name"][len("agent:"):]
+            # Find the diary room id for this wing
+            diary_room_row = self._conn.execute(
+                "SELECT id FROM rooms WHERE wing_id = ? AND name = 'diary'",
+                (wing_id,),
+            ).fetchone()
+            diary_count = 0
+            if diary_room_row:
+                diary_count = self._conn.execute(
+                    "SELECT COUNT(*) FROM assignments WHERE room_id = ?",
+                    (diary_room_row["id"],),
+                ).fetchone()[0]
+            # Most recent assignment timestamp
+            last_activity_row = self._conn.execute(
+                "SELECT MAX(assigned_at) FROM assignments WHERE wing_id = ?",
+                (wing_id,),
+            ).fetchone()
+            last_activity = last_activity_row[0] if last_activity_row else None
+            results.append({
+                "name": agent_name,
+                "wing_id": wing_id,
+                "diary_count": diary_count,
+                "last_activity": last_activity,
+            })
+        return results
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 

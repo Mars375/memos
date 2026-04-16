@@ -106,11 +106,15 @@ function bfsNeighbors(startId, maxHops) {
   return visited;
 }
 
-// ── P1: Node color by mode ──────────────────────────────────────
+// ── P1: Node color by mode (with community support) ────────────
 function nodeColorFn(n) {
   if (highlightNodes.size > 0) {
     if (highlightNodes.has(n.id)) return '#a78bfa';
     return '#1e2138';
+  }
+  // Task 5.3: Community-based coloring
+  if (colorMode === 'community') {
+    return communityColors[communityMap[n.id]] || 'rgba(210,218,255,0.88)';
   }
   if (colorMode === 'cluster') {
     return clusterColors[clusterMap[n.id]] || 'rgba(210,218,255,0.88)';
@@ -182,8 +186,10 @@ function hideTooltip() {
   if (tooltipEl) tooltipEl.style.display = 'none';
 }
 
-// ── Node radius from degree + importance ─────────────────────────
+// ── Node radius from degree + importance + god nodes ────────────
 function nr(d) {
+  // Task 5.3: God nodes are always large
+  if (godNodeIds.has(d.id)) return 8;
   const deg = degreeMap[d.id] || 0;
   if (deg >= 10) return 10;
   if (deg >= 6) return 7;
@@ -285,6 +291,8 @@ function initGraph() {
       let fillColor;
       if (dimmed) {
         fillColor = 'rgba(30,33,56,0.5)';
+      } else if (colorMode === 'community') {
+        fillColor = communityColors[communityMap[node.id]] || 'rgba(210,218,255,0.88)';
       } else if (colorMode === 'cluster') {
         fillColor = clusterColors[clusterMap[node.id]] || 'rgba(210,218,255,0.88)';
       } else if (colorMode === 'tag' && node.primary_tag) {
@@ -300,6 +308,15 @@ function initGraph() {
       if ((degreeMap[node.id] || 0) >= 4 && !dimmed) {
         ctx.strokeStyle = 'rgba(255,255,255,0.3)';
         ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Task 5.3: God node golden glow ring
+      if (godNodeIds.has(node.id) && !dimmed) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(234,179,8,0.8)';
+        ctx.lineWidth = 2;
         ctx.stroke();
       }
 
@@ -449,6 +466,97 @@ function clearAll() {
   }
 }
 
+// ── Task 5.3: Load communities + god nodes from API ────────────
+async function loadCommunityAndGodNodes() {
+  const [communities, godNodes] = await Promise.all([
+    fetchCommunities(),
+    fetchGodNodes(10),
+  ]);
+
+  // Reset state
+  Object.keys(communityMap).forEach(k => delete communityMap[k]);
+  Object.keys(communityColors).forEach(k => delete communityColors[k]);
+  Object.keys(communityNames).forEach(k => delete communityNames[k]);
+  godNodeIds.clear();
+
+  // Assign community colors
+  const commIdMap = {}; // community label → numeric id
+  let nextCommId = 0;
+  communities.forEach(comm => {
+    const label = comm.community || comm.label || comm.id || ('Community ' + nextCommId);
+    if (commIdMap[label] === undefined) {
+      commIdMap[label] = nextCommId;
+      communityNames[nextCommId] = label;
+      communityColors[nextCommId] = COMMUNITY_PALETTE[nextCommId % COMMUNITY_PALETTE.length];
+      nextCommId++;
+    }
+    const cid = commIdMap[label];
+    // Assign nodes in this community
+    (comm.nodes || comm.members || []).forEach(nodeId => {
+      communityMap[nodeId] = cid;
+    });
+  });
+
+  // Mark god nodes
+  godNodes.forEach(gn => {
+    const nodeId = gn.id || gn.node_id || gn;
+    if (nodeId) godNodeIds.add(nodeId);
+  });
+}
+
+// ── Task 5.3: Build community legend ───────────────────────────
+function rebuildCommunityLegend() {
+  // Add community entries to the graph-legend if community mode is active
+  if (colorMode !== 'community') return;
+  const legend = document.getElementById('graph-legend');
+  if (!legend) return;
+
+  const seen = new Set();
+  const entries = [];
+  Object.entries(communityMap).forEach(([nodeId, cid]) => {
+    if (!seen.has(cid)) {
+      seen.add(cid);
+      entries.push({ cid, name: communityNames[cid] || ('Community ' + cid) });
+    }
+  });
+  entries.sort((a, b) => a.cid - b.cid);
+  const maxShow = 10;
+  entries.slice(0, maxShow).forEach(({ cid, name }) => {
+    const row = document.createElement('div');
+    row.className = 'legend-item';
+    const dot = document.createElement('div');
+    dot.className = 'legend-dot';
+    dot.style.background = communityColors[cid] || '#888';
+    row.appendChild(dot);
+    const span = document.createElement('span');
+    span.textContent = name;
+    row.appendChild(span);
+    legend.appendChild(row);
+  });
+  if (entries.length > maxShow) {
+    const row = document.createElement('div');
+    row.className = 'legend-item';
+    const span = document.createElement('span');
+    span.textContent = '+' + (entries.length - maxShow) + ' more communities';
+    row.appendChild(span);
+    legend.appendChild(row);
+  }
+
+  // God node legend entry
+  if (godNodeIds.size > 0) {
+    const row = document.createElement('div');
+    row.className = 'legend-item';
+    const dot = document.createElement('div');
+    dot.className = 'legend-dot';
+    dot.style.cssText = 'background:transparent;border:2px solid rgba(234,179,8,0.8);';
+    row.appendChild(dot);
+    const span = document.createElement('span');
+    span.textContent = 'God Node (' + godNodeIds.size + ')';
+    row.appendChild(span);
+    legend.appendChild(row);
+  }
+}
+
 async function refreshGraph() {
   localGraphMode = false;
   document.getElementById('loading').style.display = 'flex';
@@ -487,7 +595,16 @@ async function refreshGraph() {
     detectClusters(); // P1: detect connected components
     computeTimeRange(); // P2: compute min/max timestamps
     updateHealthPanel(); // P2: health dashboard
+
+    // Task 5.3: Load communities and god nodes from API
+    await loadCommunityAndGodNodes();
+    rebuildCommunityLegend();
+
     initGraph();
+
+    // Task 5.1 + 5.2: Render intelligence panels in sidebar
+    renderSurprisingConnections();
+    renderSuggestedQuestions();
   } finally {
     document.getElementById('loading').style.display = 'none';
   }

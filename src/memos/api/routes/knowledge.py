@@ -356,6 +356,18 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except ValueError as exc:
             return {"status": "error", "message": str(exc)}
 
+    @router.post("/api/v1/palace/agents")
+    async def palace_provision_agent(body: dict):
+        """Auto-provision an agent wing with default rooms (diary, context, learnings)."""
+        name = body.get("name", "").strip()
+        if not name:
+            return {"status": "error", "message": "name is required"}
+        try:
+            wing = _palace.ensure_agent_wing(name, description=body.get("description", ""))
+            return {"status": "ok", "wing": wing}
+        except ValueError as exc:
+            return {"status": "error", "message": str(exc)}
+
     @router.get("/api/v1/palace/agents")
     async def palace_list_agents():
         """Discover all agents with agent- wings in the palace."""
