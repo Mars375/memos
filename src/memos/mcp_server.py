@@ -143,6 +143,48 @@ TOOLS = [
         },
     },
     {
+        "name": "kg_communities",
+        "description": "Detect entity communities in the knowledge graph using Louvain clustering.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "algorithm": {
+                    "type": "string",
+                    "default": "louvain",
+                    "description": "Community detection algorithm (currently only 'louvain')",
+                },
+            },
+        },
+    },
+    {
+        "name": "kg_god_nodes",
+        "description": "Return the highest-degree (most connected) entities in the knowledge graph.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_k": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Number of top entities to return",
+                },
+            },
+        },
+    },
+    {
+        "name": "kg_surprising",
+        "description": "Find edges connecting entities from different communities — surprising cross-domain connections.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_k": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Number of top surprising connections to return",
+                },
+            },
+        },
+    },
+    {
         "name": "memory_recall_enriched",
         "description": "Recall memories and augment them with KG facts linked to the detected entities.",
         "inputSchema": {
@@ -433,6 +475,61 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
                 return _text(f"No timeline entries for: {entity}")
             lines = [f"[{f['id']}] {f['subject']} -{f['predicate']}-> {f['object']}" for f in facts]
             return _text(f"Timeline ({len(facts)} events):\n" + "\n".join(lines))
+
+        elif tool == "kg_communities":
+            from .knowledge_graph import KnowledgeGraph
+
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance
+            communities = kg_instance.detect_communities(algorithm=args.get("algorithm", "louvain"))
+            if not communities:
+                return _text("No communities found (empty graph).")
+            lines = [f"Found {len(communities)} communities:"]
+            for c in communities:
+                members_str = ", ".join(c["members"][:10])
+                if c["size"] > 10:
+                    members_str += f" (+{c['size'] - 10} more)"
+                lines.append(
+                    f"  Community {c['id']}: {c['size']} members, hub='{c['hub']}' (degree={c['hub_degree']}) — [{members_str}]"
+                )
+            return _text("\n".join(lines))
+
+        elif tool == "kg_god_nodes":
+            from .knowledge_graph import KnowledgeGraph
+
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance
+            top_k = int(args.get("top_k", 10))
+            nodes = kg_instance.god_nodes(top_k=top_k)
+            if not nodes:
+                return _text("No entities found (empty graph).")
+            lines = [f"Top {len(nodes)} god nodes:"]
+            for n in nodes:
+                lines.append(f"  {n['entity']} (degree={n['degree']})")
+            return _text("\n".join(lines))
+
+        elif tool == "kg_surprising":
+            from .knowledge_graph import KnowledgeGraph
+
+            kg_instance = getattr(memos, "_kg", None)
+            if kg_instance is None:
+                kg_instance = KnowledgeGraph()
+                memos._kg = kg_instance
+            top_k = int(args.get("top_k", 10))
+            connections = kg_instance.surprising_connections(top_k=top_k)
+            if not connections:
+                return _text("No surprising connections found.")
+            lines = [f"Top {len(connections)} surprising connections:"]
+            for c in connections:
+                lines.append(
+                    f"  [{c['id']}] {c['subject']} -{c['predicate']}-> {c['object']} "
+                    f"(surprise={c['surprise_score']}) — {c['reason']}"
+                )
+            return _text("\n".join(lines))
 
         elif tool == "memory_recall_enriched":
             from .kg_bridge import KGBridge
