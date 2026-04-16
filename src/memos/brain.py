@@ -123,11 +123,16 @@ class EntityDetail:
 class BrainSearch:
     """Unified search facade across memory, living wiki, and knowledge graph."""
 
+    # Preference boost: how much to increase score when a memory's tags overlap
+    # with frequently-recalled preference patterns.
+    PREFERENCE_BOOST_FACTOR = 0.15
+
     def __init__(
         self,
         memos: Any,
         kg: KnowledgeGraph | None = None,
         wiki_dir: str | None = None,
+        analytics: Any | None = None,
     ) -> None:
         self._memos = memos
         self._kg = kg or getattr(memos, "_kg", None) or KnowledgeGraph()
@@ -140,6 +145,9 @@ class BrainSearch:
         self._memos._kg_bridge = self._bridge
 
         self._wiki = LivingWikiEngine(memos, wiki_dir=wiki_dir)
+
+        # Optional analytics backend for preference-pattern boosting
+        self._analytics = analytics
 
     def search(
         self,
@@ -309,17 +317,45 @@ class BrainSearch:
 
     def _score_memories(self, results: list[Any]) -> list[ScoredMemory]:
         max_score = max((float(getattr(r, "score", 0.0)) for r in results), default=1.0) or 1.0
+
+        # Load preference patterns (if analytics available) to build a lookup
+        pref_tags: set[str] = set()
+        pref_max_freq = 1
+        if self._analytics is not None:
+            try:
+                patterns = self._analytics.preference_patterns(top_k=20)
+                for p in patterns:
+                    for tag in p.get("tags", []):
+                        pref_tags.add(tag)
+                    freq = p.get("frequency", 0)
+                    if freq > pref_max_freq:
+                        pref_max_freq = freq
+            except Exception:
+                pref_tags = set()
+
         scored: list[ScoredMemory] = []
         for result in results:
             item = result.item
             raw_score = float(getattr(result, "score", 0.0))
+            norm_score = raw_score / max_score
+
+            # Apply preference-pattern boost
+            if pref_tags and self.PREFERENCE_BOOST_FACTOR > 0:
+                memory_tokens = set(str(t).lower() for t in item.tags)
+                # Also tokenize the content for overlap
+                content_lower = item.content.lower()
+                overlap = sum(1 for tag in pref_tags if tag in content_lower or tag in memory_tokens)
+                if overlap > 0:
+                    boost = self.PREFERENCE_BOOST_FACTOR * min(overlap / max(len(pref_tags), 1), 1.0)
+                    norm_score = min(norm_score + boost, 1.0)
+
             scored.append(
                 ScoredMemory(
                     id=item.id,
                     content=item.content,
                     tags=list(item.tags),
                     importance=float(item.importance),
-                    score=round(raw_score / max_score, 4),
+                    score=round(norm_score, 4),
                     match_reason=getattr(result, "match_reason", ""),
                     created_at=float(item.created_at),
                 )

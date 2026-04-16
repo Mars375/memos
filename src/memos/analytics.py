@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from dataclasses import dataclass
@@ -233,6 +234,49 @@ class RecallAnalytics:
         )
         return [{"query": row["query"], "count": int(row["count"])} for row in rows]
 
+    def preference_patterns(self, top_k: int = 10) -> list[dict[str, Any]]:
+        """Extract preference patterns from recall history over the last 30 days.
+
+        Groups recall events by tags/content keywords extracted from result IDs
+        and query terms, returning the most frequently recalled topics.
+
+        Returns:
+            List of dicts with 'tags' (list of keywords) and 'frequency' (int),
+            sorted by descending frequency.  Empty list when the recalls table
+            does not exist or has no data.
+        """
+        try:
+            rows = self._recall_rows(days=30)
+        except Exception:
+            return []
+
+        if not rows:
+            return []
+
+        # Build frequency map keyed by canonical tag/keyword sets
+        tag_freq: dict[str, int] = {}
+
+        for row in rows:
+            event = self._row_to_event(row)
+
+            # Extract keywords from the query itself
+            keywords = _extract_keywords(event.query)
+
+            # Also use result_ids as signals (each id contributes)
+            for _rid in event.result_ids:
+                keywords.append(_rid)
+
+            if not keywords:
+                continue
+
+            # Normalise: sort so that the same set of tags always hits the same key
+            key = ",".join(sorted(set(keywords)))
+            tag_freq[key] = tag_freq.get(key, 0) + 1
+
+        # Build sorted output
+        ranked = sorted(tag_freq.items(), key=lambda item: (-item[1], item[0]))[: max(0, top_k)]
+        return [{"tags": key.split(","), "frequency": freq} for key, freq in ranked]
+
     def summary(self, days: int = 7) -> dict[str, Any]:
         """Return a compact analytics summary for dashboards."""
         return {
@@ -243,4 +287,17 @@ class RecallAnalytics:
             "top_queries": self.query_patterns(5),
             "zero_result_queries": self.zero_result_queries(5),
             "daily_activity": self.daily_activity(days=min(30, max(1, days))),
+            "preference_patterns": self.preference_patterns(top_k=5),
         }
+
+
+# ---------------------------------------------------------------------------
+# Keyword extraction helper (module-level so it can be reused)
+# ---------------------------------------------------------------------------
+
+_WORD_RE = re.compile(r"\b\w{3,}\b")
+
+
+def _extract_keywords(text: str) -> list[str]:
+    """Extract lowercase keywords (>= 3 chars) from *text*."""
+    return [m.group(0).lower() for m in _WORD_RE.finditer(text.lower())]

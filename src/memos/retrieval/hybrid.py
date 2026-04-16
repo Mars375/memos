@@ -205,3 +205,115 @@ class HybridRetriever:
             if r.score >= min_score:
                 scored.append(r)
         return sorted(scored, key=lambda r: r.score, reverse=True)[:top]
+
+    def llm_rerank(
+        self,
+        query: str,
+        candidates: list[Any],
+        top_k: int = 5,
+        llm_client: Any = None,
+    ) -> list[Any]:
+        """Re-rank candidates using an LLM for relevance judgments.
+
+        Takes the top candidates from semantic + BM25 search and asks an LLM
+        to order them by relevance to *query*.
+
+        Args:
+            query: The user's search query.
+            candidates: Ranked candidate list (each must have ``.item.content``
+                        and ``.score``).
+            top_k: Number of results to return after re-ranking.
+            llm_client: An object with a ``.chat(prompt: str) -> str`` method.
+                        If *None*, candidates are returned as-is (capped to
+                        *top_k*).
+
+        Returns:
+            Re-ordered list of at most *top_k* candidates.
+        """
+        if not candidates:
+            return candidates
+
+        # No LLM client → pass through (still cap to top_k)
+        if llm_client is None:
+            return candidates[:top_k]
+
+        # Build candidate summaries for the ranking prompt
+        summaries: list[str] = []
+        for idx, cand in enumerate(candidates):
+            content = cand.item.content if hasattr(cand, "item") else str(cand)
+            # Truncate long content to keep the prompt manageable
+            snippet = content[:300] + ("..." if len(content) > 300 else "")
+            summaries.append(f"[{idx}] {snippet}")
+
+        prompt = (
+            "You are a relevance ranking assistant.  Given the following query "
+            "and candidate documents, return a ranked list of document indices "
+            "(most relevant first) as a JSON array of integers.\n\n"
+            f"Query: {query}\n\n"
+            "Candidates:\n"
+            + "\n".join(summaries)
+            + "\n\nReturn ONLY a JSON array of integers, e.g. [2, 0, 3, 1]."
+        )
+
+        try:
+            raw_response: str = llm_client.chat(prompt)
+        except Exception:
+            # If the LLM call fails, return original order capped to top_k
+            return candidates[:top_k]
+
+        # Parse the LLM response to extract the ordering
+        ordering = self._parse_llm_ordering(raw_response, len(candidates))
+
+        if not ordering:
+            # Fallback: return original order
+            return candidates[:top_k]
+
+        # Reorder candidates according to LLM ranking
+        reordered = [candidates[i] for i in ordering if 0 <= i < len(candidates)]
+
+        # Append any candidates the LLM didn't mention
+        seen = set(ordering)
+        for idx, cand in enumerate(candidates):
+            if idx not in seen:
+                reordered.append(cand)
+
+        return reordered[:top_k]
+
+    @staticmethod
+    def _parse_llm_ordering(response: str, max_idx: int) -> list[int]:
+        """Parse the LLM response to extract an ordered list of integer indices.
+
+        Tries several strategies:
+        1. Find a JSON array in the response (e.g. ``[2, 0, 3, 1]``)
+        2. Find all integers in the response text
+        """
+        import json as _json
+
+        # Strategy 1: look for a JSON array
+        # Try to find bracket-enclosed content
+        text = response.strip()
+        start = text.find("[")
+        end = text.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            try:
+                parsed = _json.loads(text[start : end + 1])
+                if isinstance(parsed, list):
+                    indices = [int(x) for x in parsed if isinstance(x, (int, float))]
+                    if indices and all(0 <= i < max_idx for i in indices):
+                        return indices
+            except (ValueError, TypeError):
+                pass
+
+        # Strategy 2: find all integers in the text
+        import re as _re
+
+        numbers = [int(m.group(0)) for m in _re.finditer(r"\d+", text)]
+        valid = [n for n in numbers if 0 <= n < max_idx]
+        # Deduplicate while preserving order
+        seen: set[int] = set()
+        unique: list[int] = []
+        for n in valid:
+            if n not in seen:
+                seen.add(n)
+                unique.append(n)
+        return unique

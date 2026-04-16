@@ -125,18 +125,34 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         importance_payload = req.importance.model_dump()
 
         explain = req.explain
-        results = memos.recall(
-            query=req.query,
-            top=req.top_k,
-            filter_tags=filter_tags,
-            min_score=req.min_score,
-            filter_after=_parse_date(req.created_after or req.filter_after),
-            filter_before=_parse_date(req.created_before or req.filter_before),
-            retrieval_mode=req.retrieval_mode,
-            tag_filter=tag_filter,
-            min_importance=importance_payload.get("min"),
-            max_importance=importance_payload.get("max"),
+        results = list(
+            memos.recall(
+                query=req.query,
+                top=req.top_k,
+                filter_tags=filter_tags,
+                min_score=req.min_score,
+                filter_after=_parse_date(req.created_after or req.filter_after),
+                filter_before=_parse_date(req.created_before or req.filter_before),
+                retrieval_mode=req.retrieval_mode,
+                tag_filter=tag_filter,
+                min_importance=importance_payload.get("min"),
+                max_importance=importance_payload.get("max"),
+            )
         )
+
+        # Optional LLM reranking
+        if req.rerank and results:
+            llm_client = getattr(memos, "_llm_client", None)
+            from ...retrieval.hybrid import HybridRetriever
+
+            retriever = HybridRetriever()
+            results = retriever.llm_rerank(
+                query=req.query,
+                candidates=results,
+                top_k=req.top_k,
+                llm_client=llm_client,
+            )
+
         serialized = []
         for r in results:
             entry = {

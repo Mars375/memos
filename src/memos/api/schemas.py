@@ -73,6 +73,7 @@ class RecallRequest(BaseModel):
     created_before: Optional[Any] = None
     filter_after: Optional[Any] = None
     filter_before: Optional[Any] = None
+    rerank: bool = False
 
     model_config = {"populate_by_name": True}
 
