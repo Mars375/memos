@@ -54,6 +54,7 @@ class ScoreBreakdown:
     importance: float = 0.0
     recency: float = 0.0
     tag_bonus: float = 0.0
+    temporal_proximity: float = 0.0
     total: float = 0.0
     backend: str = ""  # "hybrid" | "qdrant" | "keyword-only"
 
@@ -64,6 +65,7 @@ class ScoreBreakdown:
             "importance": round(self.importance, 4),
             "recency": round(self.recency, 4),
             "tag_bonus": round(self.tag_bonus, 4),
+            "temporal_proximity": round(self.temporal_proximity, 4),
             "total": round(self.total, 4),
             "backend": self.backend,
         }

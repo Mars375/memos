@@ -18,6 +18,8 @@ from .._constants import (
     SECONDS_PER_DAY,
     TAG_BONUS_MAX,
     TAG_BONUS_PER_TAG,
+    TEMPORAL_PROXIMITY_WEIGHT,
+    TEMPORAL_PROXIMITY_WINDOW,
 )
 from ..models import MemoryItem, RecallResult, ScoreBreakdown
 from ..storage.base import StorageBackend
@@ -94,25 +96,21 @@ class RetrievalEngine:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _temporal_boost(created_at: float) -> float:
-        """Return a recency boost based on how recently a memory was created.
+    def _temporal_proximity(created_at: float, now: float | None = None) -> float:
+        """Return a temporal proximity score based on how recently a memory was created.
 
-        Tiers:
-            < 1 day  → 0.2
-            < 7 days → 0.1
-            < 30 days → 0.05
-            older    → 0.0
+        Uses a continuous linear decay within TEMPORAL_PROXIMITY_WINDOW:
+            proximity = max(0, 1 - abs(now - created_at) / TEMPORAL_PROXIMITY_WINDOW)
+
+        Returns a value in [0.0, 1.0] scaled by TEMPORAL_PROXIMITY_WEIGHT.
         """
         import time as _time
 
-        age_days = (_time.time() - created_at) / SECONDS_PER_DAY
-        if age_days < 1.0:
-            return 0.2
-        if age_days < 7.0:
-            return 0.1
-        if age_days < 30.0:
-            return 0.05
-        return 0.0
+        if now is None:
+            now = _time.time()
+        elapsed = abs(now - created_at)
+        raw = max(0.0, 1.0 - elapsed / TEMPORAL_PROXIMITY_WINDOW)
+        return raw * TEMPORAL_PROXIMITY_WEIGHT
 
     def index(self, item: MemoryItem) -> None:
         """Index a memory item for retrieval."""
@@ -189,8 +187,8 @@ class RetrievalEngine:
             age_days = (time.time() - item.created_at) / SECONDS_PER_DAY
             recency_bonus = max(0, RECENCY_BONUS_WEIGHT * (1 - age_days / RECENCY_FADE_DAYS))
 
-            # Temporal proximity boost (tiered: 0.2 / 0.1 / 0.05)
-            temporal_boost = self._temporal_boost(item.created_at)
+            # Temporal proximity boost (continuous decay within 1-hour window)
+            temporal_prox = self._temporal_proximity(item.created_at)
 
             # Final score
             final_score = (
@@ -199,7 +197,7 @@ class RetrievalEngine:
                 + tag_bonus
                 + importance_boost
                 + recency_bonus
-                + temporal_boost
+                + temporal_prox
             )
 
             if final_score > 0:
@@ -209,6 +207,7 @@ class RetrievalEngine:
                     importance=round(importance_boost, 4),
                     recency=round(recency_bonus, 4),
                     tag_bonus=round(tag_bonus, 4),
+                    temporal_proximity=round(temporal_prox, 4),
                     total=round(min(final_score, 1.0), 4),
                     backend="hybrid" if has_semantic else "keyword-only",
                 )
@@ -263,10 +262,10 @@ class RetrievalEngine:
             recency_bonus = max(0, RECENCY_BONUS_WEIGHT * (1 - age_days / RECENCY_FADE_DAYS))
 
             # Temporal proximity boost (tiered: 0.2 / 0.1 / 0.05)
-            temporal_boost = self._temporal_boost(item.created_at)
+            # Temporal proximity boost (continuous decay within 1-hour window)
+            temporal_prox = self._temporal_proximity(item.created_at)
 
-            final_score = min(score + importance_boost + recency_bonus + temporal_boost, 1.0)
-
+            final_score = min(score + importance_boost + recency_bonus + temporal_prox, 1.0)
             match_reason = "semantic" if score > 0.5 else "keyword"
             breakdown = ScoreBreakdown(
                 semantic=round(score * self._semantic_weight, 4) if score > 0.5 else 0.0,
@@ -274,6 +273,7 @@ class RetrievalEngine:
                 importance=round(importance_boost, 4),
                 recency=round(recency_bonus, 4),
                 tag_bonus=0.0,
+                temporal_proximity=round(temporal_prox, 4),
                 total=round(final_score, 4),
                 backend="qdrant",
             )

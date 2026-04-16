@@ -111,42 +111,43 @@ class TestKeywordBoosting:
 
 
 class TestTemporalBoost:
-    """Tests for RetrievalEngine._temporal_boost."""
+    """Tests for RetrievalEngine._temporal_proximity."""
 
-    def test_very_recent_returns_0_2(self) -> None:
-        """Memory created 1 second ago should get 0.2 boost."""
-        boost = RetrievalEngine._temporal_boost(time.time() - 1)
-        assert boost == pytest.approx(0.2)
+    def test_very_recent_returns_full_weight(self) -> None:
+        """Memory created 1 second ago should get full temporal proximity weight."""
+        prox = RetrievalEngine._temporal_proximity(time.time() - 1)
+        assert prox == pytest.approx(0.05, abs=0.001)
 
-    def test_within_one_day_returns_0_2(self) -> None:
-        """Memory created 12 hours ago should get 0.2 boost."""
-        boost = RetrievalEngine._temporal_boost(time.time() - 12 * 3600)
-        assert boost == pytest.approx(0.2)
+    def test_30_minutes_ago_returns_half(self) -> None:
+        """Memory created 30 min ago should get ~half weight (0.5 * 0.05)."""
+        from memos._constants import TEMPORAL_PROXIMITY_WEIGHT, TEMPORAL_PROXIMITY_WINDOW
 
-    def test_within_seven_days_returns_0_1(self) -> None:
-        """Memory created 3 days ago should get 0.1 boost."""
-        boost = RetrievalEngine._temporal_boost(time.time() - 3 * 86400)
-        assert boost == pytest.approx(0.1)
+        now = time.time()
+        created = now - 1800  # 30 minutes = half of 3600s window
+        raw = max(0.0, 1.0 - 1800 / TEMPORAL_PROXIMITY_WINDOW)
+        expected = raw * TEMPORAL_PROXIMITY_WEIGHT
+        prox = RetrievalEngine._temporal_proximity(created, now=now)
+        assert prox == pytest.approx(expected)
 
-    def test_within_thirty_days_returns_0_05(self) -> None:
-        """Memory created 15 days ago should get 0.05 boost."""
-        boost = RetrievalEngine._temporal_boost(time.time() - 15 * 86400)
-        assert boost == pytest.approx(0.05)
+    def test_within_window_gets_positive(self) -> None:
+        """Memory created within 1 hour should get a positive boost."""
+        prox = RetrievalEngine._temporal_proximity(time.time() - 1800)
+        assert prox > 0.0
 
-    def test_older_returns_0(self) -> None:
-        """Memory created 60 days ago should get 0.0 boost."""
-        boost = RetrievalEngine._temporal_boost(time.time() - 60 * 86400)
-        assert boost == pytest.approx(0.0)
+    def test_older_than_window_returns_zero(self) -> None:
+        """Memory older than 1 hour should get 0.0 proximity."""
+        prox = RetrievalEngine._temporal_proximity(time.time() - 7200, now=time.time())
+        assert prox == pytest.approx(0.0)
 
-    def test_exactly_one_day_boundary(self) -> None:
-        """Exactly 1 day old: age_days == 1.0, so not < 1.0 → 0.1."""
-        boost = RetrievalEngine._temporal_boost(time.time() - 1 * 86400)
-        # age_days will be very slightly >= 1.0 due to elapsed time in the call
-        # so we just check it's either 0.2 (if < 1.0) or 0.1 (if >= 1.0)
-        assert boost in (pytest.approx(0.2), pytest.approx(0.1))
+    def test_exactly_at_window_boundary(self) -> None:
+        """Memory exactly 1 hour old → raw proximity = 0 → score = 0."""
+        now = time.time()
+        created = now - 3600
+        prox = RetrievalEngine._temporal_proximity(created, now=now)
+        assert prox == pytest.approx(0.0)
 
     def test_temporal_boost_integrated_in_search(self) -> None:
-        """Verify temporal boost is added during search scoring."""
+        """Verify temporal proximity is added during search scoring."""
         from memos.core import MemOS
 
         memos = MemOS(backend="memory")
@@ -157,10 +158,7 @@ class TestTemporalBoost:
         results = memos.recall("testing", top=1)
         assert len(results) == 1
 
-        # The score should include temporal boost (fresh → 0.2)
-        # The score_breakdown.recency already exists, but the total should be
-        # higher than it would be without temporal_boost.
-        # We just verify the result exists and has a positive score.
+        # The score should include temporal proximity (fresh → 0.05)
         assert results[0].score > 0.0
 
 

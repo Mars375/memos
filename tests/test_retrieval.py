@@ -240,3 +240,73 @@ def test_hybridretriever_alpha_one_pure_semantic() -> None:
     result = retriever.rerank("query", candidates)
     # With alpha=1, semantic score dominates → a should remain first
     assert result[0].item.id == "a"
+
+
+# ---------------------------------------------------------------------------
+# Temporal proximity boosting in RetrievalEngine
+# ---------------------------------------------------------------------------
+
+
+class TestTemporalProximityConstants:
+    """Tests for temporal proximity weight and window constants."""
+
+    def test_weight_value(self) -> None:
+        from memos._constants import TEMPORAL_PROXIMITY_WEIGHT
+
+        assert TEMPORAL_PROXIMITY_WEIGHT == 0.05
+
+    def test_window_value(self) -> None:
+        from memos._constants import TEMPORAL_PROXIMITY_WINDOW
+
+        assert TEMPORAL_PROXIMITY_WINDOW == 3600
+
+
+class TestTemporalProximityScoring:
+    """Tests for RetrievalEngine._temporal_proximity method."""
+
+    def test_recent_memory_gets_boost(self) -> None:
+        """Memory created seconds ago should get a positive proximity score."""
+        import time
+
+        from memos.retrieval.engine import RetrievalEngine
+
+        now = time.time()
+        created = now - 10  # 10 seconds ago
+        prox = RetrievalEngine._temporal_proximity(created, now=now)
+        assert prox > 0.0
+        # Should be close to full weight: (1 - 10/3600) * 0.05
+        assert prox == pytest.approx(0.05 * (1 - 10 / 3600), abs=0.001)
+
+    def test_very_old_memory_gets_no_boost(self) -> None:
+        """Memory created 24 hours ago should get 0.0 proximity."""
+        import time
+
+        from memos.retrieval.engine import RetrievalEngine
+
+        now = time.time()
+        created = now - 86400  # 1 day ago — well outside 1-hour window
+        prox = RetrievalEngine._temporal_proximity(created, now=now)
+        assert prox == 0.0
+
+    def test_half_window_returns_half_weight(self) -> None:
+        """Memory at exactly half the window should get ~half the max weight."""
+        import time
+
+        from memos._constants import TEMPORAL_PROXIMITY_WEIGHT, TEMPORAL_PROXIMITY_WINDOW
+        from memos.retrieval.engine import RetrievalEngine
+
+        now = time.time()
+        created = now - TEMPORAL_PROXIMITY_WINDOW / 2  # 30 minutes ago
+        prox = RetrievalEngine._temporal_proximity(created, now=now)
+        expected = 0.5 * TEMPORAL_PROXIMITY_WEIGHT
+        assert prox == pytest.approx(expected)
+
+    def test_score_breakdown_includes_temporal_proximity(self) -> None:
+        """Verify ScoreBreakdown has a temporal_proximity field."""
+        from memos.models import ScoreBreakdown
+
+        sb = ScoreBreakdown(temporal_proximity=0.025, total=0.5)
+        assert sb.temporal_proximity == 0.025
+        d = sb.to_dict()
+        assert "temporal_proximity" in d
+        assert d["temporal_proximity"] == 0.025

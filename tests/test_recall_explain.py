@@ -80,7 +80,7 @@ class TestRecallExplainIntegration:
         for r in results:
             bd = r.score_breakdown
             # Components should add up to approximately the total
-            component_sum = bd.semantic + bd.keyword + bd.importance + bd.recency + bd.tag_bonus
+            component_sum = bd.semantic + bd.keyword + bd.importance + bd.recency + bd.tag_bonus + bd.temporal_proximity
             assert abs(component_sum - bd.total) < 0.01, f"Components {component_sum} != total {bd.total}"
 
     def test_breakdown_semantic_dominant(self):
