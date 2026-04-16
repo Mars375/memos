@@ -63,20 +63,20 @@ class TestDetectCommunities:
         assert len(communities) >= 2  # At least two distinct communities
         for c in communities:
             assert "id" in c
-            assert "members" in c
+            assert "nodes" in c
+            assert "label" in c
             assert "size" in c
-            assert "hub" in c
-            assert "hub_degree" in c
+            assert "top_entity" in c
 
     def test_all_entities_covered(self, kg):
         """Every entity should appear in exactly one community."""
         communities = kg.detect_communities()
-        all_members = []
+        all_nodes = []
         for c in communities:
-            all_members.extend(c["members"])
+            all_nodes.extend(c["nodes"])
         # Unique set
-        unique = set(all_members)
-        assert len(all_members) == len(unique)
+        unique = set(all_nodes)
+        assert len(all_nodes) == len(unique)
         # All expected entities present
         expected = {
             "Alice", "Bob", "Carol", "ProjectX", "ProjectY",
@@ -89,12 +89,11 @@ class TestDetectCommunities:
         sizes = [c["size"] for c in communities]
         assert sizes == sorted(sizes, reverse=True)
 
-    def test_hub_is_member_with_highest_degree(self, kg):
+    def test_top_entity_is_member_with_highest_degree(self, kg):
         communities = kg.detect_communities()
         for c in communities:
             if c["size"] > 1:
-                assert c["hub"] in c["members"]
-                assert c["hub_degree"] > 0
+                assert c["top_entity"] in c["nodes"]
 
     def test_empty_graph_returns_empty(self, empty_kg):
         assert empty_kg.detect_communities() == []
@@ -104,7 +103,7 @@ class TestDetectCommunities:
         communities = empty_kg.detect_communities()
         assert len(communities) == 1
         assert communities[0]["size"] == 2
-        assert set(communities[0]["members"]) == {"A", "B"}
+        assert set(communities[0]["nodes"]) == {"A", "B"}
 
     def test_unsupported_algorithm_raises(self, kg):
         with pytest.raises(ValueError, match="Unsupported algorithm"):
@@ -119,6 +118,7 @@ class TestDetectCommunities:
             if f["predicate"] == "consults":
                 kg.invalidate(f["id"])
                 break
+        kg._communities_cache = None
         communities_after = kg.detect_communities()
         # Still should have communities, but graph changed
         assert isinstance(communities_after, list)
@@ -199,7 +199,7 @@ class TestSurprisingConnections:
         communities = kg.detect_communities()
         entity_to_comm = {}
         for comm in communities:
-            for member in comm["members"]:
+            for member in comm["nodes"]:
                 entity_to_comm[member] = comm["id"]
 
         connections = kg.surprising_connections()

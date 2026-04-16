@@ -144,14 +144,14 @@ TOOLS = [
     },
     {
         "name": "kg_communities",
-        "description": "Detect entity communities in the knowledge graph using Louvain clustering.",
+        "description": "Detect entity communities in the knowledge graph using label-propagation clustering (no external dependencies).",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "algorithm": {
                     "type": "string",
-                    "default": "louvain",
-                    "description": "Community detection algorithm (currently only 'louvain')",
+                    "default": "label_propagation",
+                    "description": "Community detection algorithm (currently only 'label_propagation')",
                 },
             },
         },
@@ -502,16 +502,17 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             if kg_instance is None:
                 kg_instance = KnowledgeGraph()
                 memos._kg = kg_instance
-            communities = kg_instance.detect_communities(algorithm=args.get("algorithm", "louvain"))
+            communities = kg_instance.detect_communities(algorithm=args.get("algorithm", "label_propagation"))
             if not communities:
                 return _text("No communities found (empty graph).")
             lines = [f"Found {len(communities)} communities:"]
             for c in communities:
-                members_str = ", ".join(c["members"][:10])
+                nodes_str = ", ".join(c["nodes"][:10])
                 if c["size"] > 10:
-                    members_str += f" (+{c['size'] - 10} more)"
+                    nodes_str += f" (+{c['size'] - 10} more)"
                 lines.append(
-                    f"  Community {c['id']}: {c['size']} members, hub='{c['hub']}' (degree={c['hub_degree']}) — [{members_str}]"
+                    f"  Community {c['id']}: {c['size']} nodes, "
+                    f"label='{c['label']}', top_entity='{c['top_entity']}' — [{nodes_str}]"
                 )
             return _text("\n".join(lines))
 
