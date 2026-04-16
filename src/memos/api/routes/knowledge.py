@@ -618,6 +618,22 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
         except Exception as e:
             return {"status": "error", "error": str(e)}
 
+    @router.get("/api/v1/wiki/lint")
+    async def wiki_lint():
+        """Run a comprehensive wiki health-check and return a structured lint report.
+
+        Checks for orphan pages, missing cross-references, stale pages, empty
+        pages, and contradictions.
+        """
+        try:
+            from ...wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            report = wiki.lint_report()
+            return {"status": "ok", **report}
+        except Exception as e:
+            return {"status": "error", "error": str(e), "issues": [], "summary": {}}
+
     @router.get("/api/v1/wiki/log")
     async def wiki_get_log():
         """Return the wiki activity log (log.md content)."""

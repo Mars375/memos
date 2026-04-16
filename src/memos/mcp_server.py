@@ -357,6 +357,11 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
+        "name": "wiki_lint",
+        "description": "Run a comprehensive wiki health-check. Returns a structured report with orphan pages, missing cross-references, stale pages, empty pages, and contradictions.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "diary_write",
         "description": "Write a diary entry for an agent. Entries are timestamped and stored in the memory palace.",
         "inputSchema": {
@@ -803,6 +808,27 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             wiki = LivingWikiEngine(memos)
             content = wiki.regenerate_index()
             return _text(content)
+
+        elif tool == "wiki_lint":
+            from .wiki_living import LivingWikiEngine
+
+            wiki = LivingWikiEngine(memos)
+            report = wiki.lint_report()
+            summary = report["summary"]
+            issues = report["issues"]
+            lines = [
+                f"Wiki Lint Report: {summary['total_pages']} pages checked",
+                "",
+                f"  Orphans: {summary['orphan_count']}",
+                f"  Missing refs: {summary['missing_ref_count']}",
+                f"  Stale pages: {summary['stale_count']}",
+                f"  Empty pages: {summary['empty_count']}",
+                f"  Contradictions: {summary['contradiction_count']}",
+                "",
+            ]
+            for issue in issues:
+                lines.append(f"  [{issue['severity'].upper()}] {issue['type']}: {issue['page']} — {issue['detail']}")
+            return _text("\n".join(lines))
 
         elif tool == "diary_write":
             from .palace import PalaceIndex

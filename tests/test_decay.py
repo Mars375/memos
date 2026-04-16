@@ -429,4 +429,4 @@ def test_mcp_tools_list_includes_decay():
     names = {t["name"] for t in TOOLS}
     assert "memory_decay" in names
     assert "memory_reinforce" in names
-    assert len(TOOLS) == 25  # + diary, palace_diary_append/read, palace_list_agents
+    assert len(TOOLS) == 26  # + diary, palace_diary_append/read, palace_list_agents, wiki_lint

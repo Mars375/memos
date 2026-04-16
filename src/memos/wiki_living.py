@@ -1040,14 +1040,56 @@ class LivingWikiEngine:
         Returns:
             LintReport with issues found.
         """
+        structured = self.lint_report()
+        report = LintReport()
+        for issue in structured["issues"]:
+            t = issue["type"]
+            if t == "orphan":
+                report.orphan_pages.append(issue["page"])
+            elif t == "empty":
+                report.empty_pages.append(issue["page"])
+            elif t == "contradiction":
+                report.contradictions.append(
+                    {"entity": issue["page"], "conflicting_terms": issue.get("conflicting_terms", [])}
+                )
+            elif t == "stale":
+                report.stale_pages.append(issue["page"])
+            elif t == "missing_ref":
+                report.missing_backlinks.append((issue["page"], issue.get("target", "")))
+        return report
+
+    def lint_report(self) -> Dict[str, Any]:
+        """Comprehensive wiki health-check (Karpathy-inspired lint).
+
+        Checks for:
+        - **Orphan pages**: pages with no inbound links from other pages
+        - **Missing cross-references**: entity mentioned in a page but no [[link]]
+        - **Stale pages**: pages not updated in >30 days
+        - **Empty pages**: pages with no content (just a title)
+        - **Contradictions**: same entity has conflicting info on different pages
+
+        Returns:
+            Structured report dict with ``issues`` list and ``summary`` counts.
+        """
         self.init()
         db = self._get_db()
-        report = LintReport()
+
+        issues: List[Dict[str, Any]] = []
 
         pages_dir = self._wiki_dir / "pages"
         if not pages_dir.exists():
             db.close()
-            return report
+            return {
+                "issues": [],
+                "summary": {
+                    "total_pages": 0,
+                    "orphan_count": 0,
+                    "missing_ref_count": 0,
+                    "stale_count": 0,
+                    "empty_count": 0,
+                    "contradiction_count": 0,
+                },
+            }
 
         now = time.time()
         thirty_days = 30 * 86400
@@ -1057,51 +1099,75 @@ class LivingWikiEngine:
             for row in db.execute("SELECT name, entity_type, page_path, updated_at FROM entities").fetchall()
         }
 
+        total_pages = len(all_entities)
+
+        # ── Build inbound-link map ────────────────────────────────
+        inbound: Dict[str, Set[str]] = {name: set() for name in all_entities}
+        for row in db.execute("SELECT source_entity, target_entity FROM backlinks").fetchall():
+            tgt = row["target_entity"]
+            if tgt in inbound:
+                inbound[tgt].add(row["source_entity"])
+
         # Get all memory IDs currently in store
         store = self._memos._store
         namespace = self._memos._namespace
         all_mem_ids = {item.id for item in store.list_all(namespace=namespace)}
 
+        # ── Per-page checks ───────────────────────────────────────
         for ename, edata in all_entities.items():
             slug = self._safe_slug(ename)
             page_path = pages_dir / f"{slug}.md"
 
-            # Orphan: entity with no memories in current store
-            mem_ids = [
-                row["memory_id"]
-                for row in db.execute(
-                    "SELECT memory_id FROM entity_memories WHERE entity_name = ?", (ename,)
-                ).fetchall()
-            ]
-            active_mems = [m for m in mem_ids if m in all_mem_ids]
-            if not active_mems:
-                report.orphan_pages.append(ename)
+            # -- Orphan: no inbound links from other pages --
+            if not inbound.get(ename):
+                issues.append(
+                    {"type": "orphan", "severity": "warning", "page": ename, "detail": "No inbound links"}
+                )
 
-            # Empty: page file is mostly template (very small)
+            # -- Empty: page file is mostly template --
             if page_path.exists():
                 content = page_path.read_text(encoding="utf-8")
-                # Count non-template lines (not comments, not frontmatter)
-                real_lines = [
-                    line
-                    for line in content.splitlines()
-                    if line.strip()
-                    and not line.strip().startswith("<!--")
-                    and not line.strip().startswith("---")
-                    and not line.startswith("# ")
-                    and not line.startswith("## ")
-                ]
+                # Count non-template lines, skipping frontmatter
+                in_fm = False
+                real_lines: List[str] = []
+                for line in content.splitlines():
+                    stripped = line.strip()
+                    if stripped == "---":
+                        in_fm = not in_fm
+                        continue
+                    if in_fm:
+                        continue
+                    if (
+                        stripped
+                        and not stripped.startswith("<!--")
+                        and not stripped.startswith("# ")
+                        and not stripped.startswith("## ")
+                    ):
+                        real_lines.append(stripped)
                 if len(real_lines) < 3:
-                    report.empty_pages.append(ename)
+                    issues.append(
+                        {"type": "empty", "severity": "warning", "page": ename, "detail": "Page has no real content"}
+                    )
             else:
-                report.empty_pages.append(ename)
+                issues.append(
+                    {"type": "empty", "severity": "warning", "page": ename, "detail": "Page file missing"}
+                )
 
-            # Stale: not updated in 30 days
+            # -- Stale: not updated in 30 days --
             if edata["updated_at"] and (now - edata["updated_at"]) > thirty_days:
-                report.stale_pages.append(ename)
+                days_stale = int((now - edata["updated_at"]) / 86400)
+                issues.append(
+                    {
+                        "type": "stale",
+                        "severity": "info",
+                        "page": ename,
+                        "detail": f"Not updated in {days_stale} days",
+                    }
+                )
 
-        # Simple contradiction detection: memories with opposing sentiment on same entity
+        # ── Contradiction detection ───────────────────────────────
         for ename in all_entities:
-            mem_contents = []
+            mem_contents: List[str] = []
             for row in db.execute(
                 "SELECT em.snippet FROM entity_memories em WHERE em.entity_name = ?",
                 (ename,),
@@ -1109,10 +1175,9 @@ class LivingWikiEngine:
                 mem_contents.append(row["snippet"])
 
             # Look for contradiction patterns (X is Y vs X is not Y)
-            negated = set()
-            affirmed = set()
+            negated: Set[str] = set()
+            affirmed: Set[str] = set()
             for snippet in mem_contents:
-                # Simple: "not X" vs "X"
                 neg_matches = re.findall(r"not\s+(\w+)", snippet.lower())
                 negated.update(neg_matches)
                 pos_matches = re.findall(r"\bis\s+(\w+)", snippet.lower())
@@ -1120,14 +1185,17 @@ class LivingWikiEngine:
 
             conflicts = negated & affirmed
             if conflicts:
-                report.contradictions.append(
+                issues.append(
                     {
-                        "entity": ename,
-                        "conflicting_terms": list(conflicts),
+                        "type": "contradiction",
+                        "severity": "error",
+                        "page": ename,
+                        "detail": f"Conflicting terms: {', '.join(sorted(conflicts))}",
+                        "conflicting_terms": sorted(conflicts),
                     }
                 )
 
-        # Missing backlinks: if page A mentions entity B but no backlink exists
+        # ── Missing cross-references ──────────────────────────────
         for ename in all_entities:
             slug = self._safe_slug(ename)
             page_path = pages_dir / f"{slug}.md"
@@ -1139,22 +1207,49 @@ class LivingWikiEngine:
             mentioned = extract_entities(content)
             for mentioned_name, _ in mentioned:
                 if mentioned_name in all_entities and mentioned_name != ename:
-                    # Check if backlink exists
-                    has_link = db.execute(
-                        "SELECT 1 FROM backlinks WHERE source_entity = ? AND target_entity = ?",
-                        (ename, mentioned_name),
-                    ).fetchone()
+                    # Check if [[link]] exists in the page content
+                    link_patterns = [
+                        f"[[{self._safe_slug(mentioned_name)}",
+                        f"[[{mentioned_name}",
+                    ]
+                    has_link = any(pat in content for pat in link_patterns)
                     if not has_link:
-                        report.missing_backlinks.append((ename, mentioned_name))
+                        issues.append(
+                            {
+                                "type": "missing_ref",
+                                "severity": "info",
+                                "page": ename,
+                                "detail": f"Mentions '{mentioned_name}' but no link",
+                                "target": mentioned_name,
+                            }
+                        )
+
+        # ── Build summary ─────────────────────────────────────────
+        orphan_count = sum(1 for i in issues if i["type"] == "orphan")
+        missing_ref_count = sum(1 for i in issues if i["type"] == "missing_ref")
+        stale_count = sum(1 for i in issues if i["type"] == "stale")
+        empty_count = sum(1 for i in issues if i["type"] == "empty")
+        contradiction_count = sum(1 for i in issues if i["type"] == "contradiction")
 
         self._append_log(
             "lint",
-            f"Orphans: {len(report.orphan_pages)}, Empty: {len(report.empty_pages)}, "
-            f"Contradictions: {len(report.contradictions)}, "
-            f"Missing backlinks: {len(report.missing_backlinks)}",
+            f"Orphans: {orphan_count}, Empty: {empty_count}, "
+            f"Contradictions: {contradiction_count}, "
+            f"Missing refs: {missing_ref_count}, Stale: {stale_count}",
         )
         db.close()
-        return report
+
+        return {
+            "issues": issues,
+            "summary": {
+                "total_pages": total_pages,
+                "orphan_count": orphan_count,
+                "missing_ref_count": missing_ref_count,
+                "stale_count": stale_count,
+                "empty_count": empty_count,
+                "contradiction_count": contradiction_count,
+            },
+        }
 
     def generate_index(self) -> str:
         """Generate index.md — all wiki pages grouped by entity_type.
