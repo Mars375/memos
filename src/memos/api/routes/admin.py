@@ -9,6 +9,16 @@ import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+from ..errors import error_response, not_found
+from ..schemas import (
+    ACLGrantRequest,
+    ACLRevokeRequest,
+    IngestURLRequest,
+    MineConversationRequest,
+    ShareImportRequest,
+    ShareOfferRequest,
+)
+
 logger = logging.getLogger(__name__)
 
 # Module-level start time for uptime calculation
@@ -66,51 +76,45 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     # ── Ingest & Mine ─────────────────────────────────────────
 
     @router.post("/api/v1/ingest/url")
-    async def api_ingest_url(body: dict):
+    async def api_ingest_url(body: IngestURLRequest):
         """Fetch a URL and ingest it into memory."""
-        url = body.get("url", "").strip()
-        if not url:
-            return {"status": "error", "message": "url is required"}
         result = memos.ingest_url(
-            url,
-            tags=body.get("tags"),
-            importance=float(body.get("importance", 0.5)),
-            max_chunk=int(body.get("max_chunk", 2000)),
-            dry_run=bool(body.get("dry_run", False)),
-            skip_sanitization=bool(body.get("skip_sanitization", False)),
+            body.url,
+            tags=body.tags,
+            importance=body.importance,
+            max_chunk=body.max_chunk,
+            dry_run=body.dry_run,
         )
         head_meta = result.chunks[0].get("metadata", {}) if result.chunks else {}
         payload = {
             "status": "ok" if not result.errors else "partial",
-            "url": url,
+            "url": body.url,
             "total_chunks": result.total_chunks,
             "skipped": result.skipped,
             "errors": result.errors,
             "source_type": head_meta.get("source_type"),
             "title": head_meta.get("title"),
         }
-        if body.get("dry_run"):
+        if body.dry_run:
             payload["chunks"] = result.chunks
         return payload
 
     @router.post("/api/v1/mine/conversation")
-    async def api_mine_conversation(body: dict):
+    async def api_mine_conversation(body: MineConversationRequest):
         """Mine a conversation transcript. Accepts text or server-side path."""
         import os
         import tempfile
 
         from ...ingest.conversation import ConversationMiner
 
-        text_body = body.get("text", "") or body.get("content", "")
-        path_body = body.get("path", "")
-        if not text_body and not path_body:
-            return {"status": "error", "message": "Either 'text'/'content' or 'path' is required"}
+        text_body = body.text or body.content or ""
+        path_body = body.path or ""
 
-        per_speaker = bool(body.get("per_speaker", True))
-        namespace_prefix = str(body.get("namespace_prefix", "conv"))
-        extra_tags = body.get("tags") or []
-        importance = float(body.get("importance", 0.6))
-        dry_run = bool(body.get("dry_run", False))
+        per_speaker = body.per_speaker
+        namespace_prefix = body.namespace_prefix
+        extra_tags = body.tags or []
+        importance = body.importance
+        dry_run = body.dry_run
         miner = ConversationMiner(memos, dry_run=dry_run)
 
         if text_body:
@@ -274,7 +278,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     async def delete_subscription(subscription_id: str):
         ok = memos.events.unsubscribe_subscription(subscription_id)
         if not ok:
-            return {"status": "error", "message": f"Subscription {subscription_id} not found"}
+            return not_found(f"Subscription {subscription_id} not found")
         return {"status": "ok", "deleted": subscription_id}
 
     @router.get("/api/v1/events/stats")
@@ -312,27 +316,25 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     # ── Namespace ACL ─────────────────────────────────────────
 
     @router.post("/api/v1/namespaces/{namespace}/grant")
-    async def api_acl_grant(namespace: str, body: dict):
-        agent_id, role = body.get("agent_id"), body.get("role")
-        if not agent_id or not role:
-            return {"status": "error", "message": "agent_id and role are required"}
+    async def api_acl_grant(namespace: str, body: ACLGrantRequest):
         try:
             policy = memos.grant_namespace_access(
-                agent_id, namespace, role, granted_by=body.get("granted_by", ""), expires_at=body.get("expires_at")
+                body.agent_id,
+                namespace,
+                body.role,
+                granted_by=body.granted_by,
+                expires_at=body.expires_at,
             )
             return {"status": "ok", "policy": policy}
-        except ValueError as e:
-            return {"status": "error", "message": str(e)}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
 
     @router.post("/api/v1/namespaces/{namespace}/revoke")
-    async def api_acl_revoke(namespace: str, body: dict):
-        agent_id = body.get("agent_id")
-        if not agent_id:
-            return {"status": "error", "message": "agent_id is required"}
-        revoked = memos.revoke_namespace_access(agent_id, namespace)
+    async def api_acl_revoke(namespace: str, body: ACLRevokeRequest):
+        revoked = memos.revoke_namespace_access(body.agent_id, namespace)
         if not revoked:
-            return {"status": "error", "message": f"No access found for {agent_id}"}
-        return {"status": "ok", "revoked": agent_id}
+            return not_found(f"No access found for {body.agent_id}")
+        return {"status": "ok", "revoked": body.agent_id}
 
     @router.get("/api/v1/namespaces/{namespace}/policies")
     async def api_acl_list(namespace: str):
@@ -351,25 +353,22 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     # ── Multi-Agent Sharing ───────────────────────────────────
 
     @router.post("/api/v1/share/offer")
-    async def api_share_offer(body: dict):
+    async def api_share_offer(body: ShareOfferRequest):
         from ...sharing.models import SharePermission, ShareScope
 
-        try:
-            scope = ShareScope(body.get("scope", "items"))
-            permission = SharePermission(body.get("permission", "read"))
-        except ValueError as e:
-            return {"status": "error", "message": str(e)}
+        scope = ShareScope(body.scope)
+        permission = SharePermission(body.permission)
         try:
             req = memos.share_with(
-                body["target_agent"],
+                body.target_agent,
                 scope=scope,
-                scope_key=body.get("scope_key", ""),
+                scope_key=body.scope_key,
                 permission=permission,
-                expires_at=body.get("expires_at"),
+                expires_at=body.expires_at,
             )
             return {"status": "ok", "share": req.to_dict()}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
 
     @router.post("/api/v1/share/{share_id}/accept")
     async def api_share_accept(share_id: str):
@@ -400,15 +399,15 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
             return {"status": "error", "message": str(e)}
 
     @router.post("/api/v1/share/import")
-    async def api_share_import(body: dict):
+    async def api_share_import(body: ShareImportRequest):
         from ...sharing.models import MemoryEnvelope
 
         try:
-            envelope = MemoryEnvelope.from_dict(body["envelope"])
+            envelope = MemoryEnvelope.from_dict(body.envelope)
             learned = memos.import_shared(envelope)
             return {"status": "ok", "imported": len(learned), "ids": [i.id for i in learned]}
-        except (ValueError, KeyError) as e:
-            return {"status": "error", "message": str(e)}
+        except (ValueError, KeyError) as exc:
+            return error_response(str(exc), status_code=400)
 
     @router.get("/api/v1/shares")
     async def api_shares_list(agent: str | None = None, status: str | None = None):

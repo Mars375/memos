@@ -117,9 +117,10 @@ class TestEventsAndSubscriptions:
 
     def test_delete_subscription_not_found(self, client):
         resp = client.delete("/api/v1/subscriptions/nonexistent-id")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
         assert data["status"] == "error"
+        assert data["code"] == "NOT_FOUND"
 
     def test_event_stats(self, client):
         resp = client.get("/api/v1/events/stats")
@@ -159,9 +160,7 @@ class TestNamespaceACL:
             "/api/v1/namespaces/project-x/grant",
             json={"agent_id": "agent-alice"},
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "error"
+        assert resp.status_code == 422
 
     def test_list_namespace_policies(self, client):
         client.post(
@@ -214,18 +213,17 @@ class TestNamespaceACL:
             "/api/v1/namespaces/nonexistent/revoke",
             json={"agent_id": "ghost-agent"},
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
         assert data["status"] == "error"
+        assert data["code"] == "NOT_FOUND"
 
     def test_revoke_missing_agent_id(self, client):
         resp = client.post(
             "/api/v1/namespaces/project-x/revoke",
             json={},
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "error"
+        assert resp.status_code == 422
 
 
 # ── Multi-agent Sharing (8 endpoints) ────────────────────────
@@ -262,9 +260,7 @@ class TestSharing:
             "/api/v1/share/offer",
             json={"target_agent": "agent-bob", "scope": "invalid_scope"},
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "error"
+        assert resp.status_code == 422
 
     def test_share_accept(self, client):
         offer = self._create_offer(client)
@@ -336,7 +332,7 @@ class TestSharing:
 
     def test_share_import_invalid_envelope(self, client):
         resp = client.post("/api/v1/share/import", json={"envelope": {"bad": "data"}})
-        assert resp.status_code == 200
+        assert resp.status_code == 400
         data = resp.json()
         assert data["status"] == "error"
 
@@ -397,9 +393,7 @@ class TestMineConversation:
 
     def test_mine_conversation_missing_text_and_path(self, client):
         resp = client.post("/api/v1/mine/conversation", json={})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "error"
+        assert resp.status_code == 422
 
 
 # ── Dashboard (1 endpoint) ───────────────────────────────────

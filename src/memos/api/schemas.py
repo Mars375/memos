@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ── Memory ───────────────────────────────────────────────────
 
@@ -233,6 +233,8 @@ class BrainSearchRequest(BaseModel):
     min_score: float = Field(default=0.0, ge=0.0, le=1.0)
     retrieval_mode: str = Field(default="hybrid", pattern="^(semantic|keyword|hybrid)$")
     max_context_chars: int = Field(default=2000, ge=100, le=50000)
+    wiki_dir: Optional[str] = None
+    auto_file: bool = False
 
 
 # ── Palace ───────────────────────────────────────────────────
@@ -261,6 +263,33 @@ class PalaceAssignRequest(BaseModel):
     room: Optional[str] = None
 
 
+class PalaceDiaryWriteRequest(BaseModel):
+    """Write a diary entry for an agent."""
+
+    agent_name: str = Field(..., min_length=1)
+    entry: str = Field(..., min_length=1)
+    tags: Optional[list[str]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _alias_fields(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        payload = dict(data)
+        if "agent_name" not in payload and payload.get("agent") is not None:
+            payload["agent_name"] = payload.get("agent")
+        if "entry" not in payload and payload.get("content") is not None:
+            payload["entry"] = payload.get("content")
+        return payload
+
+
+class PalaceProvisionAgentRequest(BaseModel):
+    """Provision a palace wing for an agent."""
+
+    name: str = Field(..., min_length=1)
+    description: str = ""
+
+
 # ── Context ──────────────────────────────────────────────────
 
 
@@ -268,6 +297,14 @@ class ContextIdentityRequest(BaseModel):
     """Set the identity context."""
 
     content: str = Field(..., min_length=1)
+
+
+class WikiCreatePageRequest(BaseModel):
+    """Create a living wiki page."""
+
+    entity: str = Field(..., min_length=1)
+    entity_type: str = "default"
+    content: str = ""
 
 
 # ── Admin / Ingest ──────────────────────────────────────────
@@ -296,6 +333,12 @@ class MineConversationRequest(BaseModel):
     dry_run: bool = False
 
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="after")
+    def _require_text_or_path(self) -> "MineConversationRequest":
+        if not (self.text or self.content or self.path):
+            raise ValueError("Either 'text'/'content' or 'path' is required")
+        return self
 
 
 # ── Namespace ACL ────────────────────────────────────────────
