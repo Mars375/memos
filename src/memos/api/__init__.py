@@ -57,6 +57,8 @@ def create_fastapi_app(
 
     _kg = KnowledgeGraph(db_path=kg_db_path)
     _kg_bridge = KGBridge(memos, _kg)
+    memos.kg = _kg
+    memos.kg_bridge = _kg_bridge
 
     if kg_db_path:
         if kg_db_path == ":memory:":

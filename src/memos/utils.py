@@ -39,10 +39,16 @@ def parse_date(value: str | float | None) -> Optional[float]:
 
 
 def get_or_create_kg(memos: Any) -> Any:
+    if hasattr(memos, "get_or_create_kg"):
+        return memos.get_or_create_kg()
+
     from .knowledge_graph import KnowledgeGraph
 
-    kg_instance = getattr(memos, "_kg", None)
+    kg_instance = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
     if kg_instance is None:
         kg_instance = KnowledgeGraph()
-        memos._kg = kg_instance
+        if hasattr(memos, "kg"):
+            memos.kg = kg_instance
+        else:
+            memos._kg = kg_instance
     return kg_instance

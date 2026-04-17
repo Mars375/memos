@@ -161,7 +161,7 @@ def hook_auto_capture_kg(tool: str, args: dict, result: dict, memos: Any) -> dic
         return result
 
     try:
-        kg = getattr(memos, "_kg", None)
+        kg = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
         if kg is None:
             return result
 
