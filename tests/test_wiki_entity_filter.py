@@ -6,10 +6,10 @@ import pytest
 
 from memos.wiki_living import STOP_WORDS, extract_entities
 
-
 # ---------------------------------------------------------------------------
 # Stop-word rejection tests
 # ---------------------------------------------------------------------------
+
 
 class TestStopWordFiltering:
     """Verify that known garbage entities are filtered out."""
@@ -17,12 +17,42 @@ class TestStopWordFiltering:
     @pytest.mark.parametrize(
         "noise_word",
         [
-            "str", "dict", "type", "int", "float", "bool", "list", "set",
-            "tuple", "None", "True", "False", "class", "def", "return",
-            "import", "http", "https", "www", "com", "org", "io",
-            "parameter", "returns", "raises", "example", "note",
-            "mcp", "servers", "server", "client",
-            "get", "set", "put", "post", "delete",
+            "str",
+            "dict",
+            "type",
+            "int",
+            "float",
+            "bool",
+            "list",
+            "set",
+            "tuple",
+            "None",
+            "True",
+            "False",
+            "class",
+            "def",
+            "return",
+            "import",
+            "http",
+            "https",
+            "www",
+            "com",
+            "org",
+            "io",
+            "parameter",
+            "returns",
+            "raises",
+            "example",
+            "note",
+            "mcp",
+            "servers",
+            "server",
+            "client",
+            "get",
+            "set",
+            "put",
+            "post",
+            "delete",
         ],
     )
     def test_programming_noise_filtered_out(self, noise_word: str) -> None:
@@ -37,8 +67,7 @@ class TestStopWordFiltering:
 
     @pytest.mark.parametrize(
         "noise_word",
-        ["Best", "General", "Same", "Augmenting", "Answers", "Any",
-         "Discovery", "Function", "Method", "Module"],
+        ["Best", "General", "Same", "Augmenting", "Answers", "Any", "Discovery", "Function", "Method", "Module"],
     )
     def test_generic_noise_filtered_out(self, noise_word: str) -> None:
         """Generic noise words from API docs/READMEs are rejected."""
@@ -73,6 +102,7 @@ class TestStopWordFiltering:
 # ---------------------------------------------------------------------------
 # Legitimate entity pass-through tests
 # ---------------------------------------------------------------------------
+
 
 class TestLegitimateEntitiesPass:
     """Verify that real entity names pass through the filter."""
@@ -130,6 +160,7 @@ class TestLegitimateEntitiesPass:
 # STOP_WORDS constant tests
 # ---------------------------------------------------------------------------
 
+
 class TestStopWordsConstant:
     """Verify the STOP_WORDS constant is properly configured."""
 
@@ -151,9 +182,20 @@ class TestStopWordsConstant:
     def test_reported_garbage_in_stop_words(self) -> None:
         """All the specific garbage entities from the bug report are in STOP_WORDS."""
         garbage = [
-            "str", "dict", "type", "http", "mcp", "servers",
-            "Function", "Best", "General", "Same",
-            "Augmenting", "Answers", "Any", "Discovery",
+            "str",
+            "dict",
+            "type",
+            "http",
+            "mcp",
+            "servers",
+            "Function",
+            "Best",
+            "General",
+            "Same",
+            "Augmenting",
+            "Answers",
+            "Any",
+            "Discovery",
         ]
         for word in garbage:
             assert word in STOP_WORDS, f"Reported garbage '{word}' missing from STOP_WORDS"

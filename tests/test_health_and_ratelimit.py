@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 from fastapi.testclient import TestClient
 
 from memos.api import create_fastapi_app
 from memos.core import MemOS
-
 
 # ── Fixtures ──────────────────────────────────────────────────
 

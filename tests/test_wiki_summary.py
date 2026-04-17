@@ -13,7 +13,6 @@ import pytest
 
 from memos.wiki_living import LivingWikiEngine
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -72,7 +71,7 @@ Some real content about TestEntity that is long enough.
 
 
 def test_summary_not_short_fragment(engine):
-    """"a embeddings" and similar short fragments must not be summaries."""
+    """ "a embeddings" and similar short fragments must not be summaries."""
     _write_page(
         engine,
         "Embeddings",
