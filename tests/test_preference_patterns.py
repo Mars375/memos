@@ -131,6 +131,7 @@ def test_brain_search_with_analytics_boost(tmp_path) -> None:
 
     persist_path = tmp_path / "store.json"
     wiki_root = tmp_path / "wiki"
+    wiki_root.mkdir(parents=True, exist_ok=True)
 
     memos = MemOS(backend="json", persist_path=str(persist_path))
     memos.learn("Python machine learning models", tags=["python", "ml"])
