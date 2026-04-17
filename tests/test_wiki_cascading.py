@@ -36,7 +36,7 @@ class TestCascadingRefresh:
         m, engine = env
         kg = KnowledgeGraph(db_path=":memory:")
         kg.add_fact("Alice", "works_on", "Project Delta")
-        m._kg = kg
+        m.kg = kg
 
         item = m.learn("Alice works with Bob on Project Delta", tags=["team"])
         engine.update_for_item(item)

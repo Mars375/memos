@@ -36,7 +36,7 @@ def brain_env(tmp_path: Path):
     kg = KnowledgeGraph(db_path=str(kg_path))
     kg.add_fact("Alice", "works_at", "OpenAI", confidence_label="EXTRACTED")
     kg.add_fact("OpenAI", "builds", "MemOS", confidence_label="INFERRED")
-    memos._kg = kg
+    memos.kg = kg
 
     yield memos, kg, wiki_root
     kg.close()
@@ -80,7 +80,7 @@ class TestAutoFileSearch:
         wiki.update(force=True)
 
         kg = KnowledgeGraph(db_path=str(kg_path))
-        memos._kg = kg
+        memos.kg = kg
 
         searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
         result = searcher.search("short", top_k=1, auto_file=True)

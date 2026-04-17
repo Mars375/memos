@@ -91,7 +91,7 @@ def test_log_records_updates(engine):
 def test_update_adds_graph_neighbors_section(mem, tmp_path):
     kg = KnowledgeGraph(db_path=":memory:")
     kg.add_fact("Alice", "works_on", "Project Phoenix")
-    mem._kg = kg
+    mem.kg = kg
     engine = LivingWikiEngine(mem, wiki_dir=str(tmp_path / "wiki"))
 
     engine.update(force=True)
