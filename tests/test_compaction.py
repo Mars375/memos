@@ -25,6 +25,16 @@ def _make_item(
     )
 
 
+class CountingStore(InMemoryBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.list_all_calls = 0
+
+    def list_all(self, *, namespace: str = "") -> list[MemoryItem]:
+        self.list_all_calls += 1
+        return super().list_all(namespace=namespace)
+
+
 @pytest.fixture
 def store():
     """Create a fresh in-memory store."""
@@ -129,6 +139,17 @@ class TestCompactionPipeline:
         store.upsert(_make_item("only one"))
         report = engine.compact(store)
         assert report.total_removed == 0
+
+    def test_noop_run_does_not_rescan_store_between_phases(self, engine):
+        store = CountingStore()
+        store.upsert(_make_item("zebra quantum lattice", importance=0.8, age_days=1, tags=["active"]))
+        store.upsert(_make_item("banana river trumpet", importance=0.7, age_days=1, tags=["active"]))
+
+        report = engine.compact(store)
+
+        assert report.total_removed == 0
+        assert report.total_added == 0
+        assert store.list_all_calls == 2
 
     def test_dedup_phase(self, engine, store):
         """Exact duplicates are removed (manually inserted with different IDs)."""

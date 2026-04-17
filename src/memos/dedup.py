@@ -65,12 +65,14 @@ class DedupEngine:
         self._threshold = threshold
         self._namespace = namespace or ""
         self._hash_index: dict[str, MemoryItem] = {}
+        self._items_cache: list[MemoryItem] = []
         self._built = False
 
     def _build_hash_index(self) -> None:
         """Build SHA-256 hash index from current store contents."""
         self._hash_index.clear()
-        for item in self._store.list_all(namespace=self._namespace):
+        self._items_cache = list(self._store.list_all(namespace=self._namespace))
+        for item in self._items_cache:
             h = self._content_hash(item.content)
             if h not in self._hash_index:
                 self._hash_index[h] = item
@@ -84,6 +86,7 @@ class DedupEngine:
     def invalidate_cache(self) -> None:
         """Force rebuild of hash index on next check."""
         self._built = False
+        self._items_cache = []
 
     def register(self, item: MemoryItem) -> None:
         """Register a newly inserted item in the hash index."""
@@ -127,7 +130,7 @@ class DedupEngine:
             best_item = None
             best_sim = 0.0
 
-            for item in self._store.list_all(namespace=self._namespace):
+            for item in self._items_cache:
                 trigrams_existing = self._trigrams(item.content)
                 if not trigrams_existing:
                     continue

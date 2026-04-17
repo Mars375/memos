@@ -8,6 +8,16 @@ from memos.models import MemoryItem
 from memos.storage.memory_backend import InMemoryBackend
 
 
+class CountingStore(InMemoryBackend):
+    def __init__(self):
+        super().__init__()
+        self.list_all_calls = 0
+
+    def list_all(self, *, namespace: str = ""):
+        self.list_all_calls += 1
+        return super().list_all(namespace=namespace)
+
+
 class TestDedupEngine:
     """Unit tests for DedupEngine."""
 
@@ -137,6 +147,17 @@ class TestDedupEngine:
         # Rebuilding should find empty store
         result = engine.check("Old content")
         assert result.is_duplicate is False
+
+    def test_near_duplicate_check_reuses_index_scan(self):
+        store = CountingStore()
+        store.upsert(self._make_item("The user prefers dark mode in the interface configuration settings", "a1"))
+        engine = DedupEngine(store, threshold=0.85)
+
+        result = engine.check("The user prefers dark mode in the interface configuration")
+
+        assert result.is_duplicate is True
+        assert result.reason == "near"
+        assert store.list_all_calls == 1
 
 
 class TestDedupScan:

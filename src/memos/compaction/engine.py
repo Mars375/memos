@@ -150,15 +150,18 @@ class CompactionEngine:
         self._phase_dedup(store, items, report)
 
         # Phase 2: Archive old low-relevance
-        items = store.list_all()  # Refresh after dedup
+        if not self._config.dry_run and (report.dedup_groups > 0 or report.dedup_merged > 0):
+            items = store.list_all()
         self._phase_archive(store, items, report)
 
         # Phase 3: Merge stale memories
-        items = store.list_all()  # Refresh after archive
+        if not self._config.dry_run and report.archived > 0:
+            items = store.list_all()
         self._phase_stale_merge(store, items, report)
 
         # Phase 4: Cluster compaction
-        items = store.list_all()  # Refresh after stale merge
+        if not self._config.dry_run and (report.stale_groups > 0 or report.stale_merged > 0):
+            items = store.list_all()
         self._phase_cluster_compact(store, items, report)
 
         # Compute totals
