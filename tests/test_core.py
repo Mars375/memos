@@ -145,6 +145,20 @@ class TestMemOSInMemory:
         assert len(results) >= 1
         assert "Docker" in results[0].content
 
+    def test_kg_property_is_lazy_and_stable(self):
+        from memos.knowledge_graph import KnowledgeGraph
+
+        assert self.mem.kg is None
+
+        kg = self.mem.get_or_create_kg()
+
+        assert isinstance(kg, KnowledgeGraph)
+        assert self.mem.kg is kg
+
+        same = self.mem.get_or_create_kg()
+        assert same is kg
+        kg.close()
+
 
 class TestSanitizer:
     def test_injection_detected(self):

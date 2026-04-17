@@ -154,7 +154,7 @@ class TestAutoCapture:
 
         kg = KnowledgeGraph(":memory:")
         memos = MagicMock()
-        memos._kg = kg
+        memos.kg = kg
         result = {"content": [{"type": "text", "text": "Saved"}]}
         hook_auto_capture_kg("memory_save", {"content": "Alice leads TeamA"}, result, memos)
         facts = kg.query("Alice")
@@ -163,7 +163,7 @@ class TestAutoCapture:
 
     def test_empty_content_no_error(self):
         memos = MagicMock()
-        memos._kg = MagicMock()
+        memos.kg = MagicMock()
         result = {"content": []}
         hook_auto_capture_kg("memory_save", {"content": ""}, result, memos)
         # No exception, result unchanged
@@ -171,8 +171,8 @@ class TestAutoCapture:
 
     def test_returns_original_result_unchanged(self):
         memos = MagicMock()
-        memos._kg = MagicMock()
-        memos._kg.add_fact.return_value = "abc"
+        memos.kg = MagicMock()
+        memos.kg.add_fact.return_value = "abc"
         original = {"content": [{"type": "text", "text": "ok"}]}
         returned = hook_auto_capture_kg("memory_save", {"content": "Alice leads TeamA"}, original, memos)
         assert returned is original

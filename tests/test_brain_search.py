@@ -29,7 +29,7 @@ def brain_env(tmp_path: Path):
     kg = KnowledgeGraph(db_path=str(kg_path))
     kg.add_fact("Alice", "works_at", "OpenAI", confidence_label="EXTRACTED")
     kg.add_fact("OpenAI", "builds", "MemOS", confidence_label="INFERRED")
-    memos._kg = kg
+    memos.kg = kg
 
     yield memos, kg, wiki_root, kg_path
     kg.close()
@@ -98,6 +98,18 @@ async def test_brain_search_api(brain_env):
     assert "Fused context:" in data["context"]
 
 
+def test_create_fastapi_app_registers_shared_kg_handles(brain_env):
+    from memos.api import create_fastapi_app
+
+    memos, _kg, _wiki_root, kg_path = brain_env
+
+    create_fastapi_app(memos=memos, kg_db_path=str(kg_path))
+
+    assert memos.kg is not None
+    assert memos.kg_bridge is not None
+    assert memos.kg_bridge.kg is memos.kg
+
+
 @pytest.mark.asyncio
 async def test_brain_entity_detail_api(brain_env):
     from httpx import ASGITransport, AsyncClient
@@ -135,7 +147,7 @@ def test_brain_search_rebinds_stale_bridge_to_explicit_kg(tmp_path: Path):
 
     stale_kg = KnowledgeGraph(db_path=str(stale_kg_path))
     stale_kg.add_fact("Alice", "works_at", "OldCorp", confidence_label="AMBIGUOUS")
-    memos._kg_bridge = KGBridge(memos, stale_kg)
+    memos.kg_bridge = KGBridge(memos, stale_kg)
 
     fresh_kg = KnowledgeGraph(db_path=str(fresh_kg_path))
     fresh_kg.add_fact("Alice", "works_at", "OpenAI", confidence_label="EXTRACTED")
@@ -171,7 +183,7 @@ async def test_brain_entity_subgraph_api(brain_env):
 
 def test_brain_search_mcp_dispatch(brain_env):
     memos, kg, wiki_root, _kg_path = brain_env
-    memos._kg = kg
+    memos.kg = kg
     response = _dispatch(
         memos,
         "brain_search",
@@ -257,7 +269,7 @@ def test_suggest_questions_orphan_entities(tmp_path: Path):
 
     kg = KnowledgeGraph(db_path=str(kg_path))
     kg.add_fact("Zephyr", "is_a", "project", confidence_label="EXTRACTED")
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     suggestions = searcher.suggest_questions(top_k=10)
@@ -294,7 +306,7 @@ def test_suggest_questions_empty_kg(tmp_path: Path):
     wiki.init()
 
     kg = KnowledgeGraph(db_path=str(kg_path))
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     suggestions = searcher.suggest_questions(top_k=5)
@@ -327,7 +339,7 @@ async def test_brain_suggest_api(brain_env):
 
 def test_brain_suggest_mcp_dispatch(brain_env):
     memos, kg, wiki_root, _kg_path = brain_env
-    memos._kg = kg
+    memos.kg = kg
     response = _dispatch(memos, "brain_suggest", {"top_k": 5})
 
     assert not response.get("isError")
@@ -350,7 +362,7 @@ def test_surprising_connections_empty_graph(tmp_path: Path):
     wiki.init()
 
     kg = KnowledgeGraph(db_path=str(kg_path))
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     result = searcher.surprising_connections(top_n=5)
@@ -373,7 +385,7 @@ def test_surprising_connections_single_community(tmp_path: Path):
     # A→B→C forms a single connected component / one community
     kg.add_fact("A", "related_to", "B", confidence=0.9)
     kg.add_fact("B", "related_to", "C", confidence=0.8)
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     result = searcher.surprising_connections(top_n=5)
@@ -403,7 +415,7 @@ def test_surprising_connections_cross_domain(tmp_path: Path):
     kg.add_fact("Bob", "works_at", "LabCorp", confidence=0.8)
     # Cross-domain link: Alice —collaborates_with→ Bob
     kg.add_fact("Alice", "collaborates_with", "Bob", confidence=0.7)
-    memos._kg = kg
+    memos.kg = kg
 
     # Mock communities so Alice/OpenAI/Python are in one and Bob/Cells/LabCorp in another
     fake_communities = [
@@ -452,7 +464,7 @@ def test_surprising_connections_reason_is_descriptive(tmp_path: Path):
     kg.add_fact("Alice", "works_at", "OpenAI", confidence=0.9)
     kg.add_fact("Bob", "studies", "Cells", confidence=0.9)
     kg.add_fact("Alice", "mentors", "Bob", confidence=0.8)
-    memos._kg = kg
+    memos.kg = kg
 
     fake_communities = [
         {"id": "0", "label": "tech", "nodes": ["Alice", "OpenAI"], "size": 2, "top_entity": "Alice"},
@@ -554,7 +566,7 @@ def test_suggest_small_community_questions(tmp_path: Path):
     # Two isolated facts → each entity forms its own 1-2 node community
     kg.add_fact("Zephyr", "is_a", "project", confidence_label="EXTRACTED")
     kg.add_fact("Orion", "is_a", "tool", confidence_label="EXTRACTED")
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     suggestions = searcher.suggest_questions(top_k=20)
@@ -583,7 +595,7 @@ def test_suggest_ambiguous_fact_questions(tmp_path: Path):
     kg = KnowledgeGraph(db_path=str(kg_path))
     kg.add_fact("Pluto", "is_a", "planet", confidence_label="AMBIGUOUS")
     kg.add_fact("Pluto", "orbits", "Sun", confidence_label="EXTRACTED")
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     suggestions = searcher.suggest_questions(top_k=20)
@@ -612,7 +624,7 @@ def test_suggest_wiki_sparse_entity_questions(tmp_path: Path):
     kg = KnowledgeGraph(db_path=str(kg_path))
     # Only one fact about RareEntity → sparse
     kg.add_fact("RareEntity", "mentioned_in", "documents", confidence_label="EXTRACTED")
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     suggestions = searcher.suggest_questions(top_k=20)
@@ -635,7 +647,7 @@ def test_suggest_questions_empty_kg_returns_empty(tmp_path: Path):
     wiki.init()
 
     kg = KnowledgeGraph(db_path=str(kg_path))
-    memos._kg = kg
+    memos.kg = kg
 
     searcher = BrainSearch(memos, kg=kg, wiki_dir=str(wiki_root))
     suggestions = searcher.suggest_questions(top_k=5)
