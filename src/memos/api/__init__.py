@@ -16,7 +16,8 @@ except ImportError:  # pragma: no cover
 def create_fastapi_app(
     memos: Optional[MemOS] = None,
     api_keys: Optional[list[str]] = None,
-    rate_limit: int = 100,
+    rate_limit: Optional[int] = None,
+    rate_window: Optional[float] = None,
     kg_db_path: Optional[str] = None,
     **kwargs: Any,
 ) -> Any:
@@ -25,7 +26,10 @@ def create_fastapi_app(
     Args:
         memos: MemOS instance (created from kwargs if None).
         api_keys: List of valid API keys. If None/empty, auth is disabled.
-        rate_limit: Max requests per minute per key (default 100).
+        rate_limit: Max requests per window per key. Falls back to
+            MEMOS_RATE_LIMIT env var, then default 300.
+        rate_window: Window in seconds. Falls back to MEMOS_RATE_WINDOW
+            env var, then default 60.0.
         kg_db_path: SQLite path for KnowledgeGraph and PalaceIndex.
     """
     if FastAPI is None:
@@ -33,6 +37,14 @@ def create_fastapi_app(
 
     if memos is None:
         memos = MemOS(**kwargs)
+
+    # Resolve rate limit from arg → env → default
+    import os
+
+    if rate_limit is None:
+        rate_limit = int(os.environ.get("MEMOS_RATE_LIMIT", "300"))
+    if rate_window is None:
+        rate_window = float(os.environ.get("MEMOS_RATE_WINDOW", "60.0"))
 
     # ── Dependencies ──────────────────────────────────────────
     from ..context import ContextStack
@@ -60,7 +72,7 @@ def create_fastapi_app(
 
     key_manager = APIKeyManager(keys=api_keys)
     key_manager.rate_limiter.max_requests = rate_limit
-    rate_limiter = RateLimiter(default_max=rate_limit, rules=DEFAULT_RULES)
+    rate_limiter = RateLimiter(default_max=rate_limit, default_window=rate_window, rules=DEFAULT_RULES)
 
     # ── FastAPI app ───────────────────────────────────────────
     app = FastAPI(

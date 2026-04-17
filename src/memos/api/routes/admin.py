@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 logger = logging.getLogger(__name__)
+
+# Module-level start time for uptime calculation
+_start_time: float = time.time()
 
 
 def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: str, DASHBOARD_HTML: str) -> APIRouter:
@@ -286,6 +290,18 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
             "active_keys": key_manager.key_count,
             "rate_limiting": True,
         }
+
+    @router.get("/api/v1/health")
+    async def api_v1_health():
+        """Health check with version and uptime."""
+        uptime = time.time() - _start_time
+        try:
+            import importlib.metadata
+
+            version = importlib.metadata.version("memos")
+        except Exception:
+            version = MEMOS_VERSION
+        return {"status": "ok", "version": version, "uptime": round(uptime, 2)}
 
     @router.get("/api/v1/rate-limit/status")
     async def api_rate_limit_status(request):
