@@ -418,7 +418,7 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
 
     @router.get("/api/v1/palace/agents")
     async def palace_list_agents():
-        """Discover all agents with agent- wings in the palace."""
+        """Discover all agents with agent: wings in the palace."""
         agents = _palace.list_agents()
         return {"status": "ok", "agents": agents, "total": len(agents)}
 

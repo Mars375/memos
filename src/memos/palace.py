@@ -472,20 +472,20 @@ class PalaceIndex:
     # ------------------------------------------------------------------
 
     def list_agents(self) -> List[dict]:
-        """Discover all agents with ``agent-`` wings and their diary entry counts.
+        """Discover all agents with ``agent:`` wings and their diary entry counts.
 
         Returns:
             List of dicts: ``{name, wing, diary_entries, stats}``.
-            *name* is the agent identifier (wing name minus ``agent-`` prefix).
+            *name* is the agent identifier (wing name minus ``agent:`` prefix).
             *wing* is the full wing dict.
             *diary_entries* is the count of diary entries for that agent.
             *stats* is a dict with ``memory_count`` and ``room_count`` from the wing.
         """
         wings = self.list_wings()
-        agent_wings = [w for w in wings if w["name"].startswith("agent-")]
+        agent_wings = [w for w in wings if w["name"].startswith("agent:")]
         results: List[dict] = []
         for w in agent_wings:
-            agent_name = w["name"][len("agent-") :]
+            agent_name = w["name"][len("agent:") :]
             diary_count = self._conn.execute(
                 "SELECT COUNT(*) FROM diary_entries WHERE agent = ?",
                 (agent_name,),
