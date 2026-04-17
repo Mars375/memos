@@ -40,6 +40,39 @@ _CORS_HEADERS = {
     "Access-Control-Expose-Headers": "Mcp-Session-Id",
 }
 
+
+def _get_kg(memos: Any) -> Any:
+    if hasattr(memos, "get_or_create_kg"):
+        return memos.get_or_create_kg()
+
+    from .knowledge_graph import KnowledgeGraph
+
+    kg_instance = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
+    if kg_instance is None:
+        kg_instance = KnowledgeGraph()
+        if hasattr(memos, "kg"):
+            memos.kg = kg_instance
+        else:
+            memos._kg = kg_instance
+    return kg_instance
+
+
+def _get_kg_bridge(memos: Any, kg_instance: Any) -> Any:
+    if hasattr(memos, "get_or_create_kg_bridge"):
+        return memos.get_or_create_kg_bridge(kg_instance)
+
+    from .kg_bridge import KGBridge
+
+    bridge = getattr(memos, "kg_bridge", None) or getattr(memos, "_kg_bridge", None)
+    if bridge is None or getattr(bridge, "kg", None) is not kg_instance:
+        bridge = KGBridge(memos, kg_instance)
+        if hasattr(memos, "kg_bridge"):
+            memos.kg_bridge = bridge
+        else:
+            memos._kg_bridge = bridge
+    return bridge
+
+
 TOOLS = [
     {
         "name": "memory_search",
@@ -496,17 +529,12 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             )
 
         elif tool == "kg_add_fact":
-            from .knowledge_graph import KnowledgeGraph
-
             subject = args.get("subject", "").strip()
             predicate = args.get("predicate", "").strip()
             obj = args.get("object", "").strip()
             if not subject or not predicate or not obj:
                 return _error("subject, predicate and object are required")
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance  # cache it for reuse
+            kg_instance = _get_kg(memos)
             fact_id = kg_instance.add_fact(
                 subject=subject,
                 predicate=predicate,
@@ -519,15 +547,10 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text(f"Fact added [{fact_id}]: {subject} -{predicate}-> {obj}")
 
         elif tool == "kg_query_entity":
-            from .knowledge_graph import KnowledgeGraph
-
             entity = args.get("entity", "").strip()
             if not entity:
                 return _error("entity is required")
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance  # cache it for reuse
+            kg_instance = _get_kg(memos)
             facts = kg_instance.query(
                 entity,
                 time=args.get("time"),
@@ -539,15 +562,10 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text(f"{len(facts)} fact(s):\n" + "\n".join(lines))
 
         elif tool == "kg_timeline":
-            from .knowledge_graph import KnowledgeGraph
-
             entity = args.get("entity", "").strip()
             if not entity:
                 return _error("entity is required")
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance  # cache it for reuse
+            kg_instance = _get_kg(memos)
             facts = kg_instance.timeline(entity)
             if not facts:
                 return _text(f"No timeline entries for: {entity}")
@@ -555,12 +573,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text(f"Timeline ({len(facts)} events):\n" + "\n".join(lines))
 
         elif tool == "kg_communities":
-            from .knowledge_graph import KnowledgeGraph
-
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance
+            kg_instance = _get_kg(memos)
             communities = kg_instance.detect_communities(algorithm=args.get("algorithm", "label_propagation"))
             if not communities:
                 return _text("No communities found (empty graph).")
@@ -576,12 +589,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text("\n".join(lines))
 
         elif tool == "kg_god_nodes":
-            from .knowledge_graph import KnowledgeGraph
-
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance
+            kg_instance = _get_kg(memos)
             top_k = int(args.get("top_k", 10))
             nodes = kg_instance.god_nodes(top_k=top_k)
             if not nodes:
@@ -598,12 +606,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text("\n".join(lines))
 
         elif tool == "kg_surprising":
-            from .knowledge_graph import KnowledgeGraph
-
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance
+            kg_instance = _get_kg(memos)
             top_k = int(args.get("top_k", 10))
             connections = kg_instance.surprising_connections(top_k=top_k)
             if not connections:
@@ -617,20 +620,11 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text("\n".join(lines))
 
         elif tool == "memory_recall_enriched":
-            from .kg_bridge import KGBridge
-            from .knowledge_graph import KnowledgeGraph
-
             query = args.get("query", "").strip()
             if not query:
                 return _error("query is required")
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance
-            bridge = getattr(memos, "_kg_bridge", None)
-            if bridge is None:
-                bridge = KGBridge(memos, kg_instance)
-                memos._kg_bridge = bridge
+            kg_instance = _get_kg(memos)
+            bridge = _get_kg_bridge(memos, kg_instance)
             payload = bridge.recall_enriched(
                 query,
                 top=int(args.get("top_k", 10)),
@@ -649,15 +643,11 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "brain_search":
             from .brain import BrainSearch
-            from .knowledge_graph import KnowledgeGraph
 
             query = args.get("query", "").strip()
             if not query:
                 return _error("query is required")
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance
+            kg_instance = _get_kg(memos)
             searcher = BrainSearch(memos, kg_instance, wiki_dir=args.get("wiki_dir"))
             result = searcher.search(
                 query,
@@ -685,12 +675,8 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "brain_suggest":
             from .brain import BrainSearch
-            from .knowledge_graph import KnowledgeGraph
 
-            kg_instance = getattr(memos, "_kg", None)
-            if kg_instance is None:
-                kg_instance = KnowledgeGraph()
-                memos._kg = kg_instance
+            kg_instance = _get_kg(memos)
             searcher = BrainSearch(memos, kg_instance)
             top_k = int(args.get("top_k", 5))
             suggestions = searcher.suggest_questions(top_k=top_k)

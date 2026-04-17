@@ -56,7 +56,15 @@ class MarkdownExporter:
         wiki_dir: str | None = None,
     ) -> None:
         self._memos = memos
-        self._kg = kg or getattr(memos, "_kg", None) or KnowledgeGraph()
+        existing_kg = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
+        if kg is not None:
+            self._kg = kg
+        elif hasattr(memos, "get_or_create_kg"):
+            self._kg = memos.get_or_create_kg()
+        elif existing_kg is not None:
+            self._kg = existing_kg
+        else:
+            self._kg = KnowledgeGraph()
         self._wiki = LivingWikiEngine(memos, wiki_dir=wiki_dir)
 
     def export(self, output_dir: str, update: bool = False) -> MarkdownExportResult:

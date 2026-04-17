@@ -135,14 +135,20 @@ class BrainSearch:
         analytics: Any | None = None,
     ) -> None:
         self._memos = memos
-        self._kg = kg or getattr(memos, "_kg", None) or KnowledgeGraph()
-        self._memos._kg = self._kg
+        self._kg = kg or getattr(memos, "kg", None) or getattr(memos, "_kg", None) or KnowledgeGraph()
+        if hasattr(self._memos, "kg"):
+            self._memos.kg = self._kg
+        else:
+            self._memos._kg = self._kg
 
-        existing_bridge = getattr(memos, "_kg_bridge", None)
+        existing_bridge = getattr(memos, "kg_bridge", None) or getattr(memos, "_kg_bridge", None)
         if existing_bridge is not None and getattr(existing_bridge, "kg", None) is not self._kg:
             existing_bridge = None
         self._bridge = existing_bridge or KGBridge(memos, self._kg)
-        self._memos._kg_bridge = self._bridge
+        if hasattr(self._memos, "kg_bridge"):
+            self._memos.kg_bridge = self._bridge
+        else:
+            self._memos._kg_bridge = self._bridge
 
         self._wiki = LivingWikiEngine(memos, wiki_dir=wiki_dir)
 
@@ -278,7 +284,7 @@ class BrainSearch:
             return []
 
         # Get all active facts
-        rows = self._kg._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL").fetchall()
+        rows = self._kg.active_triples()
 
         # Compute predicate degree (how many facts use each predicate)
         predicate_degree: dict[str, int] = {}
@@ -435,11 +441,11 @@ class BrainSearch:
             return []
 
         # Count facts per entity
-        rows = self._kg._conn.execute("SELECT subject, object FROM triples WHERE invalidated_at IS NULL").fetchall()
+        rows = self._kg.active_subject_object_pairs()
         fact_count: dict[str, int] = {}
-        for r in rows:
-            fact_count[r["subject"]] = fact_count.get(r["subject"], 0) + 1
-            fact_count[r["object"]] = fact_count.get(r["object"], 0) + 1
+        for subject, obj in rows:
+            fact_count[subject] = fact_count.get(subject, 0) + 1
+            fact_count[obj] = fact_count.get(obj, 0) + 1
 
         sparse = []
         for page in pages:
@@ -452,12 +458,12 @@ class BrainSearch:
 
     def _find_orphan_entities(self) -> list[str]:
         """Find entities that appear in only a single KG fact (degree == 1)."""
-        rows = self._kg._conn.execute("SELECT subject, object FROM triples WHERE invalidated_at IS NULL").fetchall()
+        rows = self._kg.active_subject_object_pairs()
 
         degree: dict[str, int] = {}
-        for r in rows:
-            degree[r["subject"]] = degree.get(r["subject"], 0) + 1
-            degree[r["object"]] = degree.get(r["object"], 0) + 1
+        for subject, obj in rows:
+            degree[subject] = degree.get(subject, 0) + 1
+            degree[obj] = degree.get(obj, 0) + 1
 
         orphans = sorted(entity for entity, deg in degree.items() if deg == 1)
         return orphans[:20]

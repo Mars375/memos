@@ -617,7 +617,7 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
         from ...export_markdown import MarkdownExporter
 
         export_root = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="memos-markdown-export-"))
-        MarkdownExporter(memos, kg=_kg_bridge._kg if hasattr(_kg_bridge, "_kg") else None, wiki_dir=wiki_dir).export(
+        MarkdownExporter(memos, kg=_kg_bridge.kg if hasattr(_kg_bridge, "kg") else None, wiki_dir=wiki_dir).export(
             str(export_root), update=update
         )
         zip_path = export_root.parent / f"{export_root.name}.zip"
