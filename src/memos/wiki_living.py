@@ -376,6 +376,7 @@ class LivingWikiEngine:
 
     def _get_db(self) -> sqlite3.Connection:
         """Get SQLite connection, creating schema if needed."""
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
         db = sqlite3.connect(str(self._db_path))
         db.row_factory = sqlite3.Row
         db.executescript("""
