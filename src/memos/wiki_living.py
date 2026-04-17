@@ -1135,7 +1135,7 @@ class LivingWikiEngine:
                     else:
                         content += link_lines
 
-                    kg = getattr(self._memos, "_kg", None)
+                    kg = getattr(self._memos, "kg", None) or getattr(self._memos, "_kg", None)
                     neighbor_lines = "\n## Graph Neighbors\n\n- No graph neighbors yet.\n"
                     if kg is not None:
                         try:
@@ -1356,7 +1356,7 @@ class LivingWikiEngine:
                     content += trigger_note
 
             # Update graph neighbors section
-            kg = getattr(self._memos, "_kg", None)
+            kg = getattr(self._memos, "kg", None) or getattr(self._memos, "_kg", None)
             if kg is not None:
                 try:
                     neighbor_edges = kg.neighbors(entity, depth=1, direction="both")["edges"]

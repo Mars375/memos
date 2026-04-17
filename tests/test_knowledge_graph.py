@@ -207,6 +207,29 @@ class TestCommunityAlgorithmParameter:
         assert len(result) >= 1
 
 
+class TestActiveTripleHelpers:
+    """Public helpers used by brain/wiki layers instead of raw _conn access."""
+
+    def test_active_triples_excludes_invalidated_rows(self, kg):
+        first = kg.add_fact("alice", "knows", "bob")
+        kg.add_fact("carol", "works_at", "openai")
+        kg.invalidate(first)
+
+        rows = kg.active_triples()
+
+        assert len(rows) == 1
+        assert rows[0]["subject"] == "carol"
+        assert rows[0]["predicate"] == "works_at"
+
+    def test_active_subject_object_pairs_preserve_created_order(self, kg):
+        kg.add_fact("alice", "knows", "bob")
+        kg.add_fact("carol", "works_at", "openai")
+
+        pairs = kg.active_subject_object_pairs()
+
+        assert pairs == [("alice", "bob"), ("carol", "openai")]
+
+
 # ── API endpoint test ────────────────────────────────────────
 
 

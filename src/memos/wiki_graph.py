@@ -194,8 +194,7 @@ class GraphWikiEngine:
 
     def _load_facts(self) -> List[dict]:
         """Load active facts from the underlying KG connection."""
-        cur = self._kg._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC")
-        return [{key: row[key] for key in row.keys()} for row in cur.fetchall()]
+        return self._kg.active_triples()
 
     def _detect_communities(
         self,

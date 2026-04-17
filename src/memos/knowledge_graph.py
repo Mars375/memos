@@ -254,6 +254,18 @@ class KnowledgeGraph:
         )
         return [_row_to_dict(r) for r in cur.fetchall()]
 
+    def active_triples(self) -> List[dict]:
+        """Return all active triples in created order."""
+        cur = self._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC")
+        return [_row_to_dict(r) for r in cur.fetchall()]
+
+    def active_subject_object_pairs(self) -> list[tuple[str, str]]:
+        """Return active (subject, object) pairs in created order."""
+        rows = self._conn.execute(
+            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC"
+        ).fetchall()
+        return [(str(row["subject"]), str(row["object"])) for row in rows]
+
     def invalidate(self, fact_id: str, reason: str | None = None) -> bool:
         """Mark a triple as invalidated. Returns True if found and updated."""
         now = _current_time()
