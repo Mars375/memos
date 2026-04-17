@@ -455,26 +455,101 @@ class LivingWikiEngine:
     def _get_page_summary(self, entity_name: str) -> str:
         """Extract a one-line summary from a wiki page.
 
-        Scans the page content for the first non-empty, non-frontmatter,
-        non-heading, non-comment line and returns it (truncated to 120 chars).
+        Scans the page content for the best non-junk line: skips frontmatter,
+        headings, blockquotes, code fences, URLs, short/punctuation-only lines,
+        and prefers natural-language sentences.  Returns up to 100 chars,
+        truncated at a sentence boundary.
         """
         slug = self._safe_slug(entity_name)
         page_path = self._wiki_dir / "pages" / f"{slug}.md"
         if not page_path.exists():
             return ""
         content = page_path.read_text(encoding="utf-8")
+
+        # Collect candidate lines — we prefer longer / sentence-like ones.
+        candidates: list[str] = []
         in_frontmatter = False
+        in_code_fence = False
+
         for line in content.splitlines():
             stripped = line.strip()
-            if stripped == "---":
+
+            # --- frontmatter toggle ---
+            if stripped == "---" and not in_code_fence:
                 in_frontmatter = not in_frontmatter
                 continue
             if in_frontmatter:
                 continue
-            if stripped.startswith("#") or stripped.startswith("<!--") or not stripped:
+
+            # --- code fence toggle ---
+            if stripped.startswith("```"):
+                in_code_fence = not in_code_fence
                 continue
-            return stripped[:120]
-        return ""
+            if in_code_fence:
+                continue
+
+            # --- skip structural / noise lines ---
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                continue
+            if stripped.startswith("<!--") or stripped.startswith("-->"):
+                continue
+            if stripped.startswith(">"):
+                continue
+            if stripped.startswith("---") or stripped.startswith("==="):
+                continue
+            if stripped.startswith("|") or (stripped.startswith("- ") and len(stripped) < 15):
+                continue
+            if "http://" in stripped or "https://" in stripped:
+                continue
+
+            # --- quality filters ---
+            # Skip very short lines (< 10 chars)
+            if len(stripped) < 10:
+                continue
+            # Skip lines that are mostly punctuation / symbols
+            alpha_count = sum(1 for c in stripped if c.isalpha() or c.isalnum())
+            if alpha_count < len(stripped) * 0.4:
+                continue
+
+            candidates.append(stripped)
+
+        if not candidates:
+            return ""
+
+        # Pick the best candidate: prefer lines with sentence-ending
+        # punctuation and >= 20 chars (more likely natural language).
+        def _score(s: str) -> int:
+            sc = 0
+            if len(s) >= 20:
+                sc += 2
+            if re.search(r"\b(is|are|was|were|has|have|had|do|does|did|will|can|could|should|would|deploy|build|create|make|use|run|show|provide|implement|support|enable|contain|include|represent|describe)\b", s, re.IGNORECASE):
+                sc += 3
+            if any(s.endswith(p) for p in (".", "!", "?")):
+                sc += 1
+            return sc
+
+        candidates.sort(key=_score, reverse=True)
+        best = candidates[0]
+
+        # Trim to 100 chars, breaking at sentence boundary
+        if len(best) > 100:
+            # Try to cut at last sentence-ending punctuation before 100
+            cut = best[:100]
+            for sep in (". ", "! ", "? "):
+                idx = cut.rfind(sep)
+                if idx > 20:
+                    cut = cut[: idx + 1]
+                    break
+            else:
+                # Fall back to last space
+                idx = cut.rfind(" ")
+                if idx > 20:
+                    cut = cut[:idx]
+            best = cut.rstrip()
+
+        return best
 
     def _frontmatter(self, page) -> str:
         """Generate Obsidian-compatible YAML frontmatter for a page object.

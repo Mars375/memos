@@ -64,7 +64,9 @@ def create_knowledge_router(memos, _kg, _palace, _context_stack) -> APIRouter:
     @router.delete("/api/v1/kg/facts/{fact_id}")
     async def kg_invalidate(fact_id: str):
         ok = _kg.invalidate(fact_id)
-        return {"status": "ok" if ok else "not_found"}
+        if not ok:
+            return {"status": "error", "message": f"Fact {fact_id} not found"}
+        return {"status": "ok", "invalidated": fact_id}
 
     @router.get("/api/v1/kg/stats")
     async def kg_stats():

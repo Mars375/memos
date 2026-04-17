@@ -119,8 +119,7 @@ class TestEventsAndSubscriptions:
         resp = client.delete("/api/v1/subscriptions/nonexistent-id")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "not_found"
-        assert data["subscription_id"] == "nonexistent-id"
+        assert data["status"] == "error"
 
     def test_event_stats(self, client):
         resp = client.get("/api/v1/events/stats")
@@ -208,7 +207,7 @@ class TestNamespaceACL:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "revoked"
+        assert data["status"] == "ok"
 
     def test_revoke_not_found(self, client):
         resp = client.post(
@@ -217,7 +216,7 @@ class TestNamespaceACL:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["status"] == "not_found"
+        assert data["status"] == "error"
 
     def test_revoke_missing_agent_id(self, client):
         resp = client.post(

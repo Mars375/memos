@@ -273,7 +273,9 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.delete("/api/v1/subscriptions/{subscription_id}")
     async def delete_subscription(subscription_id: str):
         ok = memos.events.unsubscribe_subscription(subscription_id)
-        return {"status": "deleted" if ok else "not_found", "subscription_id": subscription_id}
+        if not ok:
+            return {"status": "error", "message": f"Subscription {subscription_id} not found"}
+        return {"status": "ok", "deleted": subscription_id}
 
     @router.get("/api/v1/events/stats")
     async def event_stats():
@@ -327,7 +329,10 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
         agent_id = body.get("agent_id")
         if not agent_id:
             return {"status": "error", "message": "agent_id is required"}
-        return {"status": "revoked" if memos.revoke_namespace_access(agent_id, namespace) else "not_found"}
+        revoked = memos.revoke_namespace_access(agent_id, namespace)
+        if not revoked:
+            return {"status": "error", "message": f"No access found for {agent_id}"}
+        return {"status": "ok", "revoked": agent_id}
 
     @router.get("/api/v1/namespaces/{namespace}/policies")
     async def api_acl_list(namespace: str):

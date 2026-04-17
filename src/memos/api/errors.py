@@ -10,6 +10,23 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger("memos.api")
 
 
+def api_response(data: dict, status: str = "ok") -> dict:
+    """Return a standardised success response dict.
+
+    Merges *data* with ``{"status": status}``.  Use the canonical status
+    values:
+
+    * ``"ok"``          — successful synchronous operations (default)
+    * ``"completed"``   — async/long-running task finished
+    * ``"error"``       — something went wrong
+
+    Example::
+
+        return api_response({"id": fact_id, "confidence_label": label})
+    """
+    return {"status": status, **data}
+
+
 def error_response(
     message: str,
     *,
