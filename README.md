@@ -5,22 +5,22 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v1.1.0-purple.svg)](https://github.com/Mars375/memos/releases)
-[![Tests](https://img.shields.io/badge/tests-1710_passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
+[![Version](https://img.shields.io/badge/version-v2.3.1-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
 [![PyPI](https://img.shields.io/pypi/v/memos-os.svg)](https://pypi.org/project/memos-os/)
 
 ---
 
-## What's new in v1.1.0
+## What's new in v2.3.1
 
-- **Security hardening** — WebSocket auth, CORS defaults, Pydantic request schemas on all endpoints
-- **Canvas force-graph dashboard** — clustering, depth filter, time-lapse slider, KG edges
-- **Modular frontend** — monolithic 1768L split into 12 JS modules
-- **1710 tests** — modernized with shared fixtures, freezegun, tmp_path
-- **Zero ruff errors** — 506 lint errors fixed, full formatting pass
-- **CI: Python 3.11 / 3.12 / 3.13** + coverage via Codecov
+- **API consistency cleanup** — standardized validation and error handling across admin and knowledge-facing endpoints
+- **Route decomposition** — split the knowledge API monolith into focused KG, brain, palace, context, and wiki route modules
+- **Explicit KG ownership** — `MemOS` now owns `kg` and `kg_bridge` via public lazy helpers instead of ad-hoc private wiring
+- **Safer graph internals** — brain and wiki layers use public `KnowledgeGraph` helpers instead of direct private connection access
+- **Perf cleanup** — reduced redundant full-store scans in compaction and dedup hot paths
+- **Regression coverage** — added route split, KG lifecycle, and performance-focused test coverage
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 

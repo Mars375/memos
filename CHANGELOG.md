@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.3.1 (2026-04-18) — Cleanup and Consistency
+
+### API consistency
+- Standardized validation and error responses across admin and knowledge-facing endpoints
+- Split the previous `api/routes/knowledge.py` monolith into focused route modules for KG, brain, palace, context, and wiki APIs
+- Added route-level characterization coverage to preserve URLs and behavior during the split
+
+### Knowledge graph lifecycle cleanup
+- Made `MemOS` own `kg` and `kg_bridge` explicitly with lazy helpers and startup wiring
+- Migrated major KG consumers to public handles instead of relying on private `_kg` / `_kg_bridge` attributes
+- Replaced direct `_kg._conn` reads in brain/wiki layers with public `KnowledgeGraph` helper methods
+
+### Performance improvements
+- Reduced redundant store rescans in the compaction pipeline by only refreshing between phases when mutations actually occurred
+- Reused the dedup index scan for near-duplicate checks instead of rescanning the store during `DedupEngine.check()`
+
+### Tests
+- Added and updated regression tests for API validation, route decomposition, KG lifecycle wiring, and full-scan reductions
+
+---
+
 ## v2.3.0 (2026-04-17) — Intelligence Layer
 
 Five major feature sets inspired by Karpathy's LLM Wiki, Graphify, and MemPalace.
