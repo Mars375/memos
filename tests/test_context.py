@@ -307,9 +307,7 @@ async def test_rest_identity_set_missing_content() -> None:
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         resp = await client.post("/api/v1/context/identity", json={})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "error"
+    assert resp.status_code == 422
 
 
 @pytest.mark.anyio
