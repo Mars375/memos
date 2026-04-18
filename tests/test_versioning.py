@@ -779,3 +779,111 @@ class TestMemOSVersioning:
 
         assert len(mem.history(alpha_id)) == 2
         assert len(mem.history(beta_id)) == 1
+
+
+# ── Phase 2 runtime-path hardening tests ───────────────────────
+
+
+class TestForgetVersionRecording:
+    def test_forget_records_deletion_version(self):
+        mem = MemOS()
+        item = mem.learn("to be forgotten unique content", tags=["temp"])
+        versions_before = mem.history(item.id)
+        assert len(versions_before) == 1
+
+        mem.forget(item.id)
+
+        versions_after = mem.history(item.id)
+        assert len(versions_after) == 2
+        assert versions_after[-1].source == "forget"
+
+    def test_forget_tag_records_deletion_version(self):
+        mem = MemOS()
+        item_a = mem.learn("tagged item alpha unique", tags=["doomed"])
+        item_b = mem.learn("tagged item beta unique", tags=["doomed"])
+        mem.learn("safe item unique", tags=["safe"])
+
+        removed = mem.forget_tag("doomed")
+        assert removed == 2
+
+        versions_a = mem.history(item_a.id)
+        assert len(versions_a) == 2
+        assert versions_a[-1].source == "forget_tag"
+
+        versions_b = mem.history(item_b.id)
+        assert len(versions_b) == 2
+        assert versions_b[-1].source == "forget_tag"
+
+    def test_forget_nonexistent_no_version(self):
+        mem = MemOS()
+        result = mem.forget("nonexistent-id")
+        assert result is False
+        assert mem.versioning_stats()["total_versions"] == 0
+
+
+class TestTagMutationVersionRecording:
+    def test_rename_tag_records_version(self):
+        mem = MemOS()
+        item = mem.learn("tagged memory unique for rename", tags=["old-tag"])
+
+        updated = mem.rename_tag("old-tag", "new-tag")
+        assert updated == 1
+
+        versions = mem.history(item.id)
+        assert len(versions) == 2
+        assert versions[0].source == "learn"
+        assert versions[1].source == "rename_tag"
+        assert "new-tag" in versions[1].tags
+        assert "old-tag" not in versions[1].tags
+
+    def test_delete_tag_records_version(self):
+        mem = MemOS()
+        item = mem.learn("memory with removable tag unique", tags=["keep", "remove"])
+
+        updated = mem.delete_tag("remove")
+        assert updated == 1
+
+        versions = mem.history(item.id)
+        assert len(versions) == 2
+        assert versions[0].source == "learn"
+        assert versions[1].source == "delete_tag"
+        assert "remove" not in versions[1].tags
+        assert "keep" in versions[1].tags
+
+    def test_rename_tag_version_diff(self):
+        mem = MemOS()
+        item = mem.learn("diff test after rename unique", tags=["original"])
+
+        mem.rename_tag("original", "renamed")
+
+        diff = mem.diff_latest(item.id)
+        assert diff is not None
+        assert "tags" in diff.changes
+        assert "renamed" in diff.changes["tags"]["added"]
+
+
+class TestImportVersionSource:
+    def test_import_json_version_source_is_import(self):
+        mem = MemOS()
+        mem.import_json(
+            {"memories": [{"content": "check source unique content", "tags": ["src-test"]}]}
+        )
+        items = mem._store.list_all()
+        versions = mem.history(items[0].id)
+        assert len(versions) == 1
+        assert versions[0].source == "import"
+
+    def test_import_json_then_learn_adds_second_version(self):
+        mem = MemOS()
+        content = "version lifecycle test unique content"
+        mem.import_json(
+            {"memories": [{"content": content, "tags": ["imported"]}]}
+        )
+        item_id = mem._store.list_all()[0].id
+
+        mem.learn(content, tags=["imported", "updated"])
+
+        versions = mem.history(item_id)
+        assert len(versions) == 2
+        assert versions[0].source == "import"
+        assert versions[1].source == "learn"

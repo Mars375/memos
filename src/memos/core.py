@@ -826,6 +826,7 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
         for item in self._store.list_all(namespace=self._namespace):
             if tag not in item.tags:
                 continue
+            self._versioning.record_version(item, source="forget_tag")
             if self._store.delete(item.id, namespace=self._namespace):
                 self._events.emit_sync(
                     "forgotten",
@@ -844,6 +845,8 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
         self._check_acl("delete")
         item = self._store.get(content_or_id, namespace=self._namespace)
         if self._store.delete(content_or_id, namespace=self._namespace):
+            if item is not None:
+                self._versioning.record_version(item, source="forget")
             self._events.emit_sync(
                 "forgotten",
                 {
@@ -857,6 +860,8 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
         content_id = generate_id(content_or_id)
         item = self._store.get(content_id, namespace=self._namespace)
         if self._store.delete(content_id, namespace=self._namespace):
+            if item is not None:
+                self._versioning.record_version(item, source="forget")
             self._events.emit_sync(
                 "forgotten",
                 {
@@ -954,6 +959,7 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
             item.tags = new_tags
             item.accessed_at = time.time()
             self._store.upsert(item, namespace=self._namespace)
+            self._versioning.record_version(item, source="rename_tag")
             self._events.emit_sync(
                 "tag_renamed",
                 {
@@ -986,6 +992,7 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
             item.tags = new_tags
             item.accessed_at = time.time()
             self._store.upsert(item, namespace=self._namespace)
+            self._versioning.record_version(item, source="delete_tag")
             self._events.emit_sync(
                 "tag_deleted",
                 {
@@ -1157,6 +1164,8 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
                             metadata=chunk.get("metadata", {}),
                         )
                         self._store.upsert(item, namespace=self._namespace)
+                        self._retrieval.index(item)
+                        self._versioning.record_version(item, source="ingest_url")
                         continue
                     except Exception as e:
                         result.errors.append(f"Failed to store chunk (skip_sanitization): {e}")

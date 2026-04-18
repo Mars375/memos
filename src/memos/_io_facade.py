@@ -20,11 +20,16 @@ class IOFacade:
     _retrieval: Any
     _events: Any
     _backend_name: str
+    _versioning: Any
+
+    def _check_acl(self, permission: str) -> None:
+        """ACL guard — resolved at runtime on the MemOS composite."""
 
     # ── JSON export/import ────────────────────────────────────
 
     def export_json(self, *, include_metadata: bool = True) -> dict:
         """Export all memories as a JSON-serializable dict."""
+        self._check_acl("read")
         items = self._store.list_all(namespace=self._namespace)
         return {
             "version": "0.2.0",
@@ -54,6 +59,7 @@ class IOFacade:
         dry_run: bool = False,
     ) -> dict:
         """Import memories from a JSON dict (as produced by export_json)."""
+        self._check_acl("write")
         result = {"imported": 0, "skipped": 0, "overwritten": 0, "errors": []}
         memories = data.get("memories", [])
 
@@ -87,6 +93,7 @@ class IOFacade:
                     )
                     self._store.upsert(item, namespace=self._namespace)
                     self._retrieval.index(item)
+                    self._versioning.record_version(item, source="import")
                 result["imported"] += 1
             except Exception as e:
                 result["errors"].append(str(e))
@@ -114,6 +121,7 @@ class IOFacade:
         Returns:
             Summary dict with total, path, size_bytes, compression.
         """
+        self._check_acl("read")
         from .parquet_io import export_parquet as _export
 
         items = self._store.list_all(namespace=self._namespace)
@@ -153,6 +161,7 @@ class IOFacade:
         Returns:
             dict with imported, skipped, overwritten, errors counts.
         """
+        self._check_acl("write")
         from .parquet_io import import_parquet as _import
 
         items = _import(path, tags_prefix=tags_prefix)
@@ -173,6 +182,7 @@ class IOFacade:
                 if not dry_run:
                     self._store.upsert(item, namespace=self._namespace)
                     self._retrieval.index(item)
+                    self._versioning.record_version(item, source="import")
                 result["imported"] += 1
             except Exception as e:
                 result["errors"].append(str(e))
@@ -213,6 +223,7 @@ class IOFacade:
             batch_size: Progress callback interval.
             backend_kwargs: Destination backend constructor args.
         """
+        self._check_acl("read")
         from .migration import MigrationEngine, _create_backend
 
         dest = _create_backend(dest_backend, **backend_kwargs)
