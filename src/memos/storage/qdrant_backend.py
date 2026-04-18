@@ -351,9 +351,7 @@ class QdrantBackend(StorageBackend):
         for item in all_items:
             content_lower = item.content.lower()
             tag_lowers = [tag.lower() for tag in item.tags]
-            if any(t in content_lower for t in tokens) or any(
-                any(t in tl for tl in tag_lowers) for t in tokens
-            ):
+            if any(t in content_lower for t in tokens) or any(any(t in tl for tl in tag_lowers) for t in tokens):
                 results.append(item)
                 if len(results) >= limit:
                     break

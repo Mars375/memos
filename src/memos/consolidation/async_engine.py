@@ -128,9 +128,7 @@ class AsyncConsolidationEngine:
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 None,
-                lambda: engine.consolidate(
-                    store, merge_content=merge_content, dry_run=dry_run, namespace=namespace
-                ),
+                lambda: engine.consolidate(store, merge_content=merge_content, dry_run=dry_run, namespace=namespace),
             )
             handle.result = result
             handle.status = "completed"

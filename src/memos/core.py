@@ -815,10 +815,6 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
 
             await asyncio.sleep(0)
 
-
-
-
-
     def forget_tag(self, tag: str) -> int:
         """Delete all memories carrying a given tag."""
         self._check_acl("delete")
@@ -1101,8 +1097,6 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
         """Get namespace ACL statistics."""
         return self._acl.stats()
 
-
-
     def ingest(
         self,
         path: str,
@@ -1181,15 +1175,3 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
                     result.errors.append(f"Failed to store chunk: {e}")
 
         return result
-
-
-
-
-
-
-
-
-
-
-
-

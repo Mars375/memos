@@ -702,9 +702,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
         elif tool == "memory_reinforce":
             mem_id = args.get("memory_id", "")
             try:
-                new_imp = memos.reinforce_memory(
-                    mem_id, strength=args.get("strength")
-                )
+                new_imp = memos.reinforce_memory(mem_id, strength=args.get("strength"))
             except KeyError:
                 return _error(f"Memory not found: {mem_id}")
             return _text(f"Reinforced [{mem_id[:8]}] importance -> {new_imp:.3f}")

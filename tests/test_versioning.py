@@ -865,9 +865,7 @@ class TestTagMutationVersionRecording:
 class TestImportVersionSource:
     def test_import_json_version_source_is_import(self):
         mem = MemOS()
-        mem.import_json(
-            {"memories": [{"content": "check source unique content", "tags": ["src-test"]}]}
-        )
+        mem.import_json({"memories": [{"content": "check source unique content", "tags": ["src-test"]}]})
         items = mem._store.list_all()
         versions = mem.history(items[0].id)
         assert len(versions) == 1
@@ -876,9 +874,7 @@ class TestImportVersionSource:
     def test_import_json_then_learn_adds_second_version(self):
         mem = MemOS()
         content = "version lifecycle test unique content"
-        mem.import_json(
-            {"memories": [{"content": content, "tags": ["imported"]}]}
-        )
+        mem.import_json({"memories": [{"content": content, "tags": ["imported"]}]})
         item_id = mem._store.list_all()[0].id
 
         mem.learn(content, tags=["imported", "updated"])

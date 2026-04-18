@@ -34,9 +34,7 @@ class TestMaintenanceFacadeInheritance:
         assert issubclass(MemOS, MaintenanceFacade)
 
     def test_maintenance_facade_is_mixin(self):
-        assert "__init__" not in MaintenanceFacade.__dict__, (
-            "MaintenanceFacade should not define __init__"
-        )
+        assert "__init__" not in MaintenanceFacade.__dict__, "MaintenanceFacade should not define __init__"
 
     def test_memos_instance_has_all_maintenance_methods(self):
         mem = MemOS(backend="memory", sanitize=False)
