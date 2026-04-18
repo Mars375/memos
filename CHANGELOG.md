@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.3.2 (2026-04-18) — Core Facades and Scan Reuse
+
+### Core decomposition
+- Extracted `FeedbackFacade`, `IOFacade`, `MaintenanceFacade`, `SharingFacade`, and `VersioningFacade` from `core.py`
+- Kept `MemOS` focused on its CRUD and orchestration nucleus while moving cross-cutting concerns into dedicated mixins
+- Added structural regression tests for the new facades to preserve inherited public APIs
+
+### Performance improvements
+- Reused preloaded item lists in context generation and graph responses instead of rescanning the store for statistics
+- Threaded filtered item lists through retrieval and consolidation paths to avoid redundant `list_all()` calls in hybrid query and compaction flows
+
+### Verification
+- Full test suite green after each extraction and after the performance cleanup
+
+---
+
 ## v2.3.1 (2026-04-18) — Cleanup and Consistency
 
 ### API consistency
