@@ -20,6 +20,9 @@ class VersioningFacade:
     _retrieval: Any
     _events: Any
 
+    def _check_acl(self, permission: str) -> None:
+        """ACL guard — resolved at runtime on the MemOS composite."""
+
     @property
     def versioning(self) -> "VersioningEngine":
         """Access the versioning engine for time-travel queries."""
@@ -27,18 +30,22 @@ class VersioningFacade:
 
     def history(self, item_id: str) -> list["MemoryVersion"]:
         """Get the full version history of a memory item."""
+        self._check_acl("read")
         return self._versioning.history(item_id)
 
     def get_version(self, item_id: str, version_number: int) -> "MemoryVersion | None":
         """Get a specific version of a memory item."""
+        self._check_acl("read")
         return self._versioning.get_version(item_id, version_number)
 
     def diff(self, item_id: str, version_a: int, version_b: int) -> "VersionDiff | None":
         """Compare two versions of the same memory."""
+        self._check_acl("read")
         return self._versioning.diff(item_id, version_a, version_b)
 
     def diff_latest(self, item_id: str) -> "VersionDiff | None":
         """Get the diff between the last two versions of a memory."""
+        self._check_acl("read")
         return self._versioning.diff_latest(item_id)
 
     def recall_at(
@@ -51,6 +58,7 @@ class VersioningFacade:
         min_score: float = 0.0,
     ) -> list[RecallResult]:
         """Time-travel recall: retrieve memories as they were at a given time."""
+        self._check_acl("read")
         current_results = self.recall(
             query,
             top=top,
@@ -86,10 +94,12 @@ class VersioningFacade:
 
     def snapshot_at(self, timestamp: float) -> list["MemoryVersion"]:
         """Get the state of all memories at a given timestamp."""
+        self._check_acl("read")
         return self._versioning.snapshot_at(timestamp)
 
     def rollback(self, item_id: str, version_number: int) -> "MemoryItem | None":
         """Roll back a memory item to a specific version."""
+        self._check_acl("write")
         item = self._versioning.rollback(
             self._store,
             item_id,
@@ -110,8 +120,10 @@ class VersioningFacade:
 
     def versioning_stats(self) -> dict[str, Any]:
         """Get versioning statistics."""
+        self._check_acl("read")
         return self._versioning.stats()
 
     def versioning_gc(self, max_age_days: float = 90.0, keep_latest: int = 3) -> int:
         """Garbage collect old versions."""
+        self._check_acl("delete")
         return self._versioning.gc(max_age_days=max_age_days, keep_latest=keep_latest)

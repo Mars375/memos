@@ -20,6 +20,9 @@ class SharingFacade:
     _store: Any
     _namespace: str
 
+    def _check_acl(self, permission: str) -> None:
+        """ACL guard — resolved at runtime on the MemOS composite."""
+
     def sharing(self) -> SharingEngine:
         """Access the sharing engine for multi-agent memory exchange."""
         return self._sharing
@@ -34,6 +37,7 @@ class SharingFacade:
         expires_at: Optional[float] = None,
     ) -> ShareRequest:
         """Offer to share memories with another agent."""
+        self._check_acl("write")
         source = getattr(self, "_agent_id", "") or "default"
         return self._sharing.offer(
             source,
@@ -46,21 +50,25 @@ class SharingFacade:
 
     def accept_share(self, share_id: str) -> ShareRequest:
         """Accept a pending share addressed to this agent."""
+        self._check_acl("write")
         agent = getattr(self, "_agent_id", "") or "default"
         return self._sharing.accept(share_id, agent)
 
     def reject_share(self, share_id: str) -> ShareRequest:
         """Reject a pending share addressed to this agent."""
+        self._check_acl("write")
         agent = getattr(self, "_agent_id", "") or "default"
         return self._sharing.reject(share_id, agent)
 
     def revoke_share(self, share_id: str) -> ShareRequest:
         """Revoke a share previously offered by this agent."""
+        self._check_acl("write")
         agent = getattr(self, "_agent_id", "") or "default"
         return self._sharing.revoke(share_id, agent)
 
     def export_shared(self, share_id: str) -> MemoryEnvelope:
         """Export memories for an accepted share as a portable envelope."""
+        self._check_acl("read")
         req = self._sharing.get(share_id)
         if req is None or req.status != ShareStatus.ACCEPTED:
             raise ValueError("Share not found or not accepted")
@@ -69,6 +77,7 @@ class SharingFacade:
 
     def import_shared(self, envelope: MemoryEnvelope) -> list[MemoryItem]:
         """Import memories from a received envelope."""
+        self._check_acl("write")
         mem_dicts = SharingEngine.import_envelope(envelope)
         learned = []
         for md in mem_dicts:
@@ -86,10 +95,12 @@ class SharingFacade:
 
     def list_shares(self, agent: Optional[str] = None, status: Optional[ShareStatus] = None) -> list[ShareRequest]:
         """List shares, optionally filtered by agent and status."""
+        self._check_acl("read")
         return self._sharing.list_shares(agent=agent, status=status)
 
     def sharing_stats(self) -> dict[str, Any]:
         """Get sharing statistics."""
+        self._check_acl("read")
         return self._sharing.stats()
 
     def _resolve_share_scope(self, req: ShareRequest) -> list[MemoryItem]:

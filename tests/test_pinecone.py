@@ -197,6 +197,15 @@ class TestPineconeBackendUnit:
         assert len(results) >= 1
         assert results[0][1] == 0.95
 
+    def test_keyword_search_empty_query_returns_empty_without_scan(self):
+        backend = self._make_backend()
+        backend.list_all = MagicMock(return_value=[_make_item()])
+
+        results = backend._keyword_search("", limit=5, namespace="agent1")
+
+        assert results == []
+        backend.list_all.assert_not_called()
+
 
 class TestPineconeBackendInit:
     """Test initialization and client creation."""

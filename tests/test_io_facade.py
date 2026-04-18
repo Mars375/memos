@@ -123,3 +123,83 @@ class TestNamespaceScopingConsistency:
         assert result["imported"] == 1
         assert result["skipped"] == 0
         assert mem2.stats().total_memories == 1
+
+
+# ── Version recording on import (Phase 2 hardening) ──────────
+
+
+class TestImportVersionRecording:
+    """Verify that import_json and import_parquet record version history."""
+
+    def test_import_json_records_version(self):
+        mem = MemOS(backend="memory", sanitize=False)
+        result = mem.import_json(
+            {
+                "memories": [
+                    {
+                        "content": "imported via json",
+                        "tags": ["import-test"],
+                        "importance": 0.6,
+                    }
+                ]
+            }
+        )
+        assert result["imported"] == 1
+
+        items = mem._store.list_all()
+        assert len(items) == 1
+        versions = mem.history(items[0].id)
+        assert len(versions) == 1
+        assert versions[0].source == "import"
+        assert versions[0].content == "imported via json"
+
+    def test_import_json_multiple_memories_all_versioned(self):
+        mem = MemOS(backend="memory", sanitize=False)
+        result = mem.import_json(
+            {
+                "memories": [
+                    {"content": "mem-a unique alpha", "tags": ["a"]},
+                    {"content": "mem-b unique beta", "tags": ["b"]},
+                ]
+            }
+        )
+        assert result["imported"] == 2
+        stats = mem.versioning_stats()
+        assert stats["total_items"] == 2
+        assert stats["total_versions"] == 2
+
+    def test_import_json_dry_run_no_version(self):
+        mem = MemOS(backend="memory", sanitize=False)
+        result = mem.import_json(
+            {"memories": [{"content": "dry-run item", "tags": []}]},
+            dry_run=True,
+        )
+        assert result["imported"] == 1
+        assert mem.versioning_stats()["total_versions"] == 0
+
+    def test_import_json_overwrite_records_new_version(self):
+        mem = MemOS(backend="memory", sanitize=False)
+        item = mem.learn("overwrite-me unique content", tags=["v1"], importance=0.3)
+
+        result = mem.import_json(
+            {
+                "memories": [
+                    {
+                        "id": item.id,
+                        "content": "overwrite-me unique content",
+                        "tags": ["v2"],
+                        "importance": 0.9,
+                    }
+                ]
+            },
+            merge="overwrite",
+        )
+        assert result["overwritten"] == 1
+        assert result["imported"] == 1
+
+        versions = mem.history(item.id)
+        # learn + import overwrite = 2 versions
+        assert len(versions) == 2
+        assert versions[0].source == "learn"
+        assert versions[1].source == "import"
+        assert versions[1].tags == ["v2"]

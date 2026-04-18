@@ -60,25 +60,22 @@ def create_context_router(memos, _context_stack) -> APIRouter:
                     "created_at": item.created_at,
                 }
             )
-        edges = []
+        edge_map: dict[tuple[str, str], dict] = {}
         tag_to_ids: dict[str, list[str]] = {}
         for node in nodes:
             for tag in node["tags"]:
                 tag_to_ids.setdefault(tag, []).append(node["id"])
-        seen = set()
         for tag, ids in tag_to_ids.items():
             for i in range(len(ids)):
                 for j in range(i + 1, len(ids)):
                     key = tuple(sorted([ids[i], ids[j]]))
-                    if key not in seen:
-                        seen.add(key)
-                        edges.append({"source": ids[i], "target": ids[j], "shared_tags": [tag], "weight": 1})
+                    edge = edge_map.get(key)
+                    if edge is None:
+                        edge_map[key] = {"source": key[0], "target": key[1], "shared_tags": [tag], "weight": 1}
                     else:
-                        for edge in edges:
-                            if edge["source"] == key[0] and edge["target"] == key[1]:
-                                edge["weight"] += 1
-                                edge["shared_tags"].append(tag)
-                                break
+                        edge["weight"] += 1
+                        edge["shared_tags"].append(tag)
+        edges = list(edge_map.values())
         if min_shared_tags > 1:
             edges = [edge for edge in edges if edge["weight"] >= min_shared_tags]
         stats = memos.stats(items=items)

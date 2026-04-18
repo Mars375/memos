@@ -497,11 +497,11 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     @router.post("/api/v1/decay/run")
     async def api_decay_run(req: DecayRunRequest | None = None) -> dict:
         req = req or DecayRunRequest()
-        items = memos._store.list_all(namespace=memos._namespace)
-        report = memos._decay.run_decay(items, min_age_days=req.min_age_days, floor=req.floor, dry_run=req.dry_run)
-        if not req.dry_run:
-            for item in items:
-                memos._store.upsert(item, namespace=memos._namespace)
+        report = memos.decay(
+            min_age_days=req.min_age_days,
+            floor=req.floor,
+            dry_run=req.dry_run,
+        )
         return {
             "status": "ok",
             "total": report.total,
@@ -514,15 +514,14 @@ def create_memory_router(memos, _kg_bridge) -> APIRouter:
     @router.post("/api/v1/memories/{memory_id}/reinforce", response_model=None)
     async def api_reinforce(memory_id: str, req: ReinforceRequest | None = None) -> dict | JSONResponse:
         req = req or ReinforceRequest()
-        item = memos._store.get(memory_id, namespace=memos._namespace)
+        item = memos.get(memory_id)
         if item is None:
             return not_found(f"Memory {memory_id} not found")
         old_imp = item.importance
-        new_imp = memos._decay.reinforce(item, strength=req.strength)
-        memos._store.upsert(item, namespace=memos._namespace)
+        new_imp = memos.reinforce_memory(memory_id, strength=req.strength)
         return {
             "status": "ok",
-            "id": item.id,
+            "id": memory_id,
             "importance_before": round(old_imp, 4),
             "importance_after": round(new_imp, 4),
         }

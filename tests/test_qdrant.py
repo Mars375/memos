@@ -338,6 +338,29 @@ class TestQdrantBackend:
         assert "python" in item.content
         assert score > 0
 
+    def test_hybrid_search_avoids_scroll_when_vector_candidates_exist(self):
+        fake_vector = [0.1] * 768
+        self.backend._get_embedding = MagicMock(return_value=fake_vector)
+        mock_point = FakePoint(
+            "h2-00-0000-0000-000000000000",
+            {
+                "content": "docker compose setup",
+                "tags": json.dumps(["infra"]),
+                "importance": 0.5,
+                "created_at": 0,
+                "accessed_at": 0,
+                "access_count": 0,
+                "metadata": "{}",
+            },
+            score=0.9,
+        )
+        self.mock_client.search.return_value = [mock_point]
+
+        results = self.backend.hybrid_search("docker", limit=5)
+
+        assert len(results) == 1
+        self.mock_client.scroll.assert_not_called()
+
     # --- list_namespaces ---
     def test_list_namespaces(self):
         mock_col = MagicMock()

@@ -514,7 +514,7 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
                 memos.forget(mem_id)
                 return _text(f"Forgotten: {mem_id}")
             elif tag:
-                count = memos.delete_tag(tag)
+                count = memos.forget_tag(tag)
                 return _text(f"Deleted {count} memories with tag '{tag}'")
             else:
                 return _error("Provide 'id' or 'tag'")
@@ -688,16 +688,11 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
             return _text("\n".join(lines))
 
         elif tool == "memory_decay":
-            items = memos._store.list_all(namespace=memos._namespace)
-            report = memos._decay.run_decay(
-                items,
+            report = memos.decay(
                 min_age_days=args.get("min_age_days"),
                 floor=args.get("floor"),
                 dry_run=not args.get("apply", False),
             )
-            if args.get("apply", False):
-                for item in items:
-                    memos._store.upsert(item, namespace=memos._namespace)
             return _text(
                 f"Decay ({'APPLIED' if args.get('apply') else 'DRY RUN'}): "
                 f"{report.decayed}/{report.total} decayed, "
@@ -706,13 +701,11 @@ def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
 
         elif tool == "memory_reinforce":
             mem_id = args.get("memory_id", "")
-            item = memos._store.get(mem_id, namespace=memos._namespace)
-            if item is None:
+            try:
+                new_imp = memos.reinforce_memory(mem_id, strength=args.get("strength"))
+            except KeyError:
                 return _error(f"Memory not found: {mem_id}")
-            old_imp = item.importance
-            new_imp = memos._decay.reinforce(item, strength=args.get("strength"))
-            memos._store.upsert(item, namespace=memos._namespace)
-            return _text(f"Reinforced [{item.id[:8]}] importance: {old_imp:.3f} -> {new_imp:.3f}")
+            return _text(f"Reinforced [{mem_id[:8]}] importance -> {new_imp:.3f}")
 
         elif tool == "memory_wake_up":
             from .context import ContextStack

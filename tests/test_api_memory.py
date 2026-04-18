@@ -757,6 +757,14 @@ class TestDecayRun:
         assert data["status"] == "ok"
         assert isinstance(data["total"], int)
 
+    def test_decay_apply_via_public_facade(self, client):
+        _learn(client, "decay apply target", importance=0.5)
+        resp = client.post("/api/v1/decay/run", json={"apply": True, "min_age_days": 9999, "floor": 0.0})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert isinstance(data["total"], int)
+
 
 # ── 25. POST /api/v1/memories/{id}/reinforce ──────────────────────────────
 

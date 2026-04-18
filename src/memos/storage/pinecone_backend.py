@@ -308,8 +308,11 @@ class PineconeBackend(StorageBackend):
                     items.append(self._metadata_to_item(metadata))
                 return items
             except Exception:
-                logger.debug("Pinecone vector search failed, falling back to keyword", exc_info=True)
-                pass
+                logger.warning(
+                    "Pinecone vector search failed for namespace=%r, falling back to keyword",
+                    ns,
+                    exc_info=True,
+                )
 
         return self._keyword_search(query, limit, namespace)
 
@@ -357,13 +360,20 @@ class PineconeBackend(StorageBackend):
             return []
 
     def _keyword_search(self, query: str, limit: int, namespace: str) -> list[MemoryItem]:
+        import re as _re
+
+        tokens = [t for t in _re.findall(r"\w+", query.lower()) if t]
+        if not tokens:
+            return []
+
         all_items = self.list_all(namespace=namespace)
-        q = query.lower()
         results = []
         for item in all_items:
-            if q in item.content.lower():
+            content_lower = item.content.lower()
+            tag_lowers = [tag.lower() for tag in item.tags]
+            if any(token in content_lower for token in tokens):
                 results.append(item)
-            elif any(q in tag.lower() for tag in item.tags):
+            elif any(any(token in tag for tag in tag_lowers) for token in tokens):
                 results.append(item)
             if len(results) >= limit:
                 break

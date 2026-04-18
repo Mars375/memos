@@ -70,6 +70,77 @@ def test_dispatch_forget_by_tag(mem):
     assert "1" in r["content"][0]["text"]
 
 
+def test_dispatch_forget_by_tag_deletes_memories():
+    """Regression: memory_forget(tag=...) must delete matching memories, not just remove the tag."""
+    m = MemOS()
+    m.learn("Docker rocks", tags=["devops", "infra"])
+    m.learn("Kubernetes rocks", tags=["devops", "k8s"])
+    m.learn("Python tip", tags=["python"])
+    assert m.stats().total_memories == 3
+
+    r = _dispatch(m, "memory_forget", {"tag": "devops"})
+    assert not r.get("isError")
+    assert "2" in r["content"][0]["text"]
+    assert m.stats().total_memories == 1  # only "Python tip" remains
+
+
+def test_dispatch_forget_by_id():
+    """memory_forget(id=...) deletes a single memory."""
+    m = MemOS()
+    item = m.learn("temporary", tags=["tmp"])
+    assert m.stats().total_memories == 1
+
+    r = _dispatch(m, "memory_forget", {"id": item.id})
+    assert not r.get("isError")
+    assert "Forgotten" in r["content"][0]["text"]
+    assert m.stats().total_memories == 0
+
+
+def test_dispatch_decay_dry_run(mem):
+    """Decay dry-run should not modify any memories."""
+    r = _dispatch(mem, "memory_decay", {"apply": False})
+    assert not r.get("isError")
+    text = r["content"][0]["text"]
+    assert "DRY RUN" in text
+    assert mem.stats().total_memories == 3
+
+
+def test_dispatch_decay_apply():
+    """Decay with apply=True should persist via public facade."""
+    import time
+
+    m = MemOS()
+    # Create an old memory eligible for decay
+    item = m.learn("old memory", tags=["old"], importance=0.5)
+    # Backdate created_at to make it eligible
+    item.created_at = time.time() - 100 * 86400  # 100 days ago
+    item.updated_at = item.created_at
+    m._store.upsert(item, namespace=m._namespace)
+
+    r = _dispatch(m, "memory_decay", {"apply": True, "min_age_days": 30, "floor": 0.0})
+    assert not r.get("isError")
+    text = r["content"][0]["text"]
+    assert "APPLIED" in text
+
+
+def test_dispatch_reinforce_found():
+    """Reinforce via public facade should boost importance."""
+    m = MemOS()
+    item = m.learn("boost me", tags=["test"], importance=0.3)
+
+    r = _dispatch(m, "memory_reinforce", {"memory_id": item.id, "strength": 0.2})
+    assert not r.get("isError")
+    assert "Reinforced" in r["content"][0]["text"]
+
+
+def test_dispatch_reinforce_not_found():
+    """Reinforce with invalid ID should return error."""
+    m = MemOS()
+    r = _dispatch(m, "memory_reinforce", {"memory_id": "nonexistent"})
+    assert r.get("isError")
+    assert "not found" in r["content"][0]["text"].lower()
+
+
 def test_dispatch_unknown_tool(mem):
     r = _dispatch(mem, "unknown_tool", {})
     assert r.get("isError")

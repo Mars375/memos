@@ -129,40 +129,41 @@ class CompactionEngine:
             similarity_threshold=self._config.merge_similarity_threshold,
         )
 
-    def compact(self, store: StorageBackend) -> CompactionReport:
+    def compact(self, store: StorageBackend, *, namespace: str = "") -> CompactionReport:
         """Run the full compaction pipeline.
 
         Args:
             store: Storage backend to compact.
+            namespace: Namespace scope for all store operations.
 
         Returns:
             CompactionReport with detailed results.
         """
         start = time.time()
         report = CompactionReport()
-        items = store.list_all()
+        items = store.list_all(namespace=namespace)
 
         if len(items) < 2:
             report.duration_seconds = time.time() - start
             return report
 
         # Phase 1: Dedup
-        self._phase_dedup(store, items, report)
+        self._phase_dedup(store, items, report, namespace=namespace)
 
         # Phase 2: Archive old low-relevance
         if not self._config.dry_run and (report.dedup_groups > 0 or report.dedup_merged > 0):
-            items = store.list_all()
-        self._phase_archive(store, items, report)
+            items = store.list_all(namespace=namespace)
+        self._phase_archive(store, items, report, namespace=namespace)
 
         # Phase 3: Merge stale memories
         if not self._config.dry_run and report.archived > 0:
-            items = store.list_all()
-        self._phase_stale_merge(store, items, report)
+            items = store.list_all(namespace=namespace)
+        self._phase_stale_merge(store, items, report, namespace=namespace)
 
         # Phase 4: Cluster compaction
         if not self._config.dry_run and (report.stale_groups > 0 or report.stale_merged > 0):
-            items = store.list_all()
-        self._phase_cluster_compact(store, items, report)
+            items = store.list_all(namespace=namespace)
+        self._phase_cluster_compact(store, items, report, namespace=namespace)
 
         # Compute totals
         report.total_removed = report.archived + report.dedup_merged + report.stale_merged
@@ -211,8 +212,13 @@ class CompactionEngine:
         if len(stale) < self._config.cluster_min_size:
             return []
 
-        # Group by Jaccard similarity
         tokenized = [(item, self._tokenize(item.content)) for item in stale]
+
+        inv_index: dict[str, list[int]] = {}
+        for idx, (_, tokens) in enumerate(tokenized):
+            for token in tokens:
+                inv_index.setdefault(token, []).append(idx)
+
         used: set[str] = set()
         groups: list[ClusterInfo] = []
 
@@ -220,9 +226,16 @@ class CompactionEngine:
             if item_a.id in used or len(tokens_a) < 2:
                 continue
 
+            candidate_js: set[int] = set()
+            for token in tokens_a:
+                for j in inv_index.get(token, []):
+                    if j != i:
+                        candidate_js.add(j)
+
             similar = [(item_a, tokens_a)]
-            for j, (item_b, tokens_b) in enumerate(tokenized):
-                if j == i or item_b.id in used or len(tokens_b) < 2:
+            for j in candidate_js:
+                item_b, tokens_b = tokenized[j]
+                if item_b.id in used or len(tokens_b) < 2:
                     continue
                 sim = self._jaccard(tokens_a, tokens_b)
                 if sim >= self._config.merge_similarity_threshold:
@@ -256,6 +269,8 @@ class CompactionEngine:
         store: StorageBackend,
         items: list[MemoryItem],
         report: CompactionReport,
+        *,
+        namespace: str = "",
     ) -> None:
         """Phase 1: Remove exact/near-duplicates."""
         if self._config.dry_run:
@@ -269,6 +284,7 @@ class CompactionEngine:
             items=items,
             merge_content=False,
             dry_run=False,
+            namespace=namespace,
         )
         report.dedup_groups = result.groups_found
         report.dedup_merged = result.space_freed
@@ -278,6 +294,8 @@ class CompactionEngine:
         store: StorageBackend,
         items: list[MemoryItem],
         report: CompactionReport,
+        *,
+        namespace: str = "",
     ) -> None:
         """Phase 2: Tag old low-relevance memories as archived."""
         candidates = self.find_archive_candidates(items)
@@ -321,7 +339,7 @@ class CompactionEngine:
                 access_count=item.access_count,
                 metadata=archived_meta,
             )
-            store.upsert(archived_item)
+            store.upsert(archived_item, namespace=namespace)
 
             report.archived += 1
             report.archive_details.append(
@@ -338,6 +356,8 @@ class CompactionEngine:
         store: StorageBackend,
         items: list[MemoryItem],
         report: CompactionReport,
+        *,
+        namespace: str = "",
     ) -> None:
         """Phase 3: Merge groups of stale, semantically related memories."""
         groups = self.find_stale_groups(items)
@@ -352,10 +372,10 @@ class CompactionEngine:
             merged = self._merge_stale_group(group.memories)
 
             if not self._config.dry_run:
-                store.upsert(merged)
+                store.upsert(merged, namespace=namespace)
                 for m in group.memories:
                     if m.id != merged.id:
-                        store.delete(m.id)
+                        store.delete(m.id, namespace=namespace)
 
             report.stale_groups += 1
             report.stale_merged += len(group.memories) - 1  # -1 for the kept item
@@ -367,6 +387,8 @@ class CompactionEngine:
         store: StorageBackend,
         items: list[MemoryItem],
         report: CompactionReport,
+        *,
+        namespace: str = "",
     ) -> None:
         """Phase 4: Compress large tag-based clusters."""
         # Group by tag to find large clusters
@@ -401,10 +423,10 @@ class CompactionEngine:
             summary = self._create_cluster_summary(tag, to_compress)
 
             if not self._config.dry_run:
-                store.upsert(summary)
+                store.upsert(summary, namespace=namespace)
                 for m in to_compress:
                     if m.id != summary.id:
-                        store.delete(m.id)
+                        store.delete(m.id, namespace=namespace)
 
             report.clusters_compacted += 1
             report.total_removed += len(to_compress)
@@ -515,71 +537,15 @@ class CompactionEngine:
             },
         )
 
+    # Shared stopwords — reuse consolidation engine's set instead of duplicating.
+    from ..consolidation.engine import ConsolidationEngine as _CE  # noqa: TC014
+
+    _STOPWORDS = _CE._STOPWORDS
+
     @staticmethod
     def _tokenize(text: str) -> set[str]:
-        """Tokenize text into meaningful word set."""
         words = re.findall(r"\w+", text.lower())
-        stopwords = {
-            "the",
-            "a",
-            "an",
-            "is",
-            "are",
-            "was",
-            "were",
-            "be",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
-            "do",
-            "does",
-            "did",
-            "will",
-            "would",
-            "could",
-            "should",
-            "may",
-            "might",
-            "can",
-            "shall",
-            "to",
-            "of",
-            "in",
-            "for",
-            "on",
-            "with",
-            "at",
-            "by",
-            "from",
-            "as",
-            "into",
-            "and",
-            "but",
-            "or",
-            "not",
-            "it",
-            "its",
-            "i",
-            "me",
-            "my",
-            "we",
-            "our",
-            "you",
-            "your",
-            "he",
-            "him",
-            "his",
-            "she",
-            "her",
-            "they",
-            "them",
-            "their",
-            "this",
-            "that",
-        }
-        return {w for w in words if len(w) > 2 and w not in stopwords}
+        return {w for w in words if len(w) > 2 and w not in CompactionEngine._STOPWORDS}
 
     @staticmethod
     def _jaccard(a: set[str], b: set[str]) -> float:
