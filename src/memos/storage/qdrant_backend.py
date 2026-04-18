@@ -194,6 +194,9 @@ class QdrantBackend(StorageBackend):
             logger.warning("Qdrant list_all() failed", exc_info=True)
             return []
 
+    # Minimum cosine similarity for vector search to consider a result relevant.
+    _MIN_VECTOR_SCORE = 0.15
+
     def search(self, query: str, limit: int = 20, *, namespace: str = "") -> list[MemoryItem]:
         self._ensure_collection(namespace)
         name = self._collection_name(namespace)
@@ -206,12 +209,16 @@ class QdrantBackend(StorageBackend):
                     collection_name=name,
                     query_vector=vector,
                     limit=limit,
+                    score_threshold=self._MIN_VECTOR_SCORE,
                     with_payload=True,
                 )
                 return [self._point_to_item(r) for r in results]
             except Exception:
-                logger.debug("Qdrant vector search failed, falling back to keyword", exc_info=True)
-                pass
+                logger.warning(
+                    "Qdrant vector search failed for namespace=%r, falling back to keyword",
+                    namespace,
+                    exc_info=True,
+                )
 
         # Fallback: keyword-based search
         return self._keyword_search(query, limit, namespace)
@@ -275,8 +282,14 @@ class QdrantBackend(StorageBackend):
                 logger.debug("Qdrant hybrid vector search failed", exc_info=True)
                 pass
 
-        # Keyword results (BM25-like)
-        all_items = self.list_all(namespace=namespace)
+        # Keyword results (BM25-like). If vector results already gave us a
+        # strong candidate pool, score only those items to avoid a full-store
+        # scroll on every hybrid query.
+        all_items: list[MemoryItem]
+        if vector_results:
+            all_items = [self._point_to_item(r) for r in results]
+        else:
+            all_items = self.list_all(namespace=namespace)
         keyword_scores: dict[str, float] = {}
         import math
         import re
@@ -319,17 +332,31 @@ class QdrantBackend(StorageBackend):
     # --- Internal helpers ---
 
     def _keyword_search(self, query: str, limit: int, namespace: str) -> list[MemoryItem]:
-        """Simple keyword fallback when vector search is unavailable."""
+        """Keyword fallback when vector search is unavailable.
+
+        Tokenizes the query into individual words and matches if *any*
+        token is found in the item's content or tags.  This avoids the
+        previous behaviour where the entire query string had to appear as
+        a single substring (e.g. ``"docker nginx"`` would not match
+        ``"docker and nginx setup"``).
+        """
+        import re as _re
+
+        tokens = [t for t in _re.findall(r"\w+", query.lower()) if t]
+        if not tokens:
+            return []
+
         all_items = self.list_all(namespace=namespace)
-        q = query.lower()
-        results = []
+        results: list[MemoryItem] = []
         for item in all_items:
-            if q in item.content.lower():
+            content_lower = item.content.lower()
+            tag_lowers = [tag.lower() for tag in item.tags]
+            if any(t in content_lower for t in tokens) or any(
+                any(t in tl for tl in tag_lowers) for t in tokens
+            ):
                 results.append(item)
-            elif any(q in tag.lower() for tag in item.tags):
-                results.append(item)
-            if len(results) >= limit:
-                break
+                if len(results) >= limit:
+                    break
         return results
 
     @staticmethod

@@ -392,6 +392,28 @@ async def test_rest_graph_reuses_single_store_scan() -> None:
     assert m._store.list_all_calls == 1
 
 
+@pytest.mark.anyio
+async def test_rest_graph_aggregates_shared_tags_without_duplicate_edges() -> None:
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    m.learn("alpha memory", tags=["shared-a", "shared-b"])
+    m.learn("beta memory", tags=["shared-a", "shared-b"])
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/graph")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["edges"]) == 1
+    edge = data["edges"][0]
+    assert edge["weight"] == 2
+    assert sorted(edge["shared_tags"]) == ["shared-a", "shared-b"]
+
+
 # ---------------------------------------------------------------------------
 # 7. MCP dispatch
 # ---------------------------------------------------------------------------
