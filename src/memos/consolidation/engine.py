@@ -84,9 +84,13 @@ class ConsolidationEngine:
         # Phase 1: exact dedup via normalized content
         exact_groups = self._find_exact_duplicates(items)
 
+        if len(exact_groups) >= max_groups:
+            exact_groups.sort(key=lambda g: g.similarity, reverse=True)
+            return exact_groups[:max_groups]
+
         # Phase 2: semantic dedup via token similarity
         remaining = self._items_not_in_groups(items, exact_groups)
-        semantic_groups = self._find_semantic_duplicates(remaining)
+        semantic_groups = self._find_semantic_duplicates(remaining, max_groups=max_groups - len(exact_groups))
 
         all_groups = exact_groups + semantic_groups
         all_groups.sort(key=lambda g: g.similarity, reverse=True)
@@ -99,18 +103,21 @@ class ConsolidationEngine:
         items: list[MemoryItem] | None = None,
         merge_content: bool = False,
         dry_run: bool = False,
+        namespace: str = "",
     ) -> ConsolidationResult:
         """Find and merge duplicate memories in the store.
 
         Args:
             store: The storage backend to operate on.
+            items: Pre-loaded items. If None, loaded from store.
             merge_content: If True, concatenate unique content from duplicates.
             dry_run: If True, don't actually modify anything — just report.
+            namespace: Namespace scope for all store operations.
 
         Returns:
             ConsolidationResult with counts and details.
         """
-        items = items if items is not None else store.list_all()
+        items = items if items is not None else store.list_all(namespace=namespace)
         groups = self.find_duplicates(items)
 
         if not groups:
@@ -125,14 +132,12 @@ class ConsolidationEngine:
             return result
 
         for group in groups:
-            # Merge into the best item
             merged = self._merge(group.keep, group.duplicates, merge_content=merge_content)
-            store.upsert(merged)
+            store.upsert(merged, namespace=namespace)
 
-            # Remove duplicates
             for dup in group.duplicates:
                 if dup.id != merged.id:
-                    store.delete(dup.id)
+                    store.delete(dup.id, namespace=namespace)
                     result.space_freed += 1
 
             result.memories_merged += len(group.duplicates)
@@ -173,111 +178,26 @@ class ConsolidationEngine:
 
     # --- Phase 2: Semantic dedup ---
 
+    # Module-level stopwords — allocated once, shared across all calls.
+    _STOPWORDS: set[str] = {
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "will", "would", "could",
+        "should", "may", "might", "can", "shall", "to", "of", "in", "for",
+        "on", "with", "at", "by", "from", "as", "into", "through", "during",
+        "before", "after", "and", "but", "or", "not", "no", "nor", "so",
+        "yet", "both", "either", "neither", "each", "every", "all", "any",
+        "few", "more", "most", "other", "some", "such", "than", "too",
+        "very", "just", "that", "this", "these", "those", "it", "its",
+        "i", "me", "my", "we", "our", "you", "your", "he", "him", "his",
+        "she", "her", "they", "them", "their", "what", "which", "who",
+        "whom", "if", "then", "else", "when", "where", "how", "about",
+        "up", "out",
+    }
+
     def _tokenize(self, text: str) -> set[str]:
         """Tokenize text into a set of words."""
         words = re.findall(r"\w+", text.lower())
-        # Remove very short tokens and common stopwords
-        stopwords = {
-            "the",
-            "a",
-            "an",
-            "is",
-            "are",
-            "was",
-            "were",
-            "be",
-            "been",
-            "being",
-            "have",
-            "has",
-            "had",
-            "do",
-            "does",
-            "did",
-            "will",
-            "would",
-            "could",
-            "should",
-            "may",
-            "might",
-            "can",
-            "shall",
-            "to",
-            "of",
-            "in",
-            "for",
-            "on",
-            "with",
-            "at",
-            "by",
-            "from",
-            "as",
-            "into",
-            "through",
-            "during",
-            "before",
-            "after",
-            "and",
-            "but",
-            "or",
-            "not",
-            "no",
-            "nor",
-            "so",
-            "yet",
-            "both",
-            "either",
-            "neither",
-            "each",
-            "every",
-            "all",
-            "any",
-            "few",
-            "more",
-            "most",
-            "other",
-            "some",
-            "such",
-            "than",
-            "too",
-            "very",
-            "just",
-            "that",
-            "this",
-            "these",
-            "those",
-            "it",
-            "its",
-            "i",
-            "me",
-            "my",
-            "we",
-            "our",
-            "you",
-            "your",
-            "he",
-            "him",
-            "his",
-            "she",
-            "her",
-            "they",
-            "them",
-            "their",
-            "what",
-            "which",
-            "who",
-            "whom",
-            "if",
-            "then",
-            "else",
-            "when",
-            "where",
-            "how",
-            "about",
-            "up",
-            "out",
-        }
-        return {w for w in words if len(w) > 2 and w not in stopwords}
+        return {w for w in words if len(w) > 2 and w not in self._STOPWORDS}
 
     def _jaccard(self, a: set[str], b: set[str]) -> float:
         """Jaccard similarity between two token sets."""
@@ -285,12 +205,21 @@ class ConsolidationEngine:
             return 0.0
         return len(a & b) / len(a | b)
 
-    def _find_semantic_duplicates(self, items: list[MemoryItem]) -> list[DuplicateGroup]:
-        """Find near-duplicates using token overlap (Jaccard similarity)."""
+    def _find_semantic_duplicates(self, items: list[MemoryItem], *, max_groups: int | None = None) -> list[DuplicateGroup]:
+        """Find near-duplicates using token overlap (Jaccard similarity).
+
+        Uses an inverted index to skip pairs that share zero tokens,
+        reducing the effective comparison count from O(n²) to near-linear
+        for typical memory stores where most pairs are unrelated.
+        """
         # Pre-tokenize
         tokenized = [(item, self._tokenize(item.content)) for item in items]
 
-        # Pairwise comparison with early termination
+        inv_index: dict[str, list[int]] = {}
+        for idx, (_, tokens) in enumerate(tokenized):
+            for token in tokens:
+                inv_index.setdefault(token, []).append(idx)
+
         groups = []
         used: set[str] = set()
 
@@ -298,9 +227,16 @@ class ConsolidationEngine:
             if item_a.id in used or len(tokens_a) < 3:
                 continue
 
+            candidate_js: set[int] = set()
+            for token in tokens_a:
+                for j in inv_index.get(token, []):
+                    if j > i:
+                        candidate_js.add(j)
+
             similar = []
-            for j, (item_b, tokens_b) in enumerate(tokenized):
-                if j <= i or item_b.id in used or len(tokens_b) < 3:
+            for j in candidate_js:
+                item_b, tokens_b = tokenized[j]
+                if item_b.id in used or len(tokens_b) < 3:
                     continue
                 sim = self._jaccard(tokens_a, tokens_b)
                 if sim >= self._threshold:
@@ -322,6 +258,8 @@ class ConsolidationEngine:
                 used.add(item_a.id)
                 for s_item, _ in similar:
                     used.add(s_item.id)
+                if max_groups is not None and len(groups) >= max_groups:
+                    break
 
         return groups
 

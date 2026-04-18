@@ -210,3 +210,20 @@ class TestEdgeCases:
 
         groups = engine.find_duplicates(items, max_groups=3)
         assert len(groups) <= 3
+
+    def test_max_groups_skips_semantic_phase_when_exact_groups_fill_limit(self, monkeypatch):
+        engine = ConsolidationEngine()
+        items = [
+            _make_item("duplicate zero"),
+            _make_item("duplicate zero"),
+            _make_item("duplicate one"),
+            _make_item("duplicate one"),
+        ]
+
+        def fail_semantic(_items, *, max_groups=None):
+            raise AssertionError("semantic phase should be skipped once max_groups is already satisfied")
+
+        monkeypatch.setattr(engine, "_find_semantic_duplicates", fail_semantic)
+
+        groups = engine.find_duplicates(items, max_groups=1)
+        assert len(groups) == 1

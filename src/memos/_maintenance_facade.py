@@ -21,13 +21,14 @@ if TYPE_CHECKING:
     from .compression import CompressionResult
     from .consolidation.async_engine import AsyncConsolidationHandle
     from .consolidation.engine import ConsolidationResult
+    from .decay.engine import DecayReport
 
 
 class MaintenanceFacade:
     """Mixin exposing maintenance APIs on MemOS.
 
-    Covers pruning, consolidation, compaction, compression, and cache
-    management operations.
+    Covers pruning, consolidation, compaction, compression, decay,
+    reinforcement, and cache management operations.
     """
 
     _store: Any
@@ -101,6 +102,62 @@ class MaintenanceFacade:
 
         return expired
 
+    # ── Decay ──────────────────────────────────────────────
+
+    def decay(
+        self,
+        *,
+        min_age_days: float | None = None,
+        floor: float | None = None,
+        dry_run: bool = True,
+    ) -> "DecayReport":
+        """Apply importance decay to all eligible memories.
+
+        Args:
+            min_age_days: Minimum age in days to be eligible. Uses decay engine default if None.
+            floor: Minimum importance after decay. Uses decay engine default if None.
+            dry_run: If True (default), don't persist changes — just report.
+
+        Returns:
+            DecayReport with statistics and per-item details.
+        """
+        items = self._store.list_all(namespace=self._namespace)
+        report = self._decay.run_decay(
+            items,
+            min_age_days=min_age_days,
+            floor=floor,
+            dry_run=dry_run,
+        )
+        if not dry_run:
+            for item in items:
+                self._store.upsert(item, namespace=self._namespace)
+        return report
+
+    def reinforce_memory(
+        self,
+        memory_id: str,
+        *,
+        strength: float | None = None,
+    ) -> float:
+        """Boost a memory's importance score.
+
+        Args:
+            memory_id: ID of the memory to reinforce.
+            strength: Override boost amount. Uses decay engine default if None.
+
+        Returns:
+            New importance value (clamped to [0, 1]).
+
+        Raises:
+            KeyError: If memory_id not found in the current namespace.
+        """
+        item = self._store.get(memory_id, namespace=self._namespace)
+        if item is None:
+            raise KeyError(f"Memory not found: {memory_id}")
+        new_importance = self._decay.reinforce(item, strength=strength)
+        self._store.upsert(item, namespace=self._namespace)
+        return new_importance
+
     # ── Consolidation ──────────────────────────────────────
 
     def consolidate(
@@ -114,7 +171,12 @@ class MaintenanceFacade:
         from .consolidation.engine import ConsolidationEngine
 
         engine = ConsolidationEngine(similarity_threshold=similarity_threshold)
-        result = engine.consolidate(self._store, merge_content=merge_content, dry_run=dry_run)
+        result = engine.consolidate(
+            self._store,
+            merge_content=merge_content,
+            dry_run=dry_run,
+            namespace=self._namespace,
+        )
 
         if not dry_run and result.memories_merged > 0:
             self._events.emit_sync(
@@ -161,6 +223,7 @@ class MaintenanceFacade:
             similarity_threshold=similarity_threshold,
             merge_content=merge_content,
             dry_run=dry_run,
+            namespace=self._namespace,
         )
 
     def consolidation_status(self, task_id: str) -> dict | None:
@@ -211,7 +274,7 @@ class MaintenanceFacade:
             max_compact_per_run=max_compact_per_run,
         )
         engine = CompactionEngine(config=config)
-        report = engine.compact(self._store)
+        report = engine.compact(self._store, namespace=self._namespace)
 
         if not dry_run and report.total_removed > 0:
             self._events.emit_sync(

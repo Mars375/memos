@@ -15,6 +15,9 @@ class FeedbackFacade:
     _namespace: str
     _events: Any
 
+    def _check_acl(self, permission: str) -> None:
+        """ACL guard — resolved at runtime on the MemOS composite."""
+
     def record_feedback(
         self,
         item_id: str,
@@ -41,6 +44,7 @@ class FeedbackFacade:
         """
         if feedback not in ("relevant", "not-relevant"):
             raise ValueError(f"Invalid feedback: {feedback!r}. Must be 'relevant' or 'not-relevant'")
+        self._check_acl("write")
         entry = FeedbackEntry(
             item_id=item_id,
             feedback=feedback,
@@ -75,6 +79,7 @@ class FeedbackFacade:
 
     def get_feedback(self, item_id: str | None = None, limit: int = 100) -> list[FeedbackEntry]:
         """Get feedback entries, optionally filtered by item_id."""
+        self._check_acl("read")
         entries: list[FeedbackEntry] = []
         if item_id:
             item = self._store.get(item_id, namespace=self._namespace)

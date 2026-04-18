@@ -83,6 +83,7 @@ class AsyncConsolidationEngine:
         similarity_threshold: float | None = None,
         merge_content: bool | None = None,
         dry_run: bool | None = None,
+        namespace: str = "",
     ) -> AsyncConsolidationHandle:
         """Start an async consolidation run.
 
@@ -106,7 +107,7 @@ class AsyncConsolidationEngine:
             },
         )
 
-        asyncio.create_task(self._run(handle, store, threshold, merge, dry))
+        asyncio.create_task(self._run(handle, store, threshold, merge, dry, namespace))
 
         return handle
 
@@ -117,6 +118,7 @@ class AsyncConsolidationEngine:
         threshold: float,
         merge_content: bool,
         dry_run: bool,
+        namespace: str,
     ) -> None:
         """Execute consolidation in a thread pool to avoid blocking the event loop."""
         handle.status = "running"
@@ -126,7 +128,9 @@ class AsyncConsolidationEngine:
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 None,
-                lambda: engine.consolidate(store, merge_content=merge_content, dry_run=dry_run),
+                lambda: engine.consolidate(
+                    store, merge_content=merge_content, dry_run=dry_run, namespace=namespace
+                ),
             )
             handle.result = result
             handle.status = "completed"
