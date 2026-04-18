@@ -39,7 +39,7 @@ With vector backend (recommended for production):
 ```bash
 pip install "memos-os[chroma]"   # ChromaDB + Ollama embeddings
 pip install "memos-os[qdrant]"   # Qdrant
-pip install "memos-os[all]"      # all backends
+pip install "memos-os[chroma,qdrant,pinecone,parquet,server]"  # full stack
 ```
 
 ---
@@ -96,17 +96,14 @@ prompt_fragment = cs.wake_up(max_chars=2000, l1_top=15, include_stats=True)
 # ready to paste into a system prompt
 
 # 5. Reinforce and decay — keep memories healthy over time
-# Boost a memory that keeps being useful
-results = mem.recall("deployment strategy", top=1)
-if results:
-    mem._decay.reinforce(results[0].item, strength=0.1)
-    mem._store.upsert(results[0].item, namespace=mem._namespace)
+# Reinforce useful memories via the public CLI / MCP surface
+# and prune stale ones via the public maintenance API.
+preview = mem.prune(threshold=0.1, dry_run=True)
+print(f"{len(preview)} memories would be pruned")
 
-# Decay stale memories (preview first)
-items = mem._store.list_all(namespace=mem._namespace)
-report = mem._decay.run_decay(items, dry_run=True)
-print(f"{report.decayed}/{report.total} memories would decay")
-# When ready: run_decay(items, dry_run=False)
+# When ready: apply the cleanup
+removed = mem.prune(threshold=0.1)
+print(f"Pruned {len(removed)} stale memories")
 ```
 
 ---
@@ -141,7 +138,8 @@ for r in results:
 
 # Forget
 mem.forget("memory-id")           # by id
-mem.delete_tag("old-project")     # all memories with this tag
+mem.delete_tag("old-project")     # remove this tag from all memories
+mem.forget_tag("old-project")     # delete all memories carrying this tag
 mem.prune(threshold=0.2)          # decay-based cleanup
 
 # Stats
@@ -277,7 +275,6 @@ All options can be set via environment variables:
 
 ```bash
 MEMOS_BACKEND=chroma              # memory | json | chroma | qdrant | pinecone
-MEMOS_NAMESPACE=default           # memory namespace (one per agent)
 MEMOS_PERSIST_PATH=~/.memos/      # path for json/sqlite storage
 
 # ChromaDB
@@ -291,17 +288,17 @@ MEMOS_QDRANT_PORT=6333
 
 # Pinecone
 MEMOS_PINECONE_API_KEY=***
-MEMOS_PINECONE_INDEX=agent-memories
+MEMOS_PINECONE_INDEX_NAME=agent-memories
 ```
 
 ---
 
 ## Docker
 
-Single container (JSON backend, no dependencies):
+Single container (local backend, no dependencies):
 ```bash
 docker run -p 8100:8000 \
-  -e MEMOS_BACKEND=json \
+  -e MEMOS_BACKEND=local \
   -v memos-data:/root/.memos \
   ghcr.io/mars375/memos:latest
 ```
@@ -310,7 +307,7 @@ Full stack with ChromaDB + Ollama embeddings:
 ```bash
 git clone https://github.com/Mars375/memos
 cd memos
-docker compose up -d
+docker compose --profile chroma up -d
 ```
 
 ---
@@ -332,7 +329,7 @@ memos mine channel.jsonl    --format slack
 memos mine ~/.openclaw/workspace-labs/ --format openclaw
 
 # Options
-memos mine ~/notes/ --dry-run --tags project-x --chunk-size 600 --namespace agent-alice
+memos mine ~/notes/ --dry-run --tags project-x --chunk-size 600
 ```
 
 Python API:
@@ -341,7 +338,7 @@ from memos.ingest.miner import Miner
 
 miner = Miner(mem, chunk_size=800, chunk_overlap=100)
 result = miner.mine_auto("conversations/")   # auto-detect
-# MineResult(imported=127, dupes=12, empty=3, errors=0)
+# MineResult(imported=127, dupes=12, cached=0, empty=3, errors=0)
 ```
 
 ---
@@ -387,7 +384,7 @@ memos wiki-living lint            # find orphans, contradictions, empty pages
 Memories age automatically. Important ones persist; stale ones fade.
 
 ```bash
-memos decay --dry-run      # preview what would decay
+memos decay                # preview what would decay (dry-run by default)
 memos decay --apply        # apply decay
 memos prune --threshold 0.1  # delete memories below importance threshold
 ```
@@ -410,12 +407,20 @@ memos snapshot-at 1w                          # all memories 1 week ago
 
 ## Multi-namespace (multi-agent)
 
-Each agent gets its own isolated namespace:
+Each agent gets its own isolated namespace in the Python API:
 
-```bash
-memos --namespace agent-alice learn "Alice's memory"
-memos --namespace agent-bob learn "Bob's memory"
-memos --namespace agent-alice recall "what do I know?"
+```python
+from memos import MemOS
+
+alice = MemOS()
+alice.namespace = "agent-alice"
+alice.learn("Alice's memory")
+
+bob = MemOS()
+bob.namespace = "agent-bob"
+bob.learn("Bob's memory")
+
+alice.recall("what do I know?")
 ```
 
 ---
@@ -432,7 +437,7 @@ ruff check src/ tests/
 ruff format src/ tests/
 
 # Tests (Python 3.11 / 3.12 / 3.13)
-pytest -q --tb=short          # 1710 tests
+pytest -q --tb=short          # ~2100 tests
 pytest tests/test_core.py     # specific module
 ```
 
@@ -440,11 +445,13 @@ pytest tests/test_core.py     # specific module
 
 ## Architecture
 
-MemOS is built around three core layers:
+MemOS is built around three core layers plus focused facade mixins on the main `MemOS` class:
 
 - **Capture** — Mine conversations and events into structured memory units via the CLI, SDK, or MCP.
 - **Engine** — Storage, recall, decay, reinforcement, versioning, and knowledge graph. Pluggable backends (in-memory, JSON, ChromaDB, Qdrant, Pinecone).
 - **Knowledge Surface** — Living wiki, graph view, and context packs (`wake_up`, `context_for`, `recall_enriched`) that serve the right context at the right time.
+
+Recent cleanup extracted dedicated `FeedbackFacade`, `IOFacade`, `MaintenanceFacade`, `SharingFacade`, and `VersioningFacade` mixins so `core.py` stays focused on the CRUD/orchestration nucleus.
 
 See [ROADMAP.md](ROADMAP.md) for planned features and [PRD.md](PRD.md) for product requirements.
 
