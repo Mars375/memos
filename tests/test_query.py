@@ -51,6 +51,16 @@ def _seed_store(items: list[MemoryItem] | None = None, namespace: str = "") -> I
     return backend
 
 
+class CountingStore(InMemoryBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.list_all_calls = 0
+
+    def list_all(self, *, namespace: str = ""):
+        self.list_all_calls += 1
+        return super().list_all(namespace=namespace)
+
+
 @pytest.fixture
 def store():
     return _seed_store()
@@ -600,6 +610,30 @@ class TestExecute:
         q = MemoryQuery(query="anything", top_k=10)
         result = engine.execute(q, store)
         assert result == []
+
+    def test_hybrid_mode_reuses_filtered_store_scan(self):
+        store = CountingStore()
+        now = time.time()
+        items = [
+            _make_item("1", "Python async patterns", ["python", "async"], 0.8, now - 100, now),
+            _make_item("2", "Docker deployment guide", ["devops", "docker"], 0.6, now - 50, now - 10),
+            _make_item("3", "React hooks tutorial", ["react", "frontend"], 0.9, now, now),
+        ]
+        for item in items:
+            store.upsert(item)
+
+        mock_retrieval = MagicMock()
+        mock_retrieval.search.return_value = [RecallResult(item=items[0], score=0.85, match_reason="semantic")]
+        engine = QueryEngine(mock_retrieval)
+        q = MemoryQuery(query="python", retrieval_mode="hybrid", top_k=10)
+
+        with patch("memos.query.HybridRetriever") as MockHR:
+            instance = MockHR.return_value
+            instance.rerank.return_value = [RecallResult(item=items[0], score=0.9, match_reason="hybrid")]
+            result = engine.execute(q, store)
+
+        assert len(result) >= 1
+        assert store.list_all_calls == 1
 
 
 # ===================================================================

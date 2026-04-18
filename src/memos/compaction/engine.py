@@ -266,6 +266,7 @@ class CompactionEngine:
 
         result = self._consolidation.consolidate(
             store,
+            items=items,
             merge_content=False,
             dry_run=False,
         )

@@ -24,6 +24,18 @@ import pytest
 
 from memos.context import ContextStack
 from memos.core import MemOS
+from memos.storage.memory_backend import InMemoryBackend
+
+
+class CountingStore(InMemoryBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.list_all_calls = 0
+
+    def list_all(self, *, namespace: str = ""):
+        self.list_all_calls += 1
+        return super().list_all(namespace=namespace)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -161,6 +173,34 @@ def test_wake_up_memory_line_format(cs_with_memories: ContextStack) -> None:
 
     for line in mem_lines:
         assert re.match(r"^\[[\d.]+\]", line), f"unexpected format: {line!r}"
+
+
+def test_wake_up_with_stats_reuses_single_store_scan(tmp_path: Path) -> None:
+    mem = MemOS(backend="memory")
+    mem._store = CountingStore()
+    mem.learn("Python async best practices", tags=["python"], importance=0.9)
+    mem.learn("Docker multi-stage builds", tags=["devops"], importance=0.85)
+    mem._store.list_all_calls = 0
+    cs = ContextStack(mem, identity_path=str(tmp_path / "identity.txt"))
+
+    output = cs.wake_up(include_stats=True)
+
+    assert "=== STATS ===" in output
+    assert mem._store.list_all_calls == 1
+
+
+def test_wake_up_compact_reuses_single_store_scan(tmp_path: Path) -> None:
+    mem = MemOS(backend="memory")
+    mem._store = CountingStore()
+    mem.learn("Python async best practices", tags=["python"], importance=0.9)
+    mem.learn("Docker multi-stage builds", tags=["devops"], importance=0.85)
+    mem._store.list_all_calls = 0
+    cs = ContextStack(mem, identity_path=str(tmp_path / "identity.txt"))
+
+    output = cs.wake_up(compact=True)
+
+    assert "[STATS]" in output
+    assert mem._store.list_all_calls == 1
 
 
 # ---------------------------------------------------------------------------
@@ -330,6 +370,28 @@ async def test_rest_context_for_returns_context() -> None:
     assert data["query"] == "python async"
 
 
+@pytest.mark.anyio
+async def test_rest_graph_reuses_single_store_scan() -> None:
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    m = MemOS(backend="memory")
+    m._store = CountingStore()
+    m.learn("Python async patterns", tags=["python", "backend"], importance=0.8)
+    m.learn("Docker deploy guide", tags=["docker", "backend"], importance=0.6)
+    m._store.list_all_calls = 0
+    app = create_fastapi_app(memos=m)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/v1/graph")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["meta"]["total_memories"] == 2
+    assert m._store.list_all_calls == 1
+
+
 # ---------------------------------------------------------------------------
 # 7. MCP dispatch
 # ---------------------------------------------------------------------------
@@ -426,7 +488,7 @@ def test_cli_identity_show_empty(tmp_path: Path, capsys) -> None:
     class _FakeMemos:
         namespace = ""
 
-        def stats(self):
+        def stats(self, items=None):
             from memos.models import MemoryStats
 
             return MemoryStats()
@@ -453,7 +515,7 @@ def test_cli_identity_set_and_show(tmp_path: Path, capsys) -> None:
     class _FakeMemos:
         namespace = ""
 
-        def stats(self):
+        def stats(self, items=None):
             from memos.models import MemoryStats
 
             return MemoryStats()
@@ -480,11 +542,12 @@ class _FakeMemosCompact:
     def __init__(self, items=None):
         self._items = items or []
 
-    def stats(self):
+    def stats(self, items=None):
         from memos.models import MemoryStats
 
+        source_items = items if items is not None else self._items
         return MemoryStats(
-            total_memories=len(self._items),
+            total_memories=len(source_items),
             decay_candidates=1,
         )
 

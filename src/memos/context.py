@@ -153,7 +153,7 @@ class ContextStack:
 
         # Stats section
         if include_stats:
-            s = self._memos.stats()
+            s = self._memos.stats(items=all_items)
             stats_section = (
                 f"=== STATS ===\n"
                 f"Total: {s.total_memories} memories | "
@@ -202,7 +202,7 @@ class ContextStack:
             lines.append(f"[MEM] {snippets}")
 
         # Stats
-        s = self._memos.stats()
+        s = self._memos.stats(items=all_items)
         stats_parts = [f"{s.total_memories} mem"]
         if s.decay_candidates:
             stats_parts.append(f"{s.decay_candidates} prunable")

@@ -149,7 +149,7 @@ class TestCompactionPipeline:
 
         assert report.total_removed == 0
         assert report.total_added == 0
-        assert store.list_all_calls == 2
+        assert store.list_all_calls == 1
 
     def test_dedup_phase(self, engine, store):
         """Exact duplicates are removed (manually inserted with different IDs)."""

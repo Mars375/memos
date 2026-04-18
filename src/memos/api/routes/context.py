@@ -81,7 +81,7 @@ def create_context_router(memos, _context_stack) -> APIRouter:
                                 break
         if min_shared_tags > 1:
             edges = [edge for edge in edges if edge["weight"] >= min_shared_tags]
-        stats = memos.stats()
+        stats = memos.stats(items=items)
         return {
             "nodes": nodes,
             "edges": edges,

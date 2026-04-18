@@ -67,13 +67,14 @@ class QueryEngine:
                 min_score=normalized.min_score,
             )
 
-        all_items = store.list_all(namespace=self._namespace)
+        all_items = filtered_items
         search_top = max(len(all_items), normalized.top_k, 1)
         engine_results = self._retrieval.search(
             text,
             top=search_top,
             filter_tags=None,
             namespace=self._namespace,
+            items=all_items,
         )
 
         allowed_ids = {item.id for item in filtered_items}

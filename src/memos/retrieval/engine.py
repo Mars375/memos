@@ -124,6 +124,7 @@ class RetrievalEngine:
         filter_tags: Optional[list[str]] = None,
         *,
         namespace: str = "",
+        items: Optional[list[MemoryItem]] = None,
     ) -> list[RecallResult]:
         """Search memories using hybrid semantic + keyword scoring.
 
@@ -143,7 +144,7 @@ class RetrievalEngine:
             )
 
         # Standard in-memory hybrid search
-        all_items = self._store.list_all(namespace=namespace)
+        all_items = items if items is not None else self._store.list_all(namespace=namespace)
 
         # Filter by tags if specified
         if filter_tags:

@@ -96,6 +96,7 @@ class ConsolidationEngine:
         self,
         store: StorageBackend,
         *,
+        items: list[MemoryItem] | None = None,
         merge_content: bool = False,
         dry_run: bool = False,
     ) -> ConsolidationResult:
@@ -109,7 +110,7 @@ class ConsolidationEngine:
         Returns:
             ConsolidationResult with counts and details.
         """
-        items = store.list_all()
+        items = items if items is not None else store.list_all()
         groups = self.find_duplicates(items)
 
         if not groups:
