@@ -103,6 +103,13 @@ class APIKeyManager:
 def create_auth_middleware(key_manager: APIKeyManager):
     """Create ASGI middleware for API key auth and rate limiting.
 
+    Skips authentication for unauthenticated paths: ``/``, ``/health``,
+    ``/docs``, ``/openapi.json``.  All other paths require a valid
+    ``X-API-Key`` header when keys are configured.
+
+    WebSocket connections are NOT covered by this HTTP middleware;
+    auth is enforced inside the WebSocket handler itself.
+
     Usage with FastAPI:
         from memos.api.auth import APIKeyManager, create_auth_middleware
         key_mgr = APIKeyManager(keys=["sk-test-123"])

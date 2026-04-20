@@ -102,6 +102,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.post("/api/v1/mine/conversation")
     async def api_mine_conversation(body: MineConversationRequest):
         """Mine a conversation transcript. Accepts text or server-side path."""
+        import asyncio
         import os
         import tempfile
 
@@ -115,28 +116,27 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
         extra_tags = body.tags or []
         importance = body.importance
         dry_run = body.dry_run
-        miner = ConversationMiner(memos, dry_run=dry_run)
 
-        if text_body:
-            try:
-                fd, tmp_path = tempfile.mkstemp(suffix=".txt", prefix="memos_conv_")
-                with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                    fh.write(text_body)
-                result = miner.mine_conversation(
-                    tmp_path,
-                    namespace_prefix=namespace_prefix,
-                    per_speaker=per_speaker,
-                    tags=extra_tags or None,
-                    importance=importance,
-                )
-            finally:
+        def _blocking_mine():
+            miner = ConversationMiner(memos, dry_run=dry_run)
+            if text_body:
                 try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    logger.debug("Temp file cleanup failed for %s", tmp_path, exc_info=True)
-                    pass
-        else:
-            result = miner.mine_conversation(
+                    fd, tmp_path = tempfile.mkstemp(suffix=".txt", prefix="memos_conv_")
+                    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                        fh.write(text_body)
+                    return miner.mine_conversation(
+                        tmp_path,
+                        namespace_prefix=namespace_prefix,
+                        per_speaker=per_speaker,
+                        tags=extra_tags or None,
+                        importance=importance,
+                    )
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        logger.debug("Temp file cleanup failed for %s", tmp_path, exc_info=True)
+            return miner.mine_conversation(
                 path_body,
                 namespace_prefix=namespace_prefix,
                 per_speaker=per_speaker,
@@ -144,6 +144,7 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                 importance=importance,
             )
 
+        result = await asyncio.to_thread(_blocking_mine)
         return {
             "status": "ok" if not result.errors else "partial",
             "imported": result.imported,
@@ -164,7 +165,21 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
 
     @router.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
+        """WebSocket endpoint for live event subscriptions.
+
+        When authentication is enabled (one or more API keys configured),
+        callers must supply a valid ``api_key`` query parameter, e.g.
+        ``ws://host/ws?api_key=sk-...``.  Connections without a valid key
+        are rejected with code 4001.
+        """
         import asyncio
+
+        # ── WebSocket authentication ──────────────────────────
+        if key_manager.auth_enabled:
+            ws_key = websocket.query_params.get("api_key", "")
+            if not ws_key or not key_manager.validate(ws_key):
+                await websocket.close(code=4001, reason="Unauthorized: invalid or missing api_key")
+                return
 
         await websocket.accept()
         queue = memos.events.add_ws_client()
@@ -289,17 +304,20 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
 
     @router.get("/health")
     async def health():
+        """Public liveness probe — intentionally minimal.
+
+        Auth state (whether keys are configured, how many) is NOT exposed
+        here because this endpoint is unauthenticated.  See
+        ``/api/v1/health`` for the authenticated variant.
+        """
         return {
             "status": "ok",
             "version": MEMOS_VERSION,
-            "auth_enabled": key_manager.auth_enabled,
-            "active_keys": key_manager.key_count,
-            "rate_limiting": True,
         }
 
     @router.get("/api/v1/health")
     async def api_v1_health():
-        """Health check with version and uptime."""
+        """Authenticated health check with version, uptime, and auth state."""
         uptime = time.time() - _start_time
         try:
             import importlib.metadata
@@ -307,7 +325,13 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
             version = importlib.metadata.version("memos")
         except Exception:
             version = MEMOS_VERSION
-        return {"status": "ok", "version": version, "uptime": round(uptime, 2)}
+        return {
+            "status": "ok",
+            "version": version,
+            "uptime": round(uptime, 2),
+            "auth_enabled": key_manager.auth_enabled,
+            "active_keys": key_manager.key_count,
+        }
 
     @router.get("/api/v1/rate-limit/status")
     async def api_rate_limit_status(request):
