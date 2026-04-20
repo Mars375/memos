@@ -4,8 +4,16 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from ..errors import handle_exception
+from ...utils import validate_safe_path
+from ..errors import error_response, handle_exception
 from ..schemas import BrainSearchRequest
+
+
+def _validate_wiki_dir(wiki_dir: str | None) -> str | None:
+    """Validate wiki_dir or return None; raises ValueError on traversal."""
+    if wiki_dir is None:
+        return None
+    return validate_safe_path(wiki_dir)
 
 
 def create_brain_router(memos, _kg) -> APIRouter:
@@ -17,7 +25,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
         from ...brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=body.wiki_dir)
+            safe_dir = _validate_wiki_dir(body.wiki_dir)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
             result = searcher.search(
                 body.query,
                 top_k=body.top_k,
@@ -30,6 +39,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
             payload = result.to_dict()
             payload["status"] = "ok"
             return payload
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="brain_search")
 
@@ -40,11 +51,14 @@ def create_brain_router(memos, _kg) -> APIRouter:
         from ...brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            safe_dir = _validate_wiki_dir(wiki_dir)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
             detail = searcher.entity_detail(name, top_memories=top_memories, neighbor_limit=neighbor_limit)
             payload = detail.to_dict()
             payload["status"] = "ok"
             return payload
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="brain_entity_detail")
 
@@ -53,7 +67,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
         from ...brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            safe_dir = _validate_wiki_dir(wiki_dir)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
             subgraph = searcher.entity_subgraph(name, depth=depth)
             return {
                 "status": "ok",
@@ -63,6 +78,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
                 "edges": subgraph.edges,
                 "layers": subgraph.layers,
             }
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="brain_entity_subgraph")
 
@@ -71,9 +88,12 @@ def create_brain_router(memos, _kg) -> APIRouter:
         from ...brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            safe_dir = _validate_wiki_dir(wiki_dir)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
             connections = searcher.surprising_connections(top_n=top)
             return {"status": "ok", "connections": connections, "total": len(connections)}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="brain_surprising_connections")
 
@@ -82,7 +102,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
         from ...brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            safe_dir = _validate_wiki_dir(wiki_dir)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
             suggestions = searcher.suggest_questions(top_k=top_k)
             return {
                 "status": "ok",
@@ -97,6 +118,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
                 ],
                 "total": len(suggestions),
             }
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="brain_suggest")
 
@@ -105,7 +128,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
         from ...brain import BrainSearch
 
         try:
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=wiki_dir)
+            safe_dir = _validate_wiki_dir(wiki_dir)
+            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
             suggestions = searcher.suggest_questions(top_k=n)
             return {
                 "status": "ok",
@@ -121,6 +145,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
                 ],
                 "total": len(suggestions),
             }
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="brain_suggestions")
 
