@@ -38,6 +38,34 @@ def parse_date(value: str | float | None) -> Optional[float]:
         raise ValueError(f"Cannot parse date: {value!r}")
 
 
+def validate_safe_path(user_path: str, *, base_dir: str | None = None) -> str:
+    """Validate a user-supplied filesystem path is safe (no traversal).
+
+    Rejects paths containing ``..`` segments.  If *base_dir* is given, the
+    resolved path must also stay within that base directory.
+
+    Returns the resolved absolute path string.
+
+    Raises:
+        ValueError: If the path contains traversal components or escapes base_dir.
+    """
+    from pathlib import Path
+
+    if ".." in Path(user_path).parts:
+        raise ValueError(f"Path traversal rejected: {user_path!r}")
+
+    resolved = Path(user_path).resolve()
+
+    if base_dir is not None:
+        base = Path(base_dir).resolve()
+        try:
+            resolved.relative_to(base)
+        except ValueError:
+            raise ValueError(f"Path escapes base directory: {user_path!r} (base={base})")
+
+    return str(resolved)
+
+
 def get_or_create_kg(memos: Any) -> Any:
     if hasattr(memos, "get_or_create_kg"):
         return memos.get_or_create_kg()
