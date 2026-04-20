@@ -124,7 +124,7 @@ class RateLimiter:
         self.default_window = default_window
         self.rules = rules or list(DEFAULT_RULES)
         self.key_func = key_func
-        self.max_buckets = max_buckets
+        self.max_buckets = max(1, int(max_buckets))
         self.trusted_clients = trusted_clients if trusted_clients is not None else set(_TRUSTED_CLIENTS)
         self._rule_cache: dict[str, EndpointRule] = {}
         self._buckets: OrderedDict[str, dict[str, TokenBucket]] = OrderedDict()
@@ -176,7 +176,7 @@ class RateLimiter:
 
     def _evict_if_needed(self) -> int:
         evicted = self._evict_stale()
-        while len(self._buckets) >= self.max_buckets:
+        while len(self._buckets) >= self.max_buckets and self._buckets:
             oldest_key, _ = self._buckets.popitem(last=False)
             evicted += 1
         return evicted
@@ -187,9 +187,7 @@ class RateLimiter:
         now = time.monotonic()
         stale_keys: list[str] = []
         for key, client_buckets in self._buckets.items():
-            newest_access = max(
-                (b.last_access for b in client_buckets.values()), default=0.0
-            )
+            newest_access = max((b.last_access for b in client_buckets.values()), default=0.0)
             if newest_access > 0 and (now - newest_access) > _STALE_BUCKET_TTL:
                 stale_keys.append(key)
         for key in stale_keys:
@@ -197,18 +195,23 @@ class RateLimiter:
         return len(stale_keys)
 
     def check(self, request: Any) -> tuple[bool, dict[str, str], EndpointRule]:
+        self._evict_stale()
         path = str(request.url.path) if hasattr(request, "url") else "/"
         client = self._client_key(request)
 
         if client in self.trusted_clients:
             rule = self._match_rule(path)
-            return True, {
-                "X-RateLimit-Limit": str(rule.max_requests),
-                "X-RateLimit-Remaining": str(rule.max_requests),
-                "X-RateLimit-Window": str(rule.window_seconds),
-                "X-RateLimit-Policy": rule.pattern,
-                "X-RateLimit-Trusted": "true",
-            }, rule
+            return (
+                True,
+                {
+                    "X-RateLimit-Limit": str(rule.max_requests),
+                    "X-RateLimit-Remaining": str(rule.max_requests),
+                    "X-RateLimit-Window": str(rule.window_seconds),
+                    "X-RateLimit-Policy": rule.pattern,
+                    "X-RateLimit-Trusted": "true",
+                },
+                rule,
+            )
 
         rule = self._match_rule(path)
         bucket = self._get_bucket(client, rule)
@@ -223,6 +226,7 @@ class RateLimiter:
         return allowed, headers, rule
 
     def get_status(self, request: Any) -> dict[str, Any]:
+        self._evict_stale()
         client = self._client_key(request)
         buckets = self._buckets.get(client, {})
         policies = []

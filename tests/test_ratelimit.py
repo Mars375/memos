@@ -306,6 +306,16 @@ class TestBucketEviction:
             limiter.check(req)
         assert len(limiter._buckets) <= 3
 
+    def test_non_positive_max_buckets_clamps_to_one(self):
+        limiter = RateLimiter(default_max=5, rules=[], max_buckets=0)
+        req1 = MockRequest("/api/v1/test", client_host="1.1.1.1")
+        req2 = MockRequest("/api/v1/test", client_host="2.2.2.2")
+        limiter.check(req1)
+        limiter.check(req2)
+        assert limiter.max_buckets == 1
+        assert len(limiter._buckets) == 1
+        assert "2.2.2.2" in limiter._buckets
+
     def test_stale_buckets_evicted_on_access(self):
         limiter = RateLimiter(default_max=5, rules=[], max_buckets=1000)
         req = MockRequest("/api/v1/test", client_host="1.1.1.1")
