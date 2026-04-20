@@ -854,7 +854,7 @@ class MemOS(
             total_tokens=total_chars // 4,
             prunable_tokens=prunable_chars // 4,
             expired_tokens=expired_chars // 4,
-         )
+        )
 
     def search(self, q: str, limit: int = 20) -> list[MemoryItem]:
         """Simple keyword search across all memories."""
@@ -872,4 +872,3 @@ class MemOS(
         """
         self._check_acl("read")
         return self._store.get(item_id, namespace=self._namespace)
-
