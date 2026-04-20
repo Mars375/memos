@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.3.3 (2026-04-20) — Hardening Follow-up
+
+### Security and correctness
+- Serialized `/api/v1/mine/conversation` execution to avoid namespace leakage when conversation mining runs against shared `MemOS` state
+- Hardened rate-limit bucket eviction against invalid `max_buckets` values and fixed stale-bucket cleanup on short-lived CI runners
+- Tightened URL/path safety and public API guardrails introduced during the previous hardening pass
+
+### Architecture and tests
+- Finished the `api/routes/memory.py` decomposition into focused helper modules while preserving the stable router entrypoint
+- Reduced `wiki_engine.py` to a coordinator facade backed by focused core, update, lint, index, and page helper modules
+- Added direct regression coverage for split facades, MCP tools, and wiki modules to reduce reliance on compatibility shims
+
+### Maintenance
+- Refreshed contributor/agent/docs metadata to match the split architecture and current Docker/deployment flow
+- Re-ran Ruff formatting on the new split modules and regression tests so CI formatting checks stay green
+
+---
+
 ## v2.3.2 (2026-04-18) — Core Facades and Scan Reuse
 
 ### Core decomposition

@@ -1,9 +1,9 @@
 # ACTIVE.md — Chantier MemOS
 
-## Statut : ✅ v2.3.2 stable — monolith split mergé, hardening backlog en cours
+## Statut : ✅ v2.3.3 stable — hardening follow-up and final split pass integrated
 
 **Dernière session** : 2026-04-20 — merge du gros cleanup structurel + démarrage d’un nouveau pass A/B/C
-**Base** : `main` v2.3.2 — branche `main` (stable)
+**Base** : `main` v2.3.3 — branche `main` (stable)
 **Validation** : `pytest --collect-only -q` → **2406 tests collectés**
 
 ## Derniers chantiers terminés
