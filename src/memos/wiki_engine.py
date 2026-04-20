@@ -58,8 +58,15 @@ class LivingWikiEngine:
                 encoding="utf-8",
             )
         if not self._log_path.exists():
-            self._log_path.write_text("# Wiki Activity Log\n\n> Append-only journal of wiki changes.\n\n", encoding="utf-8")
-        return {"initialized": True, "wiki_dir": str(self._wiki_dir), "pages_dir": str(pages_dir), "db": str(self._db_path)}
+            self._log_path.write_text(
+                "# Wiki Activity Log\n\n> Append-only journal of wiki changes.\n\n", encoding="utf-8"
+            )
+        return {
+            "initialized": True,
+            "wiki_dir": str(self._wiki_dir),
+            "pages_dir": str(pages_dir),
+            "db": str(self._db_path),
+        }
 
     def update(self, force: bool = False) -> UpdateResult:
         return update(self, force=force)
@@ -83,7 +90,9 @@ class LivingWikiEngine:
             elif issue_type == "empty":
                 report.empty_pages.append(issue["page"])
             elif issue_type == "contradiction":
-                report.contradictions.append({"entity": issue["page"], "conflicting_terms": issue.get("conflicting_terms", [])})
+                report.contradictions.append(
+                    {"entity": issue["page"], "conflicting_terms": issue.get("conflicting_terms", [])}
+                )
             elif issue_type == "stale":
                 report.stale_pages.append(issue["page"])
             elif issue_type == "missing_ref":

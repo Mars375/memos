@@ -60,21 +60,32 @@ def lint_report(engine) -> Dict[str, Any]:
                     continue
                 if in_fm:
                     continue
-                if stripped and not stripped.startswith("<!--") and not stripped.startswith("# ") and not stripped.startswith("## "):
+                if (
+                    stripped
+                    and not stripped.startswith("<!--")
+                    and not stripped.startswith("# ")
+                    and not stripped.startswith("## ")
+                ):
                     real_lines.append(stripped)
             if len(real_lines) < 3:
-                issues.append({"type": "empty", "severity": "warning", "page": ename, "detail": "Page has no real content"})
+                issues.append(
+                    {"type": "empty", "severity": "warning", "page": ename, "detail": "Page has no real content"}
+                )
         else:
             issues.append({"type": "empty", "severity": "warning", "page": ename, "detail": "Page file missing"})
 
         if edata["updated_at"] and (now - edata["updated_at"]) > thirty_days:
             days_stale = int((now - edata["updated_at"]) / 86400)
-            issues.append({"type": "stale", "severity": "info", "page": ename, "detail": f"Not updated in {days_stale} days"})
+            issues.append(
+                {"type": "stale", "severity": "info", "page": ename, "detail": f"Not updated in {days_stale} days"}
+            )
 
     for ename in all_entities:
         mem_contents: List[str] = [
             row["snippet"]
-            for row in db.execute("SELECT em.snippet FROM entity_memories em WHERE em.entity_name = ?", (ename,)).fetchall()
+            for row in db.execute(
+                "SELECT em.snippet FROM entity_memories em WHERE em.entity_name = ?", (ename,)
+            ).fetchall()
         ]
         negated: Set[str] = set()
         affirmed: Set[str] = set()

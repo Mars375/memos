@@ -18,7 +18,9 @@ def regenerate_index(engine, db) -> str:
     }
     source_counts: Dict[str, int] = {
         row["entity_name"]: row["cnt"]
-        for row in db.execute("SELECT entity_name, COUNT(*) as cnt FROM entity_memories GROUP BY entity_name").fetchall()
+        for row in db.execute(
+            "SELECT entity_name, COUNT(*) as cnt FROM entity_memories GROUP BY entity_name"
+        ).fetchall()
     }
     total_backlinks = db.execute("SELECT COUNT(*) FROM backlinks").fetchone()[0]
     total_memory_links = db.execute("SELECT COUNT(*) FROM entity_memories").fetchone()[0]
@@ -33,7 +35,9 @@ def regenerate_index(engine, db) -> str:
         "default": "Concepts",
     }
 
-    sorted_entities = sorted(entities, key=lambda row: (-backlink_counts.get(row["name"], 0), -(row["updated_at"] or 0)))
+    sorted_entities = sorted(
+        entities, key=lambda row: (-backlink_counts.get(row["name"], 0), -(row["updated_at"] or 0))
+    )
     categories: Dict[str, List[Any]] = {"Entities": [], "Concepts": [], "Sources": [], "Topics": []}
     uncategorized: List[Any] = []
     for row in sorted_entities:
@@ -48,18 +52,20 @@ def regenerate_index(engine, db) -> str:
     lines: List[str] = []
     lines.append("# 📚 Living Wiki Index\n")
     lines.append("> Auto-generated Karpathy-style catalog of entities and concepts.\n")
-    lines.extend([
-        "",
-        "## 📊 Statistics\n",
-        "",
-        "| Metric | Value |",
-        "|--------|-------|",
-        f"| Total Pages | {len(entities)} |",
-        f"| Total Memory Links | {total_memory_links} |",
-        f"| Total Wiki Links | {total_backlinks} |",
-        f"| Last Updated | {now_fmt} |",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 📊 Statistics\n",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
+            f"| Total Pages | {len(entities)} |",
+            f"| Total Memory Links | {total_memory_links} |",
+            f"| Total Wiki Links | {total_backlinks} |",
+            f"| Last Updated | {now_fmt} |",
+            "",
+        ]
+    )
 
     recent = db.execute("SELECT ts, action, entity, detail FROM activity_log ORDER BY id DESC LIMIT 10").fetchall()
     if recent:
@@ -78,9 +84,13 @@ def regenerate_index(engine, db) -> str:
         for item in items:
             slug = engine._safe_slug(item["name"])
             summary = engine._get_page_summary(item["name"])
-            created_date = time.strftime("%Y-%m-%d", time.localtime(item["created_at"])) if item["created_at"] else "N/A"
+            created_date = (
+                time.strftime("%Y-%m-%d", time.localtime(item["created_at"])) if item["created_at"] else "N/A"
+            )
             src_count = source_counts.get(item["name"], 0)
-            updated_date = time.strftime("%Y-%m-%d", time.localtime(item["updated_at"])) if item["updated_at"] else "N/A"
+            updated_date = (
+                time.strftime("%Y-%m-%d", time.localtime(item["updated_at"])) if item["updated_at"] else "N/A"
+            )
 
             age = ""
             if item["updated_at"]:
