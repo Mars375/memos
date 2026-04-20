@@ -664,6 +664,9 @@ class MemOS(
                 self._store,
             )
             # Touch all recalled items and batch-persist the updates.
+            # This replaces N individual upserts with a single batch write
+            # for backends that support it (ChromaDB, Qdrant, Pinecone),
+            # falling back to individual upserts otherwise.
             touched_items: list[MemoryItem] = []
             for result in final_results:
                 result.item.touch()
