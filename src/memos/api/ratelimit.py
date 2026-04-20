@@ -187,8 +187,11 @@ class RateLimiter:
         now = time.monotonic()
         stale_keys: list[str] = []
         for key, client_buckets in self._buckets.items():
-            newest_access = max((b.last_access for b in client_buckets.values()), default=0.0)
-            if newest_access > 0 and (now - newest_access) > _STALE_BUCKET_TTL:
+            newest_access = max((b.last_access for b in client_buckets.values()), default=None)
+            if newest_access is None:
+                stale_keys.append(key)
+                continue
+            if (now - newest_access) > _STALE_BUCKET_TTL:
                 stale_keys.append(key)
         for key in stale_keys:
             del self._buckets[key]
