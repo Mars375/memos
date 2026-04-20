@@ -27,7 +27,10 @@ _start_time: float = time.time()
 
 def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: str, DASHBOARD_HTML: str) -> APIRouter:
     """Create the admin/ops API router."""
+    import asyncio
+
     router = APIRouter()
+    conversation_mine_lock = asyncio.Lock()
 
     # ── Stats & Analytics ────────────────────────────────────
 
@@ -102,7 +105,6 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
     @router.post("/api/v1/mine/conversation")
     async def api_mine_conversation(body: MineConversationRequest):
         """Mine a conversation transcript. Accepts text or server-side path."""
-        import asyncio
         import os
         import tempfile
 
@@ -144,7 +146,8 @@ def create_admin_router(memos, _kg, key_manager, rate_limiter, MEMOS_VERSION: st
                 importance=importance,
             )
 
-        result = await asyncio.to_thread(_blocking_mine)
+        async with conversation_mine_lock:
+            result = await asyncio.to_thread(_blocking_mine)
         return {
             "status": "ok" if not result.errors else "partial",
             "imported": result.imported,
