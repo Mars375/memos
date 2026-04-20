@@ -27,7 +27,9 @@ def register_memory_versioning_routes(router: APIRouter, memos) -> None:
         return {"status": "ok", "version": version.to_dict()}
 
     @router.get("/api/v1/memory/{item_id}/diff", response_model=None)
-    async def api_version_diff(item_id: str, v1: int, v2: int | None = None, latest: bool = False) -> dict | JSONResponse:
+    async def api_version_diff(
+        item_id: str, v1: int, v2: int | None = None, latest: bool = False
+    ) -> dict | JSONResponse:
         result = memos.diff_latest(item_id) if latest else memos.diff(item_id, v1, v2) if v2 is not None else None
         if not latest and v2 is None:
             return error_response("Provide v2 or use ?latest=true", status_code=400)

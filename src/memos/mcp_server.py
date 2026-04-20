@@ -112,7 +112,9 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
             headers=_h(sid, request),
         )
 
-    def _err(req_id: Any, code: int, msg: str, status: int = 200, sid: str | None = None, request: Request | None = None) -> JSONResponse:
+    def _err(
+        req_id: Any, code: int, msg: str, status: int = 200, sid: str | None = None, request: Request | None = None
+    ) -> JSONResponse:
         return JSONResponse(
             {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": msg}},
             status_code=status,

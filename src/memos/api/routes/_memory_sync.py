@@ -55,7 +55,9 @@ def register_memory_sync_routes(router: APIRouter, memos, kg_bridge) -> None:
         return {"status": "ok", **detector.apply(memos, report, strategy).to_dict()}
 
     @router.get("/api/v1/export/markdown", response_model=None)
-    async def api_export_markdown(output_dir: str | None = None, update: bool = False, wiki_dir: str | None = None) -> FileResponse:
+    async def api_export_markdown(
+        output_dir: str | None = None, update: bool = False, wiki_dir: str | None = None
+    ) -> FileResponse:
         import asyncio
 
         from ...export_markdown import MarkdownExporter
@@ -86,7 +88,9 @@ def register_memory_sync_routes(router: APIRouter, memos, kg_bridge) -> None:
             return str(zip_path)
 
         zip_path = await asyncio.to_thread(_blocking_export)
-        return FileResponse(zip_path, media_type="application/zip", filename=f"memos-markdown-export-{int(time.time())}.zip")
+        return FileResponse(
+            zip_path, media_type="application/zip", filename=f"memos-markdown-export-{int(time.time())}.zip"
+        )
 
     @router.get("/api/v1/export/parquet", response_model=None)
     async def api_export_parquet(include_metadata: bool = True, compression: str = "zstd") -> FileResponse:
