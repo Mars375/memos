@@ -15,7 +15,9 @@
 
 ## What's new in v2.3.2
 
+- **Monolith split** — decomposed the legacy wiki, MCP, and CLI hotspots into focused modules with backward-compatibility shims
 - **Core decomposition** — extracted dedicated feedback, I/O, maintenance, sharing, and versioning facades out of `core.py`
+- **Additional facades** — extracted dedicated dedup, ingest, namespace, and tag facades from `core.py`
 - **Safer MemOS nucleus** — left `core.py` focused on the primary CRUD and orchestration contract instead of cross-cutting concerns
 - **Scan reuse optimization** — reused preloaded item lists across context, retrieval, and consolidation paths to avoid redundant store scans
 - **Regression coverage** — added facade characterization tests plus scan-reuse tests to preserve behavior while refactoring
@@ -307,8 +309,16 @@ Full stack with ChromaDB + Ollama embeddings:
 ```bash
 git clone https://github.com/Mars375/memos
 cd memos
-docker compose --profile chroma up -d
+docker run -p 8100:8000 \
+  -e MEMOS_BACKEND=chroma \
+  -e MEMOS_CHROMA_URL=http://host.docker.internal:8000 \
+  -e MEMOS_EMBED_HOST=http://host.docker.internal:11434 \
+  --add-host=host.docker.internal:host-gateway \
+  -v memos-data:/root/.memos \
+  ghcr.io/mars375/memos:latest
 ```
+
+If you want MemOS plus ChromaDB/Qdrant together, use your own compose/orchestrator setup — the repository no longer ships a root `docker-compose.yml`.
 
 ---
 
@@ -437,7 +447,7 @@ ruff check src/ tests/
 ruff format src/ tests/
 
 # Tests (Python 3.11 / 3.12 / 3.13)
-pytest -q --tb=short          # ~2100 tests
+pytest -q --tb=short          # ~2400 tests
 pytest tests/test_core.py     # specific module
 ```
 
