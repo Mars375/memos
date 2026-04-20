@@ -55,9 +55,7 @@ class TestMethodSignatures:
 class TestNoDuplicationInCore:
     def test_methods_defined_on_facade(self):
         for name in TAG_METHODS:
-            assert name in TagFacade.__dict__, (
-                f"{name} should be defined on TagFacade, not just inherited"
-            )
+            assert name in TagFacade.__dict__, f"{name} should be defined on TagFacade, not just inherited"
 
 
 class TestListTagsBehavior:

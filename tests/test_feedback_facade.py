@@ -54,9 +54,7 @@ class TestMethodSignatures:
 class TestNoDuplicationInCore:
     def test_methods_defined_on_facade(self):
         for name in FEEDBACK_METHODS:
-            assert name in FeedbackFacade.__dict__, (
-                f"{name} should be defined on FeedbackFacade, not just inherited"
-            )
+            assert name in FeedbackFacade.__dict__, f"{name} should be defined on FeedbackFacade, not just inherited"
 
 
 class TestFeedbackFacadeDelegation:

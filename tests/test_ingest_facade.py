@@ -53,9 +53,7 @@ class TestMethodSignatures:
 class TestNoDuplicationInCore:
     def test_methods_defined_on_facade(self):
         for name in INGEST_METHODS:
-            assert name in IngestFacade.__dict__, (
-                f"{name} should be defined on IngestFacade, not just inherited"
-            )
+            assert name in IngestFacade.__dict__, f"{name} should be defined on IngestFacade, not just inherited"
 
 
 class TestIngestDelegation:
@@ -101,9 +99,7 @@ class TestIngestDelegation:
         with patch("memos.ingest.engine.ingest_file", return_value=fake_result) as mock_ingest:
             result = mem.ingest("/fake/path.md", tags=["test"])
 
-        mock_ingest.assert_called_once_with(
-            "/fake/path.md", tags=["test"], importance=0.5, max_chunk=2000
-        )
+        mock_ingest.assert_called_once_with("/fake/path.md", tags=["test"], importance=0.5, max_chunk=2000)
         assert len(mem.learn_calls) == 2
         assert mem.learn_calls[0]["content"] == "chunk A"
         assert mem.learn_calls[1]["content"] == "chunk B"

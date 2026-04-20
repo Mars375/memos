@@ -72,9 +72,7 @@ class TestMethodSignatures:
 class TestNoDuplicationInCore:
     def test_methods_defined_on_facade(self):
         for name in NAMESPACE_METHODS:
-            assert name in NamespaceFacade.__dict__, (
-                f"{name} should be defined on NamespaceFacade, not just inherited"
-            )
+            assert name in NamespaceFacade.__dict__, f"{name} should be defined on NamespaceFacade, not just inherited"
 
 
 def _make_namespace_dummy():
@@ -108,9 +106,7 @@ class TestGrantNamespaceAccessDelegation:
 
         result = mem.grant_namespace_access("a1", "ns1", "writer")
 
-        mem._acl.grant.assert_called_once_with(
-            "a1", "ns1", Role.WRITER, granted_by="", expires_at=None
-        )
+        mem._acl.grant.assert_called_once_with("a1", "ns1", Role.WRITER, granted_by="", expires_at=None)
         mem._events.emit_sync.assert_called_once()
         assert result == {"agent_id": "a1", "role": "writer"}
 
@@ -122,9 +118,7 @@ class TestGrantNamespaceAccessDelegation:
 
         result = mem.grant_namespace_access("a1", "ns1", Role.OWNER)
 
-        mem._acl.grant.assert_called_once_with(
-            "a1", "ns1", Role.OWNER, granted_by="", expires_at=None
-        )
+        mem._acl.grant.assert_called_once_with("a1", "ns1", Role.OWNER, granted_by="", expires_at=None)
         assert result["role"] == "owner"
 
 

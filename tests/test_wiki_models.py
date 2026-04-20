@@ -70,9 +70,7 @@ class TestLivingPage:
         assert page._slug_cache is not None
 
     def test_memory_count_property(self) -> None:
-        page = LivingPage(
-            entity="X", entity_type="default", path=Path("/tmp/x.md"), memory_ids=["m1", "m2", "m3"]
-        )
+        page = LivingPage(entity="X", entity_type="default", path=Path("/tmp/x.md"), memory_ids=["m1", "m2", "m3"])
         assert page.memory_count == 3
 
     def test_memory_count_empty(self) -> None:

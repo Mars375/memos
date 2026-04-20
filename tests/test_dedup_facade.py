@@ -57,9 +57,7 @@ class TestMethodSignatures:
 class TestNoDuplicationInCore:
     def test_methods_defined_on_facade(self):
         for name in ("dedup_set_enabled", "dedup_check", "dedup_scan"):
-            assert name in DedupFacade.__dict__, (
-                f"{name} should be defined on DedupFacade, not just inherited"
-            )
+            assert name in DedupFacade.__dict__, f"{name} should be defined on DedupFacade, not just inherited"
 
     def test_dedup_enabled_property_on_facade(self):
         assert "dedup_enabled" in DedupFacade.__dict__
