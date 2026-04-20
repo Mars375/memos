@@ -10,9 +10,23 @@ Features:
 
 from __future__ import annotations
 
+import ipaddress
+import os
+import re
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+# ── Rate limiter configuration ──────────────────────────────────
+
+_TRUSTED_CLIENTS: frozenset[str] = frozenset(
+    c.strip() for c in os.environ.get("MEMOS_TRUSTED_CLIENTS", "").split(",") if c.strip()
+)
+
+_MAX_BUCKETS: int = int(os.environ.get("MEMOS_RATELIMIT_MAX_BUCKETS", "10000"))
+
+_STALE_BUCKET_TTL: float = float(os.environ.get("MEMOS_RATELIMIT_BUCKET_TTL", "3600"))
 
 
 @dataclass
@@ -27,10 +41,12 @@ class TokenBucket:
     refill_rate: float  # tokens per second
     tokens: float = 0.0
     last_refill: float = field(default_factory=time.monotonic)
+    last_access: float = field(default_factory=time.monotonic)
 
     def consume(self, n: int = 1) -> bool:
         """Try to consume n tokens. Returns True if allowed."""
         self._refill()
+        self.last_access = time.monotonic()
         if self.tokens >= n:
             self.tokens -= n
             return True
@@ -91,6 +107,8 @@ class RateLimiter:
         rules: List of EndpointRule patterns. Uses first match (most specific first).
         key_func: Optional callable(request) -> str to extract client identifier.
                   Defaults to X-Forwarded-For or client IP.
+        max_buckets: Maximum number of client buckets before eviction.
+        trusted_clients: Set of client identifiers that bypass rate limiting.
     """
 
     def __init__(
@@ -99,42 +117,55 @@ class RateLimiter:
         default_window: float = 60.0,
         rules: Optional[list[EndpointRule]] = None,
         key_func: Any = None,
+        max_buckets: int = _MAX_BUCKETS,
+        trusted_clients: Optional[set[str]] = None,
     ) -> None:
         self.default_max = default_max
         self.default_window = default_window
         self.rules = rules or list(DEFAULT_RULES)
         self.key_func = key_func
-        # {client_key: {endpoint_pattern: TokenBucket}}
-        self._buckets: dict[str, dict[str, TokenBucket]] = {}
+        self.max_buckets = max_buckets
+        self.trusted_clients = trusted_clients if trusted_clients is not None else set(_TRUSTED_CLIENTS)
+        self._rule_cache: dict[str, EndpointRule] = {}
+        self._buckets: OrderedDict[str, dict[str, TokenBucket]] = OrderedDict()
 
     def _client_key(self, request: Any) -> str:
-        """Extract client identifier from request."""
         if self.key_func:
             return self.key_func(request)
         forwarded = None
         if hasattr(request, "headers"):
             forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            first = forwarded.split(",")[0].strip()
+            if first and not _is_spoofed_xff(first):
+                return first
         if hasattr(request, "client") and request.client:
             return str(request.client.host)
         return "anonymous"
 
     def _match_rule(self, path: str) -> EndpointRule:
-        """Find the first matching rule for the given path."""
+        cached = self._rule_cache.get(path)
+        if cached is not None:
+            return cached
         for rule in self.rules:
             if path.startswith(rule.pattern):
+                self._rule_cache[path] = rule
                 return rule
-        return EndpointRule(
+        default = EndpointRule(
             pattern="__default__",
             max_requests=self.default_max,
             window_seconds=self.default_window,
         )
+        self._rule_cache[path] = default
+        return default
 
     def _get_bucket(self, client: str, rule: EndpointRule) -> TokenBucket:
-        """Get or create a token bucket for a client+rule combination."""
         if client not in self._buckets:
+            self._evict_if_needed()
             self._buckets[client] = {}
+            self._buckets.move_to_end(client)
+        else:
+            self._buckets.move_to_end(client)
         if rule.pattern not in self._buckets[client]:
             self._buckets[client][rule.pattern] = TokenBucket(
                 max_tokens=rule.max_requests,
@@ -143,14 +174,42 @@ class RateLimiter:
             )
         return self._buckets[client][rule.pattern]
 
-    def check(self, request: Any) -> tuple[bool, dict[str, str], EndpointRule]:
-        """Check if a request is allowed.
+    def _evict_if_needed(self) -> int:
+        evicted = self._evict_stale()
+        while len(self._buckets) >= self.max_buckets:
+            oldest_key, _ = self._buckets.popitem(last=False)
+            evicted += 1
+        return evicted
 
-        Returns:
-            (allowed, headers, matched_rule)
-        """
+    def _evict_stale(self) -> int:
+        if _STALE_BUCKET_TTL <= 0:
+            return 0
+        now = time.monotonic()
+        stale_keys: list[str] = []
+        for key, client_buckets in self._buckets.items():
+            newest_access = max(
+                (b.last_access for b in client_buckets.values()), default=0.0
+            )
+            if newest_access > 0 and (now - newest_access) > _STALE_BUCKET_TTL:
+                stale_keys.append(key)
+        for key in stale_keys:
+            del self._buckets[key]
+        return len(stale_keys)
+
+    def check(self, request: Any) -> tuple[bool, dict[str, str], EndpointRule]:
         path = str(request.url.path) if hasattr(request, "url") else "/"
         client = self._client_key(request)
+
+        if client in self.trusted_clients:
+            rule = self._match_rule(path)
+            return True, {
+                "X-RateLimit-Limit": str(rule.max_requests),
+                "X-RateLimit-Remaining": str(rule.max_requests),
+                "X-RateLimit-Window": str(rule.window_seconds),
+                "X-RateLimit-Policy": rule.pattern,
+                "X-RateLimit-Trusted": "true",
+            }, rule
+
         rule = self._match_rule(path)
         bucket = self._get_bucket(client, rule)
         allowed = bucket.consume()
@@ -164,7 +223,6 @@ class RateLimiter:
         return allowed, headers, rule
 
     def get_status(self, request: Any) -> dict[str, Any]:
-        """Get rate limit status for the requesting client."""
         client = self._client_key(request)
         buckets = self._buckets.get(client, {})
         policies = []
@@ -179,27 +237,42 @@ class RateLimiter:
             )
         return {
             "client": client,
+            "trusted": client in self.trusted_clients,
             "policies": policies,
             "total_policies": len(policies),
             "default_limit": self.default_max,
             "default_window": self.default_window,
+            "active_clients": len(self._buckets),
+            "max_clients": self.max_buckets,
         }
 
     def reset(self, client: Optional[str] = None) -> int:
-        """Reset rate limit counters.
-
-        Args:
-            client: If provided, reset only for this client. Otherwise reset all.
-
-        Returns:
-            Number of buckets reset.
-        """
         if client:
             count = len(self._buckets.pop(client, {}))
         else:
             count = sum(len(v) for v in self._buckets.values())
             self._buckets.clear()
         return count
+
+
+_HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9.\-]*[a-zA-Z0-9])?$")
+
+
+def _is_spoofed_xff(value: str) -> bool:
+    """Detect obviously malformed XFF values that look spoofed."""
+    stripped = value.strip()
+    if not stripped:
+        return True
+    # Valid IPv4 or IPv6
+    try:
+        ipaddress.ip_address(stripped)
+        return False
+    except ValueError:
+        pass
+    # Valid hostname (letters, digits, hyphens, dots)
+    if _HOSTNAME_RE.match(stripped):
+        return False
+    return True
 
 
 def create_rate_limit_middleware(limiter: RateLimiter):
