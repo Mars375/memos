@@ -491,10 +491,12 @@ class TestSharingEdgeCases:
             SharingEngine.import_envelope(env)
 
     def test_share_id_unique(self):
+        from unittest.mock import patch
+
         engine = SharingEngine()
-        with freeze_time("2024-01-01 12:00:00") as frozen:
+        with patch("memos.sharing.models.time.time", return_value=1704110400.0):
             req1 = engine.offer("a", "b")
-            frozen.tick(1)
+        with patch("memos.sharing.models.time.time", return_value=1704110401.0):
             req2 = engine.offer("a", "b")
         assert req1.id != req2.id
 
