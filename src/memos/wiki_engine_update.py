@@ -191,7 +191,9 @@ def refresh_entity_page(engine, entity: str, trigger: str | None = None, db=None
 
         page_path.write_text(content, encoding="utf-8")
         db.execute("UPDATE entities SET updated_at = ? WHERE name = ?", (time.time(), entity))
-        engine._log_action(db, "refresh", entity, f"Refreshed page (trigger: {trigger})" if trigger else "Refreshed page")
+        engine._log_action(
+            db, "refresh", entity, f"Refreshed page (trigger: {trigger})" if trigger else "Refreshed page"
+        )
         if own_db:
             db.commit()
     finally:

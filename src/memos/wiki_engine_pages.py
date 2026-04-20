@@ -62,7 +62,9 @@ def search(engine, query: str) -> List[Dict[str, Any]]:
 def get_log(engine, limit: int = 20) -> List[Dict[str, Any]]:
     engine.init()
     db = engine._get_db()
-    rows = db.execute("SELECT ts, action, entity, detail FROM activity_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    rows = db.execute(
+        "SELECT ts, action, entity, detail FROM activity_log ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
     db.close()
     return [
         {
@@ -121,16 +123,22 @@ def list_pages(engine) -> List[LivingPage]:
     engine.init()
     db = engine._get_db()
     pages: List[LivingPage] = []
-    for row in db.execute("SELECT name, entity_type, page_path, created_at, updated_at FROM entities ORDER BY name").fetchall():
+    for row in db.execute(
+        "SELECT name, entity_type, page_path, created_at, updated_at FROM entities ORDER BY name"
+    ).fetchall():
         slug = engine._safe_slug(row["name"])
         page_path = engine._wiki_dir / "pages" / f"{slug}.md"
         memory_ids = [
             result["memory_id"]
-            for result in db.execute("SELECT memory_id FROM entity_memories WHERE entity_name = ?", (row["name"],)).fetchall()
+            for result in db.execute(
+                "SELECT memory_id FROM entity_memories WHERE entity_name = ?", (row["name"],)
+            ).fetchall()
         ]
         backlinks = [
             result["target_entity"]
-            for result in db.execute("SELECT target_entity FROM backlinks WHERE source_entity = ?", (row["name"],)).fetchall()
+            for result in db.execute(
+                "SELECT target_entity FROM backlinks WHERE source_entity = ?", (row["name"],)
+            ).fetchall()
         ]
         pages.append(
             LivingPage(
