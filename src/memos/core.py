@@ -14,7 +14,6 @@ from ._constants import (
     DEFAULT_DEDUP_THRESHOLD,
     DEFAULT_EMBED_TIMEOUT,
     DEFAULT_IMPORTANCE,
-    DEFAULT_MAX_CHUNK_SIZE,
     DEFAULT_MAX_MEMORIES,
     DEFAULT_MAX_VERSIONS_PER_ITEM,
     DEFAULT_SEMANTIC_WEIGHT,
@@ -23,20 +22,23 @@ from ._constants import (
     SECONDS_PER_DAY,
     STATS_DECAY_THRESHOLD,
 )
+from ._dedup_facade import DedupFacade
 from ._feedback_facade import FeedbackFacade
+from ._ingest_facade import IngestFacade
 from ._io_facade import IOFacade
 from ._maintenance_facade import MaintenanceFacade
+from ._namespace_facade import NamespaceFacade
 from ._sharing_facade import SharingFacade
+from ._tag_facade import TagFacade
 from ._versioning_facade import VersioningFacade
 from .analytics import RecallAnalytics
 from .cache.embedding_cache import EmbeddingCache
 from .crypto import MemoryCrypto
 from .decay.engine import DecayEngine
-from .dedup import DedupCheckResult, DedupEngine, DedupScanResult
+from .dedup import DedupEngine
 from .events import EventBus
-from .ingest.engine import IngestResult
 from .models import MemoryItem, MemoryStats, RecallResult, generate_id
-from .namespaces.acl import NamespaceACL, Role
+from .namespaces.acl import NamespaceACL
 from .query import MemoryQuery, QueryEngine
 from .retrieval.engine import RetrievalEngine
 from .sanitizer import MemorySanitizer
@@ -51,7 +53,17 @@ from .versioning.engine import VersioningEngine
 logger = logging.getLogger(__name__)
 
 
-class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, MaintenanceFacade):
+class MemOS(
+    IOFacade,
+    VersioningFacade,
+    SharingFacade,
+    FeedbackFacade,
+    MaintenanceFacade,
+    DedupFacade,
+    IngestFacade,
+    TagFacade,
+    NamespaceFacade,
+):
     """Memory Operating System for LLM Agents.
 
     Usage:
@@ -491,70 +503,6 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
 
         return item
 
-    # ── Dedup ──────────────────────────────────────────
-
-    @property
-    def dedup_enabled(self) -> bool:
-        """Whether dedup checking is enabled."""
-        return self._dedup_enabled
-
-    def dedup_set_enabled(self, enabled: bool = True, threshold: float = DEFAULT_DEDUP_THRESHOLD) -> None:
-        """Enable or disable dedup checking at write time.
-
-        Args:
-            enabled: Enable dedup on learn().
-            threshold: Similarity threshold (0.0-1.0) for near-duplicate detection.
-        """
-        self._dedup_enabled = enabled
-        self._dedup_threshold = threshold
-        if enabled:
-            self._dedup_engine = DedupEngine(
-                self._store,
-                threshold=threshold,
-                namespace=self._namespace or None,
-            )
-        else:
-            self._dedup_engine = None
-
-    def dedup_check(self, content: str, *, threshold: Optional[float] = None) -> "DedupCheckResult":
-        """Check if content would be a duplicate.
-
-        Args:
-            content: Content to check.
-            threshold: Override threshold for this check.
-
-        Returns:
-            DedupCheckResult with is_duplicate, match, reason, similarity.
-        """
-        if self._dedup_engine is None:
-            self._dedup_engine = DedupEngine(
-                self._store,
-                threshold=threshold or self._dedup_threshold,
-                namespace=self._namespace or None,
-            )
-        return self._dedup_engine.check(content, threshold=threshold)
-
-    def dedup_scan(self, *, fix: bool = False, threshold: Optional[float] = None) -> "DedupScanResult":
-        """Scan all memories for duplicates.
-
-        Args:
-            fix: If True, remove found duplicates.
-            threshold: Override threshold for this scan.
-
-        Returns:
-            DedupScanResult with counts and details.
-        """
-        if self._dedup_engine is None:
-            self._dedup_engine = DedupEngine(
-                self._store,
-                threshold=threshold or self._dedup_threshold,
-                namespace=self._namespace or None,
-            )
-        result = self._dedup_engine.scan(fix=fix, threshold=threshold)
-        if fix:
-            self._dedup_engine.invalidate_cache()
-        return result
-
     def batch_learn(
         self,
         items: list[dict[str, Any]],
@@ -908,98 +856,6 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
             expired_tokens=expired_chars // 4,
         )
 
-    def list_tags(self, sort: str = "count", limit: int = 0) -> list[tuple[str, int]]:
-        """List all tags with their memory counts.
-
-        Args:
-            sort: "count" (descending) or "name" (alphabetical).
-            limit: Max tags to return. 0 = all.
-
-        Returns:
-            List of (tag, count) tuples.
-        """
-        self._check_acl("read")
-        items = self._store.list_all(namespace=self._namespace)
-        tag_counts: dict[str, int] = {}
-        for item in items:
-            for tag in item.tags:
-                tag_counts[tag] = tag_counts.get(tag, 0) + 1
-
-        if sort == "name":
-            result = sorted(tag_counts.items(), key=lambda x: x[0])
-        else:
-            result = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
-
-        if limit > 0:
-            result = result[:limit]
-        return result
-
-    def rename_tag(self, old_tag: str, new_tag: str) -> int:
-        """Rename a tag across all memories.
-
-        Args:
-            old_tag: Tag name to replace.
-            new_tag: New tag name.
-
-        Returns:
-            Number of memories updated.
-        """
-        self._check_acl("write")
-        updated = 0
-        old_lower = old_tag.lower()
-        for item in self._store.list_all(namespace=self._namespace):
-            tags_lower = [t.lower() for t in item.tags]
-            if old_lower not in tags_lower:
-                continue
-            new_tags = [new_tag if t.lower() == old_lower else t for t in item.tags]
-            item.tags = new_tags
-            item.accessed_at = time.time()
-            self._store.upsert(item, namespace=self._namespace)
-            self._versioning.record_version(item, source="rename_tag")
-            self._events.emit_sync(
-                "tag_renamed",
-                {
-                    "id": item.id,
-                    "old_tag": old_tag,
-                    "new_tag": new_tag,
-                },
-                namespace=self._namespace,
-            )
-            updated += 1
-        return updated
-
-    def delete_tag(self, tag: str) -> int:
-        """Delete a tag from all memories without removing the memories.
-
-        Args:
-            tag: Tag name to remove.
-
-        Returns:
-            Number of memories updated.
-        """
-        self._check_acl("write")
-        updated = 0
-        tag_lower = tag.lower()
-        for item in self._store.list_all(namespace=self._namespace):
-            tags_lower = [t.lower() for t in item.tags]
-            if tag_lower not in tags_lower:
-                continue
-            new_tags = [t for t in item.tags if t.lower() != tag_lower]
-            item.tags = new_tags
-            item.accessed_at = time.time()
-            self._store.upsert(item, namespace=self._namespace)
-            self._versioning.record_version(item, source="delete_tag")
-            self._events.emit_sync(
-                "tag_deleted",
-                {
-                    "id": item.id,
-                    "tag": tag,
-                },
-                namespace=self._namespace,
-            )
-            updated += 1
-        return updated
-
     def search(self, q: str, limit: int = 20) -> list[MemoryItem]:
         """Simple keyword search across all memories."""
         self._check_acl("read")
@@ -1016,162 +872,3 @@ class MemOS(IOFacade, VersioningFacade, SharingFacade, FeedbackFacade, Maintenan
         """
         self._check_acl("read")
         return self._store.get(item_id, namespace=self._namespace)
-
-    def list_namespaces(self) -> list[str]:
-        """List all non-default namespaces."""
-        return self._store.list_namespaces()
-
-    # ── Namespace ACL Management ───────────────────────────
-
-    def grant_namespace_access(
-        self,
-        agent_id: str,
-        namespace: str,
-        role: str | Role,
-        *,
-        granted_by: str = "",
-        expires_at: Optional[float] = None,
-    ) -> dict[str, Any]:
-        """Grant an agent access to a namespace.
-
-        Args:
-            agent_id: Unique identifier for the agent.
-            namespace: Target namespace.
-            role: Access role ("owner", "writer", "reader", "denied").
-            granted_by: ID of the agent performing the grant.
-            expires_at: Optional Unix timestamp when access expires.
-
-        Returns:
-            The created policy as a dict.
-        """
-        if isinstance(role, str):
-            role = Role(role)
-        policy = self._acl.grant(
-            agent_id,
-            namespace,
-            role,
-            granted_by=granted_by,
-            expires_at=expires_at,
-        )
-        self._events.emit_sync(
-            "acl_granted",
-            {
-                "agent_id": agent_id,
-                "namespace": namespace,
-                "role": role.value,
-            },
-            namespace=namespace,
-        )
-        return policy.to_dict()
-
-    def revoke_namespace_access(
-        self,
-        agent_id: str,
-        namespace: str,
-    ) -> bool:
-        """Revoke an agent's access to a namespace.
-
-        Returns True if a policy was revoked, False if none existed.
-        """
-        removed = self._acl.revoke(agent_id, namespace)
-        if removed:
-            self._events.emit_sync(
-                "acl_revoked",
-                {
-                    "agent_id": agent_id,
-                    "namespace": namespace,
-                },
-                namespace=namespace,
-            )
-            return True
-        return False
-
-    def list_namespace_policies(
-        self,
-        namespace: Optional[str] = None,
-    ) -> list[dict[str, Any]]:
-        """List ACL policies, optionally filtered by namespace."""
-        return [p.to_dict() for p in self._acl.list_policies(namespace=namespace)]
-
-    def namespace_acl_stats(self) -> dict[str, Any]:
-        """Get namespace ACL statistics."""
-        return self._acl.stats()
-
-    def ingest(
-        self,
-        path: str,
-        *,
-        tags: list[str] | None = None,
-        importance: float = DEFAULT_IMPORTANCE,
-        max_chunk: int = DEFAULT_MAX_CHUNK_SIZE,
-        dry_run: bool = False,
-    ) -> "IngestResult":
-        """Parse and store memories from a file (markdown, JSON, txt)."""
-        from .ingest.engine import ingest_file
-
-        result = ingest_file(path, tags=tags, importance=importance, max_chunk=max_chunk)
-
-        if not dry_run:
-            for chunk in result.chunks:
-                try:
-                    self.learn(
-                        chunk["content"],
-                        tags=chunk.get("tags", []),
-                        importance=chunk.get("importance", importance),
-                        metadata=chunk.get("metadata", {}),
-                    )
-                except Exception as e:
-                    result.errors.append(f"Failed to store chunk: {e}")
-
-        return result
-
-    def ingest_url(
-        self,
-        url: str,
-        *,
-        tags: list[str] | None = None,
-        importance: float = DEFAULT_IMPORTANCE,
-        max_chunk: int = DEFAULT_MAX_CHUNK_SIZE,
-        dry_run: bool = False,
-        skip_sanitization: bool = False,
-    ) -> "IngestResult":
-        """Fetch a URL, extract its contents, and store it as memories."""
-        from .ingest.url import URLIngestor
-
-        result = URLIngestor().ingest(
-            url,
-            tags=tags,
-            importance=importance,
-            max_chunk=max_chunk,
-        )
-
-        if not dry_run:
-            for chunk in result.chunks:
-                if skip_sanitization:
-                    # Bypass sanitizer: store as a MemoryItem directly
-                    try:
-                        item = MemoryItem(
-                            id=generate_id(chunk["content"]),
-                            content=chunk["content"],
-                            tags=chunk.get("tags", []),
-                            importance=chunk.get("importance", importance),
-                            metadata=chunk.get("metadata", {}),
-                        )
-                        self._store.upsert(item, namespace=self._namespace)
-                        self._retrieval.index(item)
-                        self._versioning.record_version(item, source="ingest_url")
-                        continue
-                    except Exception as e:
-                        result.errors.append(f"Failed to store chunk (skip_sanitization): {e}")
-                        continue
-                try:
-                    self.learn(
-                        chunk["content"],
-                        tags=chunk.get("tags", []),
-                        importance=chunk.get("importance", importance),
-                        metadata=chunk.get("metadata", {}),
-                    )
-                except Exception as e:
-                    result.errors.append(f"Failed to store chunk: {e}")
-
-        return result
