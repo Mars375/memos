@@ -44,14 +44,7 @@ def _is_private_ip(addr: str) -> bool:
         ip = ipaddress.ip_address(addr)
     except ValueError:
         return False
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
 
 
 def _resolve_host(hostname: str) -> list[str]:
@@ -60,6 +53,7 @@ def _resolve_host(hostname: str) -> list[str]:
         return [r[4][0] for r in results]
     except socket.gaierror:
         return []
+
 
 _META_RE = re.compile(
     r"<meta[^>]+(?:name|property)=[\"'](?P<key>[^\"']+)[\"'][^>]+content=[\"'](?P<value>.*?)[\"'][^>]*>",

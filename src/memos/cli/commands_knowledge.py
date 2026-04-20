@@ -289,6 +289,3 @@ def cmd_wiki_read(ns: argparse.Namespace) -> None:
         print(f"No wiki page found for tag '{ns.tag}'. Run: memos wiki-compile", file=sys.stderr)
         sys.exit(1)
     print(content)
-
-
-
