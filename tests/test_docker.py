@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -30,34 +28,6 @@ def test_cli_env_vars():
     assert ns.port == 8000
 
 
-# ── Compose tests removed — docker-compose.yml deleted in 25183a5 ──────────
+# ── Compose tests removed ──────────────────────────────────────────────────
+# docker-compose.yml was deleted in commit 25183a5.
 # Docker deployment now uses `docker run` (see README).
-# These are kept as xfail markers so CI stays green and the intent is documented.
-
-
-@pytest.mark.skip(reason="docker-compose.yml removed in 25183a5")
-def test_compose_exists():
-    assert (ROOT / "docker-compose.yml").is_file(), "docker-compose.yml missing"
-
-
-@pytest.mark.skip(reason="docker-compose.yml removed in 25183a5")
-def test_compose_has_memos_and_chroma():
-    content = (ROOT / "docker-compose.yml").read_text()
-    assert "memos:" in content
-    assert "chroma:" in content
-    assert "MEMOS_BACKEND=chroma" in content
-    assert "MEMOS_CHROMA_URL" in content
-
-
-@pytest.mark.skip(reason="docker-compose.yml removed in 25183a5")
-def test_compose_valid_yaml():
-    """Validate docker-compose.yml parses as valid YAML."""
-    try:
-        import yaml
-    except ImportError:
-        return
-    data = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
-    assert "services" in data
-    assert "memos" in data["services"]
-    assert "chroma" in data["services"]
-    assert data["services"]["memos"]["depends_on"] is not None
