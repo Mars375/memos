@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..utils import parse_date as _parse_date
 from ._registry import _error, _text, register_tool
 
 # ---------------------------------------------------------------------------
@@ -157,15 +158,6 @@ _MEMORY_CONTEXT_FOR = {
 
 
 def _handle_memory_search(args: dict, memos: Any) -> dict:
-    from datetime import datetime as _dt
-
-    def _parse_date(value: Any) -> float | None:
-        if not value:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        return _dt.fromisoformat(str(value)).timestamp()
-
     query = args.get("query", "")
     top_k = int(args.get("top_k", 5))
     tags = args.get("tags") or []

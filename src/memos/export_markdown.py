@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .knowledge_graph import KnowledgeGraph
+from .utils import get_or_create_kg as _get_or_create_kg
 from .wiki_graph import GraphWikiEngine
 from .wiki_living import LivingWikiEngine
 
@@ -56,15 +57,10 @@ class MarkdownExporter:
         wiki_dir: str | None = None,
     ) -> None:
         self._memos = memos
-        existing_kg = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
         if kg is not None:
             self._kg = kg
-        elif hasattr(memos, "get_or_create_kg"):
-            self._kg = memos.get_or_create_kg()
-        elif existing_kg is not None:
-            self._kg = existing_kg
         else:
-            self._kg = KnowledgeGraph()
+            self._kg = _get_or_create_kg(memos)
         self._wiki = LivingWikiEngine(memos, wiki_dir=wiki_dir)
 
     def export(self, output_dir: str, update: bool = False) -> MarkdownExportResult:

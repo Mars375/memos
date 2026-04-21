@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from ..utils import get_or_create_kg as _get_kg_impl
+from ..utils import get_or_create_kg_bridge as _get_kg_bridge_impl
+
 # ---------------------------------------------------------------------------
 # Internal registries
 # ---------------------------------------------------------------------------
@@ -28,36 +31,12 @@ def _error(msg: str) -> dict:
 
 def _get_kg(memos: Any) -> Any:
     """Resolve or create a KnowledgeGraph instance from *memos*."""
-    if hasattr(memos, "get_or_create_kg"):
-        return memos.get_or_create_kg()
-
-    from ..knowledge_graph import KnowledgeGraph
-
-    kg_instance = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
-    if kg_instance is None:
-        kg_instance = KnowledgeGraph()
-        if hasattr(memos, "kg"):
-            memos.kg = kg_instance
-        else:
-            memos._kg = kg_instance
-    return kg_instance
+    return _get_kg_impl(memos)
 
 
 def _get_kg_bridge(memos: Any, kg_instance: Any) -> Any:
     """Resolve or create a KGBridge instance from *memos* and *kg_instance*."""
-    if hasattr(memos, "get_or_create_kg_bridge"):
-        return memos.get_or_create_kg_bridge(kg_instance)
-
-    from ..kg_bridge import KGBridge
-
-    bridge = getattr(memos, "kg_bridge", None) or getattr(memos, "_kg_bridge", None)
-    if bridge is None or getattr(bridge, "kg", None) is not kg_instance:
-        bridge = KGBridge(memos, kg_instance)
-        if hasattr(memos, "kg_bridge"):
-            memos.kg_bridge = bridge
-        else:
-            memos._kg_bridge = bridge
-    return bridge
+    return _get_kg_bridge_impl(memos, kg_instance)
 
 
 # ---------------------------------------------------------------------------

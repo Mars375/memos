@@ -67,16 +67,28 @@ def validate_safe_path(user_path: str, *, base_dir: str | None = None) -> str:
 
 
 def get_or_create_kg(memos: Any) -> Any:
+    """Return a KG instance, delegating to ``memos.get_or_create_kg`` when available."""
     if hasattr(memos, "get_or_create_kg"):
         return memos.get_or_create_kg()
 
     from .knowledge_graph import KnowledgeGraph
 
-    kg_instance = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
+    kg_instance = getattr(memos, "kg", None)
     if kg_instance is None:
         kg_instance = KnowledgeGraph()
-        if hasattr(memos, "kg"):
-            memos.kg = kg_instance
-        else:
-            memos._kg = kg_instance
+        memos.kg = kg_instance
     return kg_instance
+
+
+def get_or_create_kg_bridge(memos: Any, kg_instance: Any) -> Any:
+    """Return a KGBridge, delegating to ``memos.get_or_create_kg_bridge`` when available."""
+    if hasattr(memos, "get_or_create_kg_bridge"):
+        return memos.get_or_create_kg_bridge(kg_instance)
+
+    from .kg_bridge import KGBridge
+
+    bridge = getattr(memos, "kg_bridge", None)
+    if bridge is None or getattr(bridge, "kg", None) is not kg_instance:
+        bridge = KGBridge(memos, kg_instance)
+        memos.kg_bridge = bridge
+    return bridge
