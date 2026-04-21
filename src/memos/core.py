@@ -48,6 +48,7 @@ from .storage.encrypted_backend import EncryptedStorageBackend
 from .storage.json_backend import JsonFileBackend
 from .storage.memory_backend import InMemoryBackend
 from .tagger import AutoTagger
+from .utils import coerce_tags
 from .versioning.engine import VersioningEngine
 
 logger = logging.getLogger(__name__)
@@ -229,8 +230,6 @@ class MemOS(
         # Feedback is stored in memory item metadata["_feedback"] for persistence
 
         # Compounding ingest (P8) — auto-update wiki pages on every learn()
-        self._compounding_ingest: bool = False
-        self._compounding_wiki: Optional[Any] = None
         self._living_wiki: Optional[Any] = None
         self._wiki_auto_update: bool = False
         self._kg_instance: Any | None = None
@@ -250,22 +249,18 @@ class MemOS(
         """
         from .wiki_living import LivingWikiEngine
 
-        self._compounding_wiki = LivingWikiEngine(self, wiki_dir=wiki_dir)
-        self._living_wiki = self._compounding_wiki
-        self._compounding_ingest = True
+        self._living_wiki = LivingWikiEngine(self, wiki_dir=wiki_dir)
         self._wiki_auto_update = True
 
     def disable_compounding_ingest(self) -> None:
         """Disable compounding ingest."""
-        self._compounding_ingest = False
-        self._compounding_wiki = None
         self._living_wiki = None
         self._wiki_auto_update = False
 
     @property
     def compounding_ingest(self) -> bool:
         """Whether compounding ingest is currently enabled."""
-        return self._compounding_ingest
+        return self._wiki_auto_update
 
     @property
     def wiki_auto_update(self) -> bool:
@@ -281,6 +276,15 @@ class MemOS(
     def living_wiki(self) -> Any:
         """The LivingWikiEngine instance, or None if not initialized."""
         return self._living_wiki
+
+    @property
+    def _compounding_wiki(self) -> Any:
+        """Backward-compatible alias for older compounding-ingest integrations."""
+        return self._living_wiki
+
+    @_compounding_wiki.setter
+    def _compounding_wiki(self, value: Any) -> None:
+        self._living_wiki = value
 
     @property
     def namespace(self) -> str:
@@ -305,30 +309,12 @@ class MemOS(
         self._kg_instance = value
 
     @property
-    def _kg(self) -> Any | None:
-        """Backward-compatible alias for older integrations."""
-        return self._kg_instance
-
-    @_kg.setter
-    def _kg(self, value: Any | None) -> None:
-        self._kg_instance = value
-
-    @property
     def kg_bridge(self) -> Any | None:
         """Public KG bridge handle, if one has been initialized."""
         return self._kg_bridge_instance
 
     @kg_bridge.setter
     def kg_bridge(self, value: Any | None) -> None:
-        self._kg_bridge_instance = value
-
-    @property
-    def _kg_bridge(self) -> Any | None:
-        """Backward-compatible alias for older integrations."""
-        return self._kg_bridge_instance
-
-    @_kg_bridge.setter
-    def _kg_bridge(self, value: Any | None) -> None:
         self._kg_bridge_instance = value
 
     def get_or_create_kg(self) -> Any:
@@ -359,6 +345,41 @@ class MemOS(
         if not self._namespace or not hasattr(self, "_agent_id") or not self._agent_id:
             return
         self._acl.check(self._agent_id, self._namespace, permission)
+
+    def _validate_content(self, content: str) -> None:
+        if not content or not content.strip():
+            raise ValueError("Memory content cannot be empty")
+        if self._sanitize:
+            issues = MemorySanitizer.check(content)
+            if issues:
+                raise ValueError(f"Memory failed sanitization: {issues}")
+
+    def _batch_upsert_items(self, items: list[MemoryItem]) -> None:
+        if hasattr(self._store, "upsert_batch") and len(items) > 1:
+            try:
+                self._store.upsert_batch(items, namespace=self._namespace)
+                return
+            except AttributeError:
+                pass
+        for item in items:
+            self._store.upsert(item, namespace=self._namespace)
+
+    def _forget_by_id(self, item_id: str, *, source: str = "forget") -> bool:
+        item = self._store.get(item_id, namespace=self._namespace)
+        if not self._store.delete(item_id, namespace=self._namespace):
+            return False
+        if item is not None:
+            self._versioning.record_version(item, source=source)
+        self._events.emit_sync(
+            "forgotten",
+            {
+                "id": item_id,
+                "content": item.content[:200] if item else "",
+                "tags": item.tags if item else [],
+            },
+            namespace=self._namespace,
+        )
+        return True
 
     def set_agent_id(self, agent_id: str) -> None:
         """Set the agent identity for ACL checks.
@@ -427,14 +448,7 @@ class MemOS(
             allow_duplicate: If True, bypass dedup check and insert even if duplicate.
         """
         self._check_acl("write")
-
-        if not content or not content.strip():
-            raise ValueError("Memory content cannot be empty")
-
-        if self._sanitize:
-            issues = MemorySanitizer.check(content)
-            if issues:
-                raise ValueError(f"Memory failed sanitization: {issues}")
+        self._validate_content(content)
 
         # Dedup check — skip if duplicate found and allow_duplicate=False
         # Only block true duplicates: same content AND same tags/importance.
@@ -563,18 +577,7 @@ class MemOS(
             )
             valid_items.append(item)
 
-        # Use batch upsert for backends that support it
-        if hasattr(self._store, "upsert_batch") and len(valid_items) > 1:
-            # Pinecone and similar backends have optimized batch upsert
-            try:
-                self._store.upsert_batch(valid_items, namespace=self._namespace)
-            except AttributeError:
-                # Fallback to individual upserts
-                for item in valid_items:
-                    self._store.upsert(item, namespace=self._namespace)
-        else:
-            for item in valid_items:
-                self._store.upsert(item, namespace=self._namespace)
+        self._batch_upsert_items(valid_items)
 
         # Index all valid items
         for item in valid_items:
@@ -627,20 +630,13 @@ class MemOS(
         started = time.perf_counter()
         final_results: list[RecallResult] = []
 
-        def _coerce_tags(values: Any) -> list[str]:
-            if not values:
-                return []
-            if isinstance(values, str):
-                return [values]
-            return [str(value) for value in values if value]
-
-        include_tags = _coerce_tags(filter_tags)
+        include_tags = coerce_tags(filter_tags)
         require_tags: list[str] = []
         exclude_tags: list[str] = []
         if tag_filter:
-            include_tags.extend(_coerce_tags(tag_filter.get("include")))
-            require_tags.extend(_coerce_tags(tag_filter.get("require")))
-            exclude_tags.extend(_coerce_tags(tag_filter.get("exclude")))
+            include_tags.extend(coerce_tags(tag_filter.get("include")))
+            require_tags.extend(coerce_tags(tag_filter.get("require")))
+            exclude_tags.extend(coerce_tags(tag_filter.get("exclude")))
             if str(tag_filter.get("mode") or "").upper() == "AND" and include_tags:
                 require_tags.extend(include_tags)
                 include_tags = []
@@ -668,23 +664,12 @@ class MemOS(
                 self._store,
             )
             # Touch all recalled items and batch-persist the updates.
-            # This replaces N individual upserts with a single batch write
-            # for backends that support it (ChromaDB, Qdrant, Pinecone),
-            # falling back to individual upserts otherwise.
             touched_items: list[MemoryItem] = []
             for result in final_results:
                 result.item.touch()
                 touched_items.append(result.item)
             if touched_items:
-                if hasattr(self._store, "upsert_batch") and len(touched_items) > 1:
-                    try:
-                        self._store.upsert_batch(touched_items, namespace=self._namespace)
-                    except AttributeError:
-                        for item in touched_items:
-                            self._store.upsert(item, namespace=self._namespace)
-                else:
-                    for item in touched_items:
-                        self._store.upsert(item, namespace=self._namespace)
+                self._batch_upsert_items(touched_items)
             for result in final_results:
                 self._events.emit_sync(
                     "recalled",
@@ -725,19 +710,12 @@ class MemOS(
             decay=self._decay,
         )
 
-        def _coerce_tags(values: Any) -> list[str]:
-            if not values:
-                return []
-            if isinstance(values, str):
-                return [values]
-            return [str(value) for value in values if value]
-
         return query_engine.list_items(
             MemoryQuery(
                 top_k=limit,
-                include_tags=_coerce_tags(tags),
-                require_tags=_coerce_tags(require_tags),
-                exclude_tags=_coerce_tags(exclude_tags),
+                include_tags=coerce_tags(tags),
+                require_tags=coerce_tags(require_tags),
+                exclude_tags=coerce_tags(exclude_tags),
                 min_importance=min_importance,
                 max_importance=max_importance,
                 created_after=created_after,
@@ -784,55 +762,16 @@ class MemOS(
         self._check_acl("delete")
         removed = 0
         for item in self._store.list_all(namespace=self._namespace):
-            if tag not in item.tags:
-                continue
-            self._versioning.record_version(item, source="forget_tag")
-            if self._store.delete(item.id, namespace=self._namespace):
-                self._events.emit_sync(
-                    "forgotten",
-                    {
-                        "id": item.id,
-                        "content": item.content[:200],
-                        "tags": item.tags,
-                    },
-                    namespace=self._namespace,
-                )
+            if tag in item.tags and self._forget_by_id(item.id, source="forget_tag"):
                 removed += 1
         return removed
 
     def forget(self, content_or_id: str) -> bool:
         """Delete a specific memory by content or ID."""
         self._check_acl("delete")
-        item = self._store.get(content_or_id, namespace=self._namespace)
-        if self._store.delete(content_or_id, namespace=self._namespace):
-            if item is not None:
-                self._versioning.record_version(item, source="forget")
-            self._events.emit_sync(
-                "forgotten",
-                {
-                    "id": content_or_id,
-                    "content": item.content[:200] if item else "",
-                    "tags": item.tags if item else [],
-                },
-                namespace=self._namespace,
-            )
+        if self._forget_by_id(content_or_id):
             return True
-        content_id = generate_id(content_or_id)
-        item = self._store.get(content_id, namespace=self._namespace)
-        if self._store.delete(content_id, namespace=self._namespace):
-            if item is not None:
-                self._versioning.record_version(item, source="forget")
-            self._events.emit_sync(
-                "forgotten",
-                {
-                    "id": content_id,
-                    "content": item.content[:200] if item else "",
-                    "tags": item.tags if item else [],
-                },
-                namespace=self._namespace,
-            )
-            return True
-        return False
+        return self._forget_by_id(generate_id(content_or_id))
 
     def stats(self, items: list[MemoryItem] | None = None) -> MemoryStats:
         """Get memory store statistics."""
