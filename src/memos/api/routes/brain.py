@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ...brain import BrainSearch
 from ...utils import validate_safe_path
 from ..errors import error_response, handle_exception
 from ..schemas import BrainSearchRequest
@@ -20,13 +21,24 @@ def create_brain_router(memos, _kg) -> APIRouter:
     """Create brain-search routes."""
     router = APIRouter()
 
+    # Lazy default searcher — built on first use so that callers that pass
+    # memos=None during test setup don't blow up at import time.
+    _default_searcher: BrainSearch | None = None
+
+    def _get_searcher(wiki_dir: str | None) -> BrainSearch:
+        """Return the shared default searcher or build a scoped one."""
+        nonlocal _default_searcher
+        safe_dir = _validate_wiki_dir(wiki_dir)
+        if safe_dir is None:
+            if _default_searcher is None:
+                _default_searcher = BrainSearch(memos, kg=_kg)
+            return _default_searcher
+        return BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+
     @router.post("/api/v1/brain/search")
     async def brain_search(body: BrainSearchRequest):
-        from ...brain import BrainSearch
-
         try:
-            safe_dir = _validate_wiki_dir(body.wiki_dir)
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+            searcher = _get_searcher(body.wiki_dir)
             result = searcher.search(
                 body.query,
                 top_k=body.top_k,
@@ -48,11 +60,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
     async def brain_entity_detail(
         name: str, top_memories: int = 5, neighbor_limit: int = 12, wiki_dir: str | None = None
     ):
-        from ...brain import BrainSearch
-
         try:
-            safe_dir = _validate_wiki_dir(wiki_dir)
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+            searcher = _get_searcher(wiki_dir)
             detail = searcher.entity_detail(name, top_memories=top_memories, neighbor_limit=neighbor_limit)
             payload = detail.to_dict()
             payload["status"] = "ok"
@@ -64,11 +73,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
 
     @router.get("/api/v1/brain/entity/{name}/subgraph")
     async def brain_entity_subgraph(name: str, depth: int = 2, wiki_dir: str | None = None):
-        from ...brain import BrainSearch
-
         try:
-            safe_dir = _validate_wiki_dir(wiki_dir)
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+            searcher = _get_searcher(wiki_dir)
             subgraph = searcher.entity_subgraph(name, depth=depth)
             return {
                 "status": "ok",
@@ -85,11 +91,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
 
     @router.get("/api/v1/brain/connections")
     async def brain_surprising_connections(top: int = 5, wiki_dir: str | None = None):
-        from ...brain import BrainSearch
-
         try:
-            safe_dir = _validate_wiki_dir(wiki_dir)
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+            searcher = _get_searcher(wiki_dir)
             connections = searcher.surprising_connections(top_n=top)
             return {"status": "ok", "connections": connections, "total": len(connections)}
         except ValueError as exc:
@@ -99,11 +102,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
 
     @router.get("/api/v1/brain/suggest")
     async def brain_suggest(top_k: int = 5, wiki_dir: str | None = None):
-        from ...brain import BrainSearch
-
         try:
-            safe_dir = _validate_wiki_dir(wiki_dir)
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+            searcher = _get_searcher(wiki_dir)
             suggestions = searcher.suggest_questions(top_k=top_k)
             return {
                 "status": "ok",
@@ -125,11 +125,8 @@ def create_brain_router(memos, _kg) -> APIRouter:
 
     @router.get("/api/v1/brain/suggestions")
     async def brain_suggestions(n: int = 5, wiki_dir: str | None = None):
-        from ...brain import BrainSearch
-
         try:
-            safe_dir = _validate_wiki_dir(wiki_dir)
-            searcher = BrainSearch(memos, kg=_kg, wiki_dir=safe_dir)
+            searcher = _get_searcher(wiki_dir)
             suggestions = searcher.suggest_questions(top_k=n)
             return {
                 "status": "ok",
