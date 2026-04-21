@@ -5,60 +5,31 @@ Standalone module: no dependency on MemOS core.
 
 from __future__ import annotations
 
-import json
 import sqlite3
-import time
-import uuid
-from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from ._constants import (
-    DEFAULT_FIND_PATHS_MAX,
-    DEFAULT_INFERENCE_MAX_DEPTH,
-    DEFAULT_SHORTEST_PATH_MAX_HOPS,
-    KG_SHORT_ID_LENGTH,
+from ._kg_algorithms import detect_communities, god_nodes, infer_transitive, surprising_connections
+from ._kg_facts import add_fact, invalidate
+from ._kg_lint import lint as _lint
+from ._kg_paths import (
+    find_paths,
+    neighbors,
+    shortest_path,
 )
-
-
-def _short_id() -> str:
-    """Generate an 8-char UUID fragment."""
-    return uuid.uuid4().hex[:KG_SHORT_ID_LENGTH]
-
-
-def _parse_date(value: str | float | None) -> Optional[float]:
-    """Parse a date value to a Unix timestamp float.
-
-    Accepts:
-    - None → None
-    - float/int → passed through as-is (epoch)
-    - ISO 8601 string (e.g. "2024-01-15T10:00:00Z")
-    - Relative strings: "1h", "2d", "1w" (relative to *now*, in the past)
-    """
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    value = str(value).strip()
-    # Relative: 1h, 2d, 1w, 30m, 45s
-    if len(value) >= 2 and value[-1] in "smhdw" and value[:-1].replace(".", "").isdigit():
-        units = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
-        return time.time() - float(value[:-1]) * units[value[-1]]
-    # ISO 8601
-    for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%d"):
-        try:
-            dt = datetime.strptime(value, fmt)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.timestamp()
-        except ValueError:
-            continue
-    # Try float cast last
-    try:
-        return float(value)
-    except ValueError:
-        raise ValueError(f"Cannot parse date: {value!r}")
+from ._kg_query import (
+    active_subject_object_pairs,
+    active_triples,
+    backlinks,
+    label_stats,
+    query,
+    query_by_label,
+    query_entities,
+    query_predicate,
+    search_entities,
+    stats,
+    timeline,
+)
 
 
 class KnowledgeGraph:
@@ -85,13 +56,8 @@ class KnowledgeGraph:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         self._init_schema()
-        # Community detection cache (60 s TTL)
         self._communities_cache: list[dict] | None = None
         self._communities_cache_ts: float = 0.0
-
-    # ------------------------------------------------------------------
-    # Schema
-    # ------------------------------------------------------------------
 
     def _init_schema(self) -> None:
         self._conn.executescript("""
@@ -129,860 +95,100 @@ class KnowledgeGraph:
             self._conn.execute("ALTER TABLE triples ADD COLUMN confidence_label TEXT NOT NULL DEFAULT 'EXTRACTED'")
         self._conn.commit()
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+    # -- Fact CRUD (delegated to _kg_facts) --
 
-    def add_fact(
-        self,
-        subject: str,
-        predicate: str,
-        object: str,
-        valid_from: str | float | None = None,
-        valid_to: str | float | None = None,
-        confidence: float = 1.0,
-        source: str | None = None,
-        confidence_label: str = "EXTRACTED",
-    ) -> str:
-        """Add a triple to the knowledge graph.
-
-        Returns the ID of the new triple.
-        """
-        if confidence_label not in self.VALID_LABELS:
-            raise ValueError(f"Invalid confidence_label: {confidence_label!r}. Must be one of {self.VALID_LABELS}")
-        fact_id = _short_id()
-        now = time.time()
-        vf = _parse_date(valid_from)
-        vt = _parse_date(valid_to)
-        self._conn.execute(
-            """
-            INSERT INTO triples
-                (id, subject, predicate, object, valid_from, valid_to,
-                 confidence, confidence_label, source, created_at, invalidated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-            """,
-            (
-                fact_id,
-                subject,
-                predicate,
-                str(object),
-                vf,
-                vt,
-                confidence,
-                confidence_label,
-                source,
-                now,
-            ),
-        )
-        # Auto-upsert subject and object into the entities table so that
-        # stats()["total_entities"] and search_entities() reflect reality.
-        for entity_name in {subject, str(object)}:
-            existing = self._conn.execute("SELECT id FROM entities WHERE name=?", (entity_name,)).fetchone()
-            if existing is None:
-                self._conn.execute(
-                    """
-                    INSERT INTO entities (id, name, type, properties, created_at)
-                    VALUES (?, ?, 'auto', '{}', ?)
-                    """,
-                    (_short_id(), entity_name, now),
-                )
-        self._conn.commit()
-        return fact_id
-
-    def query(
-        self,
-        entity: str,
-        time: float | str | None = None,
-        direction: str = "both",
-    ) -> List[dict]:
-        """Return all active facts linked to *entity* at a given point in time.
-
-        direction: 'subject' | 'object' | 'both'
-        time: epoch float, ISO string, or None (= now)
-        """
-        t = _parse_date(time) if time is not None else _current_time()
-        rows: list[sqlite3.Row] = []
-        if direction in ("subject", "both"):
-            cur = self._conn.execute(
-                "SELECT * FROM triples WHERE subject=? AND invalidated_at IS NULL"
-                " AND (valid_from IS NULL OR valid_from <= ?)"
-                " AND (valid_to IS NULL OR valid_to >= ?)",
-                (entity, t, t),
-            )
-            rows.extend(cur.fetchall())
-        if direction in ("object", "both"):
-            cur = self._conn.execute(
-                "SELECT * FROM triples WHERE object=? AND invalidated_at IS NULL"
-                " AND (valid_from IS NULL OR valid_from <= ?)"
-                " AND (valid_to IS NULL OR valid_to >= ?)",
-                (entity, t, t),
-            )
-            rows.extend(cur.fetchall())
-        seen_ids: set[str] = set()
-        deduped: list[dict] = []
-        for r in rows:
-            d = _row_to_dict(r)
-            if d["id"] not in seen_ids:
-                seen_ids.add(d["id"])
-                deduped.append(d)
-        return deduped
-
-    def query_predicate(
-        self,
-        predicate: str,
-        time: float | str | None = None,
-    ) -> List[dict]:
-        """Return all active triples with the given predicate at time T."""
-        t = _parse_date(time) if time is not None else _current_time()
-        cur = self._conn.execute(
-            "SELECT * FROM triples WHERE predicate=? AND invalidated_at IS NULL"
-            " AND (valid_from IS NULL OR valid_from <= ?)"
-            " AND (valid_to IS NULL OR valid_to >= ?)",
-            (predicate, t, t),
-        )
-        return [_row_to_dict(r) for r in cur.fetchall()]
-
-    def timeline(self, entity: str) -> List[dict]:
-        """Return all facts (active and invalidated) about *entity*, chronologically."""
-        cur = self._conn.execute(
-            """
-            SELECT * FROM triples
-            WHERE subject=? OR object=?
-            ORDER BY COALESCE(valid_from, created_at) ASC
-            """,
-            (entity, entity),
-        )
-        return [_row_to_dict(r) for r in cur.fetchall()]
-
-    def active_triples(self) -> List[dict]:
-        """Return all active triples in created order."""
-        cur = self._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC")
-        return [_row_to_dict(r) for r in cur.fetchall()]
-
-    def active_subject_object_pairs(self) -> list[tuple[str, str]]:
-        """Return active (subject, object) pairs in created order."""
-        rows = self._conn.execute(
-            "SELECT subject, object FROM triples WHERE invalidated_at IS NULL ORDER BY created_at ASC"
-        ).fetchall()
-        return [(str(row["subject"]), str(row["object"])) for row in rows]
+    def add_fact(self, subject: str, predicate: str, object: str,
+                 valid_from: str | float | None = None,
+                 valid_to: str | float | None = None,
+                 confidence: float = 1.0, source: str | None = None,
+                 confidence_label: str = "EXTRACTED") -> str:
+        return add_fact(self, subject, predicate, object, valid_from, valid_to,
+                        confidence, source, confidence_label)
 
     def invalidate(self, fact_id: str, reason: str | None = None) -> bool:
-        """Mark a triple as invalidated. Returns True if found and updated."""
-        now = _current_time()
-        cur = self._conn.execute(
-            "UPDATE triples SET invalidated_at=? WHERE id=? AND invalidated_at IS NULL",
-            (now, fact_id),
-        )
-        self._conn.commit()
-        return cur.rowcount > 0
+        return invalidate(self, fact_id, reason)
 
-    def query_by_label(
-        self,
-        label: str,
-        active_only: bool = True,
-    ) -> List[dict]:
-        """Return all facts with the given confidence_label."""
-        if label not in self.VALID_LABELS:
-            raise ValueError(f"Invalid label {label!r}. Must be one of {self.VALID_LABELS}")
-        if active_only:
-            cur = self._conn.execute(
-                "SELECT * FROM triples WHERE confidence_label=? AND invalidated_at IS NULL",
-                (label,),
-            )
-        else:
-            cur = self._conn.execute(
-                "SELECT * FROM triples WHERE confidence_label=?",
-                (label,),
-            )
-        return [_row_to_dict(r) for r in cur.fetchall()]
+    # -- Read queries (delegated to _kg_query) --
+
+    def query(self, entity: str, time: float | str | None = None,
+              direction: str = "both") -> List[dict]:
+        return query(self, entity, time, direction)
+
+    def query_predicate(self, predicate: str,
+                        time: float | str | None = None) -> List[dict]:
+        return query_predicate(self, predicate, time)
+
+    def timeline(self, entity: str) -> List[dict]:
+        return timeline(self, entity)
+
+    def active_triples(self) -> List[dict]:
+        return active_triples(self)
+
+    def active_subject_object_pairs(self) -> list[tuple[str, str]]:
+        return active_subject_object_pairs(self)
+
+    def query_by_label(self, label: str, active_only: bool = True) -> List[dict]:
+        return query_by_label(self, label, active_only)
 
     def label_stats(self) -> dict[str, int]:
-        """Return counts per confidence_label (active facts only)."""
-        stats = {label: 0 for label in self.VALID_LABELS}
-        rows = self._conn.execute(
-            "SELECT confidence_label, COUNT(*) as cnt FROM triples "
-            "WHERE invalidated_at IS NULL GROUP BY confidence_label"
-        ).fetchall()
-        for r in rows:
-            if r["confidence_label"] in stats:
-                stats[r["confidence_label"]] = r["cnt"]
-        return stats
-
-    def infer_transitive(
-        self,
-        predicate: str,
-        inferred_predicate: str | None = None,
-        max_depth: int = DEFAULT_INFERENCE_MAX_DEPTH,
-    ) -> list[str]:
-        """Create INFERRED facts for transitive chains.
-
-        If A-predicate->B and B-predicate->C, creates A-{inferred_predicate}->C
-        with confidence_label='INFERRED'.
-
-        Returns list of new fact IDs (empty if nothing to infer).
-        """
-        if inferred_predicate is None:
-            inferred_predicate = predicate
-
-        active = self._conn.execute(
-            "SELECT subject, object FROM triples WHERE predicate=? AND invalidated_at IS NULL",
-            (predicate,),
-        ).fetchall()
-
-        # Build adjacency
-        adj: dict[str, list[str]] = {}
-        for row in active:
-            adj.setdefault(row["subject"], []).append(row["object"])
-
-        # BFS to find chains
-        new_ids: list[str] = []
-        visited_chains: set[frozenset[tuple[str, str]]] = set()
-
-        for start in list(adj.keys()):
-            queue: list[tuple[str, list[str]]] = [(start, [start])]
-            for _ in range(max_depth):
-                next_queue: list[tuple[str, list[str]]] = []
-                for current, path in queue:
-                    for neighbor in adj.get(current, []):
-                        if neighbor in path:
-                            continue
-                        new_path = path + [neighbor]
-                        # If path length >= 3, we have a transitive chain
-                        if len(new_path) >= 3:
-                            chain_key = frozenset((new_path[i], new_path[i + 1]) for i in range(len(new_path) - 1))
-                            if chain_key not in visited_chains:
-                                visited_chains.add(chain_key)
-                                # Check if inferred fact already exists
-                                existing = self._conn.execute(
-                                    "SELECT id FROM triples "
-                                    "WHERE subject=? AND predicate=? AND object=? "
-                                    "AND invalidated_at IS NULL",
-                                    (new_path[0], inferred_predicate, new_path[-1]),
-                                ).fetchone()
-                                if existing is None:
-                                    fid = self.add_fact(
-                                        new_path[0],
-                                        inferred_predicate,
-                                        new_path[-1],
-                                        confidence_label="INFERRED",
-                                        source=f"inferred:transitive:{predicate}",
-                                    )
-                                    new_ids.append(fid)
-                        next_queue.append((neighbor, new_path))
-                queue = next_queue
-                if not queue:
-                    break
-
-        return new_ids
+        return label_stats(self)
 
     def search_entities(self, query: str) -> List[dict]:
-        """Full-text search on entity names (case-insensitive substring match)."""
-        cur = self._conn.execute(
-            "SELECT * FROM entities WHERE LOWER(name) LIKE LOWER(?)",
-            (f"%{query}%",),
-        )
-        return [
-            {
-                "id": r["id"],
-                "name": r["name"],
-                "type": r["type"],
-                "properties": json.loads(r["properties"]),
-                "created_at": r["created_at"],
-            }
-            for r in cur.fetchall()
-        ]
+        return search_entities(self, query)
+
+    def query_entities(self, entities: list[str], time: float | str | None = None) -> list[dict]:
+        return query_entities(self, entities, time)
 
     def stats(self) -> dict:
-        """Return aggregate statistics."""
-        total_facts = self._conn.execute("SELECT COUNT(*) FROM triples").fetchone()[0]
-        active_facts = self._conn.execute("SELECT COUNT(*) FROM triples WHERE invalidated_at IS NULL").fetchone()[0]
-        invalidated_facts = total_facts - active_facts
-        total_entities = self._conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
-        return {
-            "total_facts": total_facts,
-            "total_entities": total_entities,
-            "active_facts": active_facts,
-            "invalidated_facts": invalidated_facts,
-        }
+        return stats(self)
 
-    def backlinks(
-        self,
-        entity: str,
-        predicate: str | None = None,
-        active_only: bool = True,
-    ) -> List[dict]:
-        """Return all triples where *entity* is the object (incoming edges).
+    def backlinks(self, entity: str, predicate: str | None = None,
+                  active_only: bool = True) -> List[dict]:
+        return backlinks(self, entity, predicate, active_only)
 
-        Args:
-            entity: The target entity to find backlinks for.
-            predicate: Optional filter — only return backlinks via this predicate.
-            active_only: If True (default), exclude invalidated facts.
+    # -- Path queries (delegated to _kg_paths) --
 
-        Returns:
-            List of fact dicts, each with subject/predicate/object/confidence/...
-        """
-        sql = "SELECT * FROM triples WHERE object=?"
-        params: list[object] = [entity]
-        if predicate is not None:
-            sql += " AND predicate=?"
-            params.append(predicate)
-        if active_only:
-            sql += " AND invalidated_at IS NULL"
-        sql += " ORDER BY created_at ASC"
-        cur = self._conn.execute(sql, params)
-        return [_row_to_dict(r) for r in cur.fetchall()]
+    def neighbors(self, entity: str, depth: int = 1,
+                  direction: str = "both") -> dict:
+        return neighbors(self, entity, depth, direction)
+
+    def find_paths(self, entity_a: str, entity_b: str,
+                   max_hops: int = 3, max_paths: int = 10) -> List[List[dict]]:
+        return find_paths(self, entity_a, entity_b, max_hops, max_paths)
+
+    def shortest_path(self, entity_a: str, entity_b: str,
+                      max_hops: int = 5) -> Optional[List[dict]]:
+        return shortest_path(self, entity_a, entity_b, max_hops)
+
+    # -- Algorithms (delegated to _kg_algorithms) --
+
+    def detect_communities(self, algorithm: str = "label_propagation") -> List[dict]:
+        return detect_communities(self, algorithm)
+
+    def god_nodes(self, top_k: int = 10) -> List[dict]:
+        return god_nodes(self, top_k)
+
+    def surprising_connections(self, top_k: int = 10) -> List[dict]:
+        return surprising_connections(self, top_k)
+
+    def infer_transitive(self, predicate: str,
+                         inferred_predicate: str | None = None,
+                         max_depth: int = 3) -> list[str]:
+        return infer_transitive(self, predicate, inferred_predicate, max_depth)
+
+    # -- Lint (delegated to _kg_lint) --
 
     def lint(self, min_facts: int = 2) -> dict:
-        """Detect knowledge graph quality issues.
+        return _lint(self, min_facts)
 
-        Returns a structured report dict with:
-          - contradictions: list of {subject, predicate, objects, fact_ids}
-            where one subject+predicate points to multiple different objects
-            (all facts currently valid / not invalidated)
-          - orphans: list of entity names that appear in exactly one triple
-            (degree == 1, likely dangling references)
-          - sparse: list of entity names with fewer than `min_facts` active facts
-          - suggested_facts: list of {subject, predicate, object, reason, via}
-            for potential new facts inferred from transitive relationships
-            that don't already exist as explicit facts
-          - summary: {contradictions, orphans, sparse, suggested_facts,
-            total_entities, active_facts}
-        """
-        # Active facts only
-        rows = self._conn.execute(
-            "SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY subject, predicate"
-        ).fetchall()
-        facts = [_row_to_dict(r) for r in rows]
-
-        # --- Contradictions: same (subject, predicate) → multiple objects,
-        #     all currently valid (no invalidated_at) ---
-        sp_to_objects: dict[tuple, set] = defaultdict(set)
-        sp_to_fact_ids: dict[tuple, list[str]] = defaultdict(list)
-        for f in facts:
-            sp_to_objects[(f["subject"], f["predicate"])].add(f["object"])
-            sp_to_fact_ids[(f["subject"], f["predicate"])].append(f["id"])
-
-        contradictions = [
-            {
-                "subject": s,
-                "predicate": p,
-                "objects": sorted(objs),
-                "fact_ids": sp_to_fact_ids[(s, p)],
-            }
-            for (s, p), objs in sp_to_objects.items()
-            if len(objs) > 1
-        ]
-
-        # --- Orphans: entities with degree == 1 ---
-        degree: dict[str, int] = defaultdict(int)
-        for f in facts:
-            degree[f["subject"]] += 1
-            degree[f["object"]] += 1
-        orphans = sorted(e for e, d in degree.items() if d == 1)
-
-        # --- Sparse entities: fewer than min_facts active facts ---
-        sparse_counts: dict[str, int] = defaultdict(int)
-        for f in facts:
-            sparse_counts[f["subject"]] += 1
-        sparse = sorted(e for e, count in sparse_counts.items() if count < min_facts)
-
-        # --- Suggested new facts based on transitive relationships ---
-        # Build adjacency: predicate → {subject: [objects]}
-        pred_adj: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-        for f in facts:
-            pred_adj[f["predicate"]][f["subject"]].append(f["object"])
-
-        # Existing facts as a set for fast lookup
-        existing_facts: set[tuple[str, str, str]] = set()
-        for f in facts:
-            existing_facts.add((f["subject"], f["predicate"], f["object"]))
-
-        suggested: list[dict] = []
-        seen_suggestions: set[tuple[str, str, str]] = set()
-
-        for predicate, adj in pred_adj.items():
-            # For each predicate, find transitive chains: A→B and B→C suggests A→C
-            for a, b_list in adj.items():
-                for b in b_list:
-                    c_list = adj.get(b, [])
-                    for c in c_list:
-                        if c == a:
-                            continue  # skip self-loops
-                        key = (a, predicate, c)
-                        if key in existing_facts or key in seen_suggestions:
-                            continue
-                        seen_suggestions.add(key)
-                        suggested.append(
-                            {
-                                "subject": a,
-                                "predicate": predicate,
-                                "object": c,
-                                "reason": "transitive_inference",
-                                "via": [a, b, c],
-                            }
-                        )
-
-        # Also suggest cross-predicate transitivity for common patterns
-        # e.g., if A "works_at" B and B "located_in" C → suggest A "located_in" C
-        _TRANSITIVE_PAIRS = [
-            ("works_at", "located_in", "located_in"),
-            ("member_of", "part_of", "member_of"),
-            ("owns", "located_in", "located_in"),
-            ("manages", "works_on", "works_on"),
-        ]
-        for pred1, pred2, result_pred in _TRANSITIVE_PAIRS:
-            adj1 = pred_adj.get(pred1, {})
-            adj2 = pred_adj.get(pred2, {})
-            for a, b_list in adj1.items():
-                for b in b_list:
-                    c_list = adj2.get(b, [])
-                    for c in c_list:
-                        if c == a:
-                            continue
-                        key = (a, result_pred, c)
-                        if key in existing_facts or key in seen_suggestions:
-                            continue
-                        seen_suggestions.add(key)
-                        suggested.append(
-                            {
-                                "subject": a,
-                                "predicate": result_pred,
-                                "object": c,
-                                "reason": "cross_predicate_transitive",
-                                "via": [a, b, c],
-                            }
-                        )
-
-        total_entities = len(degree)
-        return {
-            "contradictions": contradictions,
-            "orphans": orphans,
-            "sparse": sparse,
-            "suggested_facts": suggested,
-            "summary": {
-                "contradictions": len(contradictions),
-                "orphans": len(orphans),
-                "sparse": len(sparse),
-                "suggested_facts": len(suggested),
-                "total_entities": total_entities,
-                "active_facts": len(facts),
-            },
-        }
+    # -- Lifecycle --
 
     def close(self) -> None:
         """Close the SQLite connection."""
         self._conn.close()
-
-    # ------------------------------------------------------------------
-    # Path Queries — multi-hop graph traversal
-    # ------------------------------------------------------------------
-
-    def _get_active_neighbors(self, entity: str, direction: str = "both") -> List[dict]:
-        """Get all active triples connected to *entity* (internal helper)."""
-        t = _current_time()
-        rows: list[sqlite3.Row] = []
-        if direction in ("subject", "both"):
-            cur = self._conn.execute(
-                "SELECT * FROM triples WHERE subject=? AND invalidated_at IS NULL"
-                " AND (valid_from IS NULL OR valid_from <= ?)"
-                " AND (valid_to IS NULL OR valid_to >= ?)",
-                (entity, t, t),
-            )
-            rows.extend(cur.fetchall())
-        if direction in ("object", "both"):
-            cur = self._conn.execute(
-                "SELECT * FROM triples WHERE object=? AND invalidated_at IS NULL"
-                " AND (valid_from IS NULL OR valid_from <= ?)"
-                " AND (valid_to IS NULL OR valid_to >= ?)",
-                (entity, t, t),
-            )
-            rows.extend(cur.fetchall())
-        seen_ids: set[str] = set()
-        deduped: list[dict] = []
-        for r in rows:
-            d = _row_to_dict(r)
-            if d["id"] not in seen_ids:
-                seen_ids.add(d["id"])
-                deduped.append(d)
-        return deduped
-
-    def neighbors(self, entity: str, depth: int = 1, direction: str = "both") -> dict:
-        """Expand entity neighborhood up to *depth* hops.
-
-        Returns a dict with:
-        - "center": the entity name
-        - "depth": the depth used
-        - "nodes": set of unique entity names discovered
-        - "edges": list of active triples in the neighborhood
-        - "layers": for each hop (1..depth), the new entities discovered
-        """
-        if depth < 1:
-            raise ValueError("depth must be >= 1")
-        all_edges: list[dict] = []
-        all_nodes: set[str] = {entity}
-        layers: dict[int, list[str]] = {}
-        frontier: set[str] = {entity}
-        seen_edge_ids: set[str] = set()
-
-        for hop in range(1, depth + 1):
-            next_frontier: set[str] = set()
-            layer_new: list[str] = []
-            for node in frontier:
-                for triple in self._get_active_neighbors(node, direction):
-                    if triple["id"] in seen_edge_ids:
-                        continue
-                    seen_edge_ids.add(triple["id"])
-                    all_edges.append(triple)
-                    subj, obj = triple["subject"], triple["object"]
-                    for candidate in (subj, obj):
-                        if candidate not in all_nodes:
-                            all_nodes.add(candidate)
-                            next_frontier.add(candidate)
-                            layer_new.append(candidate)
-            layers[hop] = sorted(layer_new)
-            frontier = next_frontier
-            if not frontier:
-                break
-
-        return {
-            "center": entity,
-            "depth": depth,
-            "nodes": sorted(all_nodes),
-            "edges": all_edges,
-            "layers": layers,
-        }
-
-    def find_paths(
-        self,
-        entity_a: str,
-        entity_b: str,
-        max_hops: int = 3,
-        max_paths: int = DEFAULT_FIND_PATHS_MAX,
-    ) -> List[List[dict]]:
-        """Find all paths between entity_a and entity_b up to *max_hops*.
-
-        Uses BFS. Returns a list of paths; each path is a list of triples
-        connecting entity_a to entity_b. At most *max_paths* paths returned.
-
-        A path is valid if: the first triple contains entity_a, the last
-        contains entity_b, and consecutive triples share an entity.
-        """
-        if max_hops < 1:
-            raise ValueError("max_hops must be >= 1")
-        if entity_a == entity_b:
-            return []
-
-        # Build adjacency: entity -> list of active triples
-        t = _current_time()
-        cur = self._conn.execute(
-            "SELECT * FROM triples WHERE invalidated_at IS NULL"
-            " AND (valid_from IS NULL OR valid_from <= ?)"
-            " AND (valid_to IS NULL OR valid_to >= ?)",
-            (t, t),
-        )
-        all_triples = [_row_to_dict(r) for r in cur.fetchall()]
-
-        adj: dict[str, list[dict]] = {}
-        for triple in all_triples:
-            for node in (triple["subject"], triple["object"]):
-                adj.setdefault(node, []).append(triple)
-
-        # BFS with path tracking
-        # State: (current_entity, path_of_triples, visited_edge_ids)
-        paths_found: list[list[dict]] = []
-        queue: list[tuple[str, list[dict], frozenset[str]]] = [(entity_a, [], frozenset())]
-
-        for hop in range(max_hops + 1):
-            next_queue: list[tuple[str, list[dict], frozenset[str]]] = []
-            visited_this_level: set[str] = set()
-            for current, path, visited_edges in queue:
-                if current == entity_b and len(path) > 0:
-                    paths_found.append(path)
-                    if len(paths_found) >= max_paths:
-                        return paths_found
-                    continue
-                if hop == max_hops:
-                    continue
-                for triple in adj.get(current, []):
-                    if triple["id"] in visited_edges:
-                        continue
-                    # Determine the next entity
-                    if triple["subject"] == current:
-                        next_entity = triple["object"]
-                    elif triple["object"] == current:
-                        next_entity = triple["subject"]
-                    else:
-                        continue  # shouldn't happen
-                    new_edges = visited_edges | {triple["id"]}
-                    next_queue.append((next_entity, path + [triple], new_edges))
-                    visited_this_level.add(next_entity)
-            queue = next_queue
-            if not queue:
-                break
-
-        return paths_found
-
-    def detect_communities(self, algorithm: str = "label_propagation") -> List[dict]:
-        """Detect entity communities using label-propagation clustering.
-
-        Pure Python implementation — no external dependencies.
-        Builds an undirected adjacency list from all active facts and
-        runs iterative label-propagation: each node adopts the most
-        common label among its neighbours.  Converges in ~10 iterations.
-
-        Results are cached for 60 seconds.
-
-        Args:
-            algorithm: Kept for API compatibility. Only ``"label_propagation"``
-                is supported.
-
-        Returns:
-            List of community dicts with keys:
-                id (str), label (str), nodes (list[str]),
-                size (int), top_entity (str)
-        """
-        # Check cache (60 s TTL)
-        now = time.time()
-        if self._communities_cache is not None and (now - self._communities_cache_ts) < 60:
-            return self._communities_cache
-
-        if algorithm not in ("label_propagation", "louvain"):
-            raise ValueError(f"Unsupported algorithm: {algorithm!r}. Use 'label_propagation'.")
-
-        # Fetch all active facts
-        rows = self._conn.execute("SELECT subject, object FROM triples WHERE invalidated_at IS NULL").fetchall()
-
-        if not rows:
-            self._communities_cache = []
-            self._communities_cache_ts = now
-            return []
-
-        # Build undirected adjacency list
-        adj: dict[str, set[str]] = defaultdict(set)
-        all_nodes: set[str] = set()
-        for r in rows:
-            s, o = r["subject"], r["object"]
-            all_nodes.add(s)
-            all_nodes.add(o)
-            adj[s].add(o)
-            adj[o].add(s)
-
-        # Initialise labels — each node is its own community
-        labels: dict[str, str] = {node: node for node in all_nodes}
-
-        # Label propagation (deterministic: sorted order, ties broken
-        # lexicographically so that tests are reproducible).
-        node_list = sorted(all_nodes)
-        for _ in range(10):
-            changed = False
-            for node in node_list:
-                neighbours = adj.get(node)
-                if not neighbours:
-                    continue
-                # Tally neighbour labels
-                counts: dict[str, int] = defaultdict(int)
-                for nb in neighbours:
-                    counts[labels[nb]] += 1
-                max_count = max(counts.values())
-                best = min(lab for lab, c in counts.items() if c == max_count)
-                if best != labels[node]:
-                    labels[node] = best
-                    changed = True
-            if not changed:
-                break
-
-        # Group nodes by their final label
-        groups: dict[str, list[str]] = defaultdict(list)
-        for node in all_nodes:
-            groups[labels[node]].append(node)
-
-        result: list[dict] = []
-        for label, members in groups.items():
-            members.sort()
-            # top_entity = highest-degree node in the community
-            top_entity = max(members, key=lambda n: len(adj.get(n, set())))
-            result.append(
-                {
-                    "id": "",
-                    "label": label,
-                    "nodes": members,
-                    "size": len(members),
-                    "top_entity": top_entity,
-                }
-            )
-
-        # Sort by size descending, assign sequential ids
-        result.sort(key=lambda c: c["size"], reverse=True)
-        for i, c in enumerate(result):
-            c["id"] = str(i)
-
-        self._communities_cache = result
-        self._communities_cache_ts = now
-        return result
-
-    def god_nodes(self, top_k: int = 10) -> List[dict]:
-        """Return the highest-degree entities in the knowledge graph.
-
-        Counts appearances of each entity as both subject and object
-        across all active facts.  Also reports the break-down of facts
-        where the entity appears as subject vs. object, and the three
-        most common predicates involving the entity.
-
-        Returns:
-            List of dicts with keys:
-                entity (str), degree (int),
-                facts_as_subject (int), facts_as_object (int),
-                top_predicates (list[str])
-        """
-        rows = self._conn.execute(
-            "SELECT subject, predicate, object FROM triples WHERE invalidated_at IS NULL"
-        ).fetchall()
-
-        subject_count: dict[str, int] = defaultdict(int)
-        object_count: dict[str, int] = defaultdict(int)
-        predicate_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-
-        for r in rows:
-            s, p, o = r["subject"], r["predicate"], r["object"]
-            subject_count[s] += 1
-            object_count[o] += 1
-            predicate_counts[s][p] += 1
-            predicate_counts[o][p] += 1
-
-        degree: dict[str, int] = defaultdict(int)
-        for entity in set(list(subject_count.keys()) + list(object_count.keys())):
-            degree[entity] = subject_count.get(entity, 0) + object_count.get(entity, 0)
-
-        sorted_entities = sorted(degree.items(), key=lambda x: x[1], reverse=True)
-
-        result: list[dict] = []
-        for entity, deg in sorted_entities[:top_k]:
-            f_subj = subject_count.get(entity, 0)
-            f_obj = object_count.get(entity, 0)
-            preds = predicate_counts.get(entity, {})
-            top_3 = [p for p, _ in sorted(preds.items(), key=lambda x: x[1], reverse=True)][:3]
-            result.append(
-                {
-                    "entity": entity,
-                    "degree": deg,
-                    "facts_as_subject": f_subj,
-                    "facts_as_object": f_obj,
-                    "top_predicates": top_3,
-                }
-            )
-        return result
-
-    def surprising_connections(self, top_k: int = 10) -> List[dict]:
-        """Find edges that connect entities from different communities.
-
-        Uses detect_communities() to build an entity→community map,
-        then scores each fact whose subject and object belong to
-        different communities.
-
-        The surprise_score is based on the product of the degrees of
-        the connected entities (cross-community bridges involving
-        high-degree nodes are more surprising).
-
-        Returns:
-            List of dicts with keys:
-                id, subject, predicate, object, surprise_score, reason
-        """
-        communities = self.detect_communities()
-        if not communities:
-            return []
-
-        # Build entity → community id map
-        entity_to_community: dict[str, int] = {}
-        for comm in communities:
-            for member in comm["nodes"]:
-                entity_to_community[member] = int(comm["id"])
-
-        # Get all active facts
-        rows = self._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL").fetchall()
-        facts = [_row_to_dict(r) for r in rows]
-
-        # Compute degree map for scoring
-        degree: dict[str, int] = defaultdict(int)
-        for f in facts:
-            degree[f["subject"]] += 1
-            degree[f["object"]] += 1
-
-        # Find cross-community edges
-        surprising: list[dict] = []
-        for f in facts:
-            subj_comm = entity_to_community.get(f["subject"])
-            obj_comm = entity_to_community.get(f["object"])
-            if subj_comm is None or obj_comm is None:
-                continue
-            if subj_comm != obj_comm:
-                # Surprise score: product of entity degrees
-                subj_deg = degree.get(f["subject"], 1)
-                obj_deg = degree.get(f["object"], 1)
-                surprise_score = round(subj_deg * obj_deg, 2)
-                reason = (
-                    f"Cross-community bridge: "
-                    f"'{f['subject']}' (community {subj_comm}) → "
-                    f"'{f['object']}' (community {obj_comm})"
-                )
-                surprising.append(
-                    {
-                        "id": f["id"],
-                        "subject": f["subject"],
-                        "predicate": f["predicate"],
-                        "object": f["object"],
-                        "surprise_score": surprise_score,
-                        "reason": reason,
-                    }
-                )
-
-        # Sort by surprise_score descending
-        surprising.sort(key=lambda x: x["surprise_score"], reverse=True)
-        return surprising[:top_k]
-
-    def shortest_path(
-        self,
-        entity_a: str,
-        entity_b: str,
-        max_hops: int = DEFAULT_SHORTEST_PATH_MAX_HOPS,
-    ) -> Optional[List[dict]]:
-        """Find the shortest path between entity_a and entity_b.
-
-        Returns the path as a list of triples, or None if no path exists.
-        """
-        paths = self.find_paths(entity_a, entity_b, max_hops=max_hops, max_paths=1)
-        return paths[0] if paths else None
-
-    # ------------------------------------------------------------------
-    # Context manager support
-    # ------------------------------------------------------------------
 
     def __enter__(self) -> KnowledgeGraph:
         return self
 
     def __exit__(self, *_) -> None:
         self.close()
-
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-
-def _current_time() -> float:
-    return time.time()
-
-
-def _row_to_dict(row: sqlite3.Row) -> dict:
-    return {
-        "id": row["id"],
-        "subject": row["subject"],
-        "predicate": row["predicate"],
-        "object": row["object"],
-        "valid_from": row["valid_from"],
-        "valid_to": row["valid_to"],
-        "confidence": row["confidence"],
-        "source": row["source"],
-        "created_at": row["created_at"],
-        "invalidated_at": row["invalidated_at"],
-        "confidence_label": row["confidence_label"] if "confidence_label" in row.keys() else "EXTRACTED",
-    }
