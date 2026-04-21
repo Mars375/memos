@@ -255,7 +255,7 @@ class HybridRetriever:
 
         try:
             raw_response: str = llm_client.chat(prompt)
-        except Exception:
+        except (ConnectionError, TimeoutError, RuntimeError, ValueError, OSError, AttributeError):
             # If the LLM call fails, return original order capped to top_k
             return candidates[:top_k]
 
