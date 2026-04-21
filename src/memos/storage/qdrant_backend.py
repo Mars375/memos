@@ -82,7 +82,7 @@ class QdrantBackend(StorageBackend):
         if name not in self._collections:
             try:
                 self._client.get_collection(name)
-            except Exception:
+            except (ConnectionError, OSError, RuntimeError, ValueError):
                 self._client.create_collection(
                     collection_name=name,
                     vectors_config=VectorParams(
@@ -114,7 +114,7 @@ class QdrantBackend(StorageBackend):
                     for k in keys:
                         del self._embed_cache[k]
                 return vec
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError):
             logger.debug("Embedding fetch failed for Qdrant", exc_info=True)
             pass
         return None
@@ -159,7 +159,7 @@ class QdrantBackend(StorageBackend):
             if not points:
                 return None
             return self._point_to_item(points[0])
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError):
             logger.warning("Qdrant get() failed for %s", item_id, exc_info=True)
             return None
 
@@ -175,7 +175,7 @@ class QdrantBackend(StorageBackend):
                 points_selector=PointIdsList(points=[point_id]),
             )
             return True
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError):
             logger.warning("Qdrant delete() failed for %s", item_id, exc_info=True)
             return False
 
@@ -190,7 +190,7 @@ class QdrantBackend(StorageBackend):
                 with_vectors=False,
             )
             return [self._point_to_item(p) for p in points]
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError):
             logger.warning("Qdrant list_all() failed", exc_info=True)
             return []
 
@@ -213,7 +213,7 @@ class QdrantBackend(StorageBackend):
                     with_payload=True,
                 )
                 return [self._point_to_item(r) for r in results]
-            except Exception:
+            except (ConnectionError, OSError, RuntimeError, ValueError):
                 logger.warning(
                     "Qdrant vector search failed for namespace=%r, falling back to keyword",
                     namespace,
@@ -247,7 +247,7 @@ class QdrantBackend(StorageBackend):
                 with_payload=True,
             )
             return [(self._point_to_item(r), r.score) for r in results]
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError):
             return []
 
     def hybrid_search(
@@ -278,7 +278,7 @@ class QdrantBackend(StorageBackend):
                 for r in results:
                     item = self._point_to_item(r)
                     vector_results[item.id] = r.score
-            except Exception:
+            except (ConnectionError, OSError, RuntimeError, ValueError):
                 logger.debug("Qdrant hybrid vector search failed", exc_info=True)
                 pass
 
@@ -326,7 +326,7 @@ class QdrantBackend(StorageBackend):
         try:
             collections = self._client.get_collections().collections
             return sorted(c.name[len(prefix) :] for c in collections if c.name.startswith(prefix))
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError):
             return []
 
     # --- Internal helpers ---
@@ -380,7 +380,7 @@ class QdrantBackend(StorageBackend):
         if not raw_id:
             try:
                 raw_id = QdrantBackend._uuid_to_id(point_id)
-            except Exception:
+            except (ValueError, IndexError):
                 raw_id = point_id[:16]
 
         metadata_raw = payload.get("metadata", "{}")
