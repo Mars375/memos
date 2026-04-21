@@ -30,6 +30,8 @@ class LivingWikiEngine:
         self._db_path = self._wiki_dir / ".living.db"
         self._index_path = self._wiki_dir / "index.md"
         self._log_path = self._wiki_dir / "log.md"
+        self._list_pages_cache: list | None = None
+        self._list_pages_cache_ts: float = 0.0
 
     def _get_db(self):
         return get_db(self)
@@ -135,7 +137,15 @@ class LivingWikiEngine:
         return create_page(self, entity, entity_type=entity_type, content=content)
 
     def list_pages(self) -> List[LivingPage]:
-        return list_pages(self)
+        import time
+
+        now = time.time()
+        if self._list_pages_cache is not None and (now - self._list_pages_cache_ts) < 5:
+            return self._list_pages_cache
+        result = list_pages(self)
+        self._list_pages_cache = result
+        self._list_pages_cache_ts = now
+        return result
 
     def stats(self) -> Dict[str, Any]:
         return stats(self)
