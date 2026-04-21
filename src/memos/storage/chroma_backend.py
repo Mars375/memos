@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import sqlite3
 import time
 from typing import Optional
 
@@ -58,7 +59,7 @@ class _CachedOllamaEF:
                     vec = json.loads(row[0])
                     self._mem[key] = vec
                     return vec
-        except Exception:
+        except (sqlite3.Error, json.JSONDecodeError, OSError):
             logger.debug("Embed cache load failed", exc_info=True)
             pass
         return None
@@ -73,7 +74,7 @@ class _CachedOllamaEF:
                     (key, json.dumps(vec), time.time()),
                 )
                 conn.commit()
-        except Exception:
+        except (sqlite3.Error, OSError):
             logger.debug("Embed cache store failed", exc_info=True)
             pass
 
@@ -226,7 +227,7 @@ class ChromaBackend(StorageBackend):
             try:
                 vec = ef.embed_query([query])[0]
                 results = col.query(query_embeddings=[vec], n_results=min(limit, n))
-            except Exception:
+            except (OSError, RuntimeError, ValueError, ConnectionError):
                 results = col.query(query_texts=[query], n_results=min(limit, n))
         else:
             results = col.query(query_texts=[query], n_results=min(limit, n))
