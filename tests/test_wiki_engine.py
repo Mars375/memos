@@ -247,6 +247,18 @@ class TestEngineCreatePage:
         result = engine.create_page("DupEntity", entity_type="default")
         assert result["status"] == "already_exists"
 
+    def test_create_page_slug_collision_duplicate(self, engine: LivingWikiEngine) -> None:
+        engine.init()
+        first = engine.create_page("Foo Bar", entity_type="default")
+        second = engine.create_page("Foo-Bar", entity_type="default")
+
+        assert first["status"] == "created"
+        assert second["status"] == "already_exists"
+
+        page = engine.read_page("Foo Bar")
+        assert page is not None
+        assert 'title: "Foo Bar"' in page
+
 
 # ---------------------------------------------------------------------------
 # Backward compatibility
