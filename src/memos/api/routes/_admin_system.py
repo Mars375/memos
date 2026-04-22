@@ -42,9 +42,8 @@ def register_admin_system_routes(
     async def health():
         """Public liveness probe — intentionally minimal.
 
-        Auth state (whether keys are configured, how many) is NOT exposed
-        here because this endpoint is unauthenticated.  See
-        ``/api/v1/health`` for the authenticated variant.
+        Auth state (whether keys are configured, how many) is NOT exposed.
+        See ``/api/v1/health`` for the full readiness probe.
         """
         return {
             "status": "ok",
@@ -53,7 +52,7 @@ def register_admin_system_routes(
 
     @router.get("/api/v1/health")
     async def api_v1_health():
-        """Authenticated health check with version, uptime, and auth state."""
+        """Health check with version, uptime, and auth state."""
         uptime = time.time() - _start_time
         try:
             import importlib.metadata

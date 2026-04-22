@@ -26,6 +26,12 @@ def client(app):
     return TestClient(app)
 
 
+@pytest.fixture()
+def auth_rate_limited_client():
+    app = create_fastapi_app(memos=MemOS(backend="memory"), api_keys=["sk-test"], rate_limit=1)
+    return TestClient(app)
+
+
 # ── Health endpoint ───────────────────────────────────────────
 
 
@@ -59,6 +65,14 @@ class TestHealthEndpoint:
         time.sleep(0.05)
         d2 = client.get("/api/v1/health").json()
         assert d2["uptime"] >= d1["uptime"]
+
+    def test_prefixed_health_skips_auth_and_rate_limit(self, auth_rate_limited_client):
+        resp1 = auth_rate_limited_client.get("/api/v1/health")
+        resp2 = auth_rate_limited_client.get("/api/v1/health")
+
+        assert resp1.status_code == 200
+        assert resp2.status_code == 200
+        assert resp2.json()["status"] == "ok"
 
 
 # ── Configurable rate limit ───────────────────────────────────
