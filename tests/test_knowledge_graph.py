@@ -137,6 +137,22 @@ class TestCommunityCache:
         r2 = kg.detect_communities()
         assert r1 is r2  # same list object from cache
 
+    def test_add_fact_invalidates_cache(self, kg):
+        kg.add_fact("x", "rel", "y")
+        cached = kg.detect_communities()
+        kg.add_fact("a", "rel", "b")
+        fresh = kg.detect_communities()
+        assert fresh is not cached
+        assert len(fresh) == 2
+
+    def test_invalidate_clears_cache(self, kg):
+        fid = kg.add_fact("x", "rel", "y")
+        cached = kg.detect_communities()
+        assert kg.invalidate(fid) is True
+        fresh = kg.detect_communities()
+        assert fresh is not cached
+        assert fresh == []
+
     def test_cache_expires(self, kg, monkeypatch):
         kg.add_fact("x", "rel", "y")
         r1 = kg.detect_communities()

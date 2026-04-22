@@ -103,8 +103,10 @@ class APIKeyManager:
 def create_auth_middleware(key_manager: APIKeyManager):
     """Create ASGI middleware for API key auth and rate limiting.
 
-    Skips authentication for unauthenticated paths: ``/``, ``/health``,
-    ``/api/v1/health``, ``/docs``, ``/openapi.json``.  All other paths
+    Skips authentication for unauthenticated paths: ``/``, ``/dashboard``,
+    ``/health``, ``/api/v1/health``, ``/docs``, ``/redoc``, ``/openapi.json``,
+    and dashboard static assets under ``/static``.
+    All other paths
     require a valid ``X-API-Key`` header when keys are configured.
 
     WebSocket connections are NOT covered by this HTTP middleware;
@@ -120,7 +122,11 @@ def create_auth_middleware(key_manager: APIKeyManager):
     async def middleware(request, call_next):
         # Skip auth for health and dashboard
         path = request.url.path
-        if path in ("/", "/health", "/api/v1/health", "/docs", "/openapi.json"):
+        if (
+            path in ("/", "/dashboard", "/health", "/api/v1/health", "/docs", "/redoc", "/openapi.json")
+            or path == "/static"
+            or path.startswith("/static/")
+        ):
             return await call_next(request)
 
         if key_manager.auth_enabled:

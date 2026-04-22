@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from ..crypto import MemoryCrypto, NoOpCrypto
@@ -92,9 +93,27 @@ class EncryptedStorageBackend(StorageBackend):
         return [self._decrypt_item(i) for i in self._inner.list_all(namespace=namespace)]
 
     def search(self, query: str, limit: int = 20, *, namespace: str = "") -> list[MemoryItem]:
-        # Search works on encrypted content — we decrypt results after
-        results = self._inner.search(query, limit=limit, namespace=namespace)
-        return [self._decrypt_item(i) for i in results]
+        # Search the decrypted projection so encrypted-at-rest storage remains usable.
+        query_lower = query.lower().strip()
+        if not query_lower:
+            return self.list_all(namespace=namespace)[:limit]
+
+        query_tokens = set(re.findall(r"\w+", query_lower))
+        scored: list[tuple[float, MemoryItem]] = []
+        for item in self.list_all(namespace=namespace):
+            content_lower = item.content.lower()
+            content_tokens = set(re.findall(r"\w+", content_lower))
+            overlap = query_tokens & content_tokens
+            score = float(len(overlap))
+            if query_lower in content_lower:
+                score += 2.0
+            if any(tag.lower() in query_lower or query_lower in tag.lower() for tag in item.tags):
+                score += 1.0
+            if score > 0:
+                scored.append((score, item))
+
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return [item for _, item in scored[:limit]]
 
     def list_namespaces(self) -> list[str]:
         return self._inner.list_namespaces()

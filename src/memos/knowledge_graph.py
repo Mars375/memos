@@ -108,10 +108,17 @@ class KnowledgeGraph:
         source: str | None = None,
         confidence_label: str = "EXTRACTED",
     ) -> str:
-        return add_fact(self, subject, predicate, object, valid_from, valid_to, confidence, source, confidence_label)
+        fact_id = add_fact(self, subject, predicate, object, valid_from, valid_to, confidence, source, confidence_label)
+        self._communities_cache = None
+        self._communities_cache_ts = 0.0
+        return fact_id
 
     def invalidate(self, fact_id: str, reason: str | None = None) -> bool:
-        return invalidate(self, fact_id, reason)
+        ok = invalidate(self, fact_id, reason)
+        if ok:
+            self._communities_cache = None
+            self._communities_cache_ts = 0.0
+        return ok
 
     # -- Read queries (delegated to _kg_query) --
 

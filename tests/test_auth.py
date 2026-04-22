@@ -189,6 +189,27 @@ class TestFastAPIAuth:
         resp = client.get("/")
         assert resp.status_code == 200
 
+    def test_dashboard_alias_no_auth_required(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/dashboard")
+        assert resp.status_code == 200
+
+    def test_redoc_no_auth_required(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/redoc")
+        assert resp.status_code == 200
+
+    def test_static_assets_no_auth_required(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/static/dashboard.css")
+        assert resp.status_code == 200
+
     def test_rate_limit_enforced(self, app_rate_limited):
         from fastapi.testclient import TestClient
 

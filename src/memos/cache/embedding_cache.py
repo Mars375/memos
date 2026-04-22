@@ -149,8 +149,15 @@ class EmbeddingCache:
                     (now, key),
                 )
                 conn.commit()
+                try:
+                    embedding = json.loads(row[0])
+                except json.JSONDecodeError:
+                    conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
+                    conn.commit()
+                    self._misses += 1
+                    return None
                 self._hits += 1
-                return json.loads(row[0])
+                return embedding
 
     def put(
         self,

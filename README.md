@@ -439,7 +439,7 @@ alice.recall("what do I know?")
 ```bash
 git clone https://github.com/Mars375/memos
 cd memos
-pip install -e ".[dev]"
+pip install -e ".[dev]"  # includes pyarrow, so parquet tests run out of the box
 
 # Lint
 ruff check src/ tests/
