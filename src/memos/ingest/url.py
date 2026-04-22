@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import html
+import ipaddress
 import mimetypes
+import os
 import re
+import socket
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -15,6 +18,42 @@ import httpx
 
 from .engine import IngestResult
 from .miner import chunk_text
+
+# ── SSRF safety configuration ───────────────────────────────────
+
+# Allow file:// scheme (disabled by default to prevent local file reads via SSRF).
+_ALLOW_FILE_SCHEME: bool = os.environ.get("MEMOS_ALLOW_FILE_SCHEME", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
+# Allow fetching private/internal network URLs (disabled by default).
+_ALLOW_PRIVATE_URLS: bool = os.environ.get("MEMOS_ALLOW_PRIVATE_URLS", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
+_MAX_REDIRECTS: int = int(os.environ.get("MEMOS_MAX_URL_REDIRECTS", "5"))
+
+
+def _is_private_ip(addr: str) -> bool:
+    """Return True if the IP address is private, loopback, link-local, or reserved."""
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+
+
+def _resolve_host(hostname: str) -> list[str]:
+    try:
+        results = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        return [r[4][0] for r in results]
+    except socket.gaierror:
+        return []
+
 
 _META_RE = re.compile(
     r"<meta[^>]+(?:name|property)=[\"'](?P<key>[^\"']+)[\"'][^>]+content=[\"'](?P<value>.*?)[\"'][^>]*>",
@@ -207,7 +246,10 @@ class URLIngestor:
 
     def _fetch(self, url: str) -> _FetchedURL | str:
         parsed = urlparse(url)
+
         if parsed.scheme == "file":
+            if not _ALLOW_FILE_SCHEME:
+                return "file:// scheme is disabled; set MEMOS_ALLOW_FILE_SCHEME=true to enable"
             path = Path(unquote(parsed.path))
             if not path.exists():
                 return f"File not found: {path}"
@@ -219,13 +261,34 @@ class URLIngestor:
         if parsed.scheme not in {"http", "https"}:
             return f"Unsupported URL scheme: {parsed.scheme or 'missing'}"
 
+        if not _ALLOW_PRIVATE_URLS:
+            hostname = parsed.hostname
+            if not hostname:
+                return "URL has no hostname"
+            resolved = _resolve_host(hostname)
+            if not resolved:
+                return f"Cannot resolve hostname: {hostname}"
+            for ip in resolved:
+                if _is_private_ip(ip):
+                    return (
+                        f"Hostname {hostname} resolves to private/internal address {ip}; "
+                        "set MEMOS_ALLOW_PRIVATE_URLS=true to allow"
+                    )
+
         headers = {"User-Agent": self._user_agent}
         try:
-            with httpx.Client(timeout=self._timeout, follow_redirects=True, headers=headers) as client:
+            with httpx.Client(
+                timeout=self._timeout,
+                follow_redirects=True,
+                max_redirects=_MAX_REDIRECTS,
+                headers=headers,
+            ) as client:
                 response = client.get(url)
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "text/html").split(";")[0].strip().lower()
                 return _FetchedURL(url=str(response.url), data=response.content, content_type=content_type)
+        except httpx.TooManyRedirects:
+            return f"Too many redirects (max {_MAX_REDIRECTS})"
         except Exception as exc:
             return f"Fetch error: {exc}"
 

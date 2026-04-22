@@ -143,8 +143,33 @@ class TestFastAPIAuth:
         resp = client.get("/health")
         assert resp.status_code == 200
         data = resp.json()
+        assert "auth_enabled" not in data
+        assert "active_keys" not in data
+        assert data["status"] == "ok"
+        assert "version" in data
+
+    def test_health_authenticated_exposes_auth_state(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/api/v1/health", headers={"X-API-Key": "sk-test-123"})
+        assert resp.status_code == 200
+        data = resp.json()
         assert data["auth_enabled"] is True
         assert data["active_keys"] == 1
+
+    def test_health_unauthenticated_no_auth_state(self):
+        from memos.api import create_fastapi_app
+
+        app = create_fastapi_app(api_keys=None)
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        resp = client.get("/api/v1/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["auth_enabled"] is False
+        assert data["active_keys"] == 0
 
     def test_dashboard_no_auth_required(self, app_with_auth):
         from fastapi.testclient import TestClient
@@ -186,3 +211,53 @@ class TestFastAPIAuth:
             json={"content": "test memory"},
         )
         assert resp.status_code == 401
+
+
+class TestWebSocketAuth:
+    """WebSocket /ws must enforce authentication when keys are configured."""
+
+    @pytest.fixture
+    def app_with_auth(self):
+        from memos.api import create_fastapi_app
+
+        return create_fastapi_app(api_keys=["sk-ws-test"])
+
+    @pytest.fixture
+    def app_no_auth(self):
+        from memos.api import create_fastapi_app
+
+        return create_fastapi_app(api_keys=None)
+
+    def test_ws_rejects_no_key(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        with TestClient(app_with_auth) as client:
+            with pytest.raises(Exception):
+                with client.websocket_connect("/ws"):
+                    pass
+
+    def test_ws_rejects_wrong_key(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        with TestClient(app_with_auth) as client:
+            with pytest.raises(Exception):
+                with client.websocket_connect("/ws?api_key=wrong-key"):
+                    pass
+
+    def test_ws_accepts_valid_key(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        with TestClient(app_with_auth) as client:
+            with client.websocket_connect("/ws?api_key=sk-ws-test") as ws:
+                ws.send_text("ping")
+                data = ws.receive_json()
+                assert data["type"] == "pong"
+
+    def test_ws_no_auth_allows_anonymous(self, app_no_auth):
+        from fastapi.testclient import TestClient
+
+        with TestClient(app_no_auth) as client:
+            with client.websocket_connect("/ws") as ws:
+                ws.send_text("ping")
+                data = ws.receive_json()
+                assert data["type"] == "pong"

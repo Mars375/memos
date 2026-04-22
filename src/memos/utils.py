@@ -38,17 +38,57 @@ def parse_date(value: str | float | None) -> Optional[float]:
         raise ValueError(f"Cannot parse date: {value!r}")
 
 
+def validate_safe_path(user_path: str, *, base_dir: str | None = None) -> str:
+    """Validate a user-supplied filesystem path is safe (no traversal).
+
+    Rejects paths containing ``..`` segments.  If *base_dir* is given, the
+    resolved path must also stay within that base directory.
+
+    Returns the resolved absolute path string.
+
+    Raises:
+        ValueError: If the path contains traversal components or escapes base_dir.
+    """
+    from pathlib import Path
+
+    if ".." in Path(user_path).parts:
+        raise ValueError(f"Path traversal rejected: {user_path!r}")
+
+    resolved = Path(user_path).resolve()
+
+    if base_dir is not None:
+        base = Path(base_dir).resolve()
+        try:
+            resolved.relative_to(base)
+        except ValueError:
+            raise ValueError(f"Path escapes base directory: {user_path!r} (base={base})")
+
+    return str(resolved)
+
+
 def get_or_create_kg(memos: Any) -> Any:
+    """Return a KG instance, delegating to ``memos.get_or_create_kg`` when available."""
     if hasattr(memos, "get_or_create_kg"):
         return memos.get_or_create_kg()
 
     from .knowledge_graph import KnowledgeGraph
 
-    kg_instance = getattr(memos, "kg", None) or getattr(memos, "_kg", None)
+    kg_instance = getattr(memos, "kg", None)
     if kg_instance is None:
         kg_instance = KnowledgeGraph()
-        if hasattr(memos, "kg"):
-            memos.kg = kg_instance
-        else:
-            memos._kg = kg_instance
+        memos.kg = kg_instance
     return kg_instance
+
+
+def get_or_create_kg_bridge(memos: Any, kg_instance: Any) -> Any:
+    """Return a KGBridge, delegating to ``memos.get_or_create_kg_bridge`` when available."""
+    if hasattr(memos, "get_or_create_kg_bridge"):
+        return memos.get_or_create_kg_bridge(kg_instance)
+
+    from .kg_bridge import KGBridge
+
+    bridge = getattr(memos, "kg_bridge", None)
+    if bridge is None or getattr(bridge, "kg", None) is not kg_instance:
+        bridge = KGBridge(memos, kg_instance)
+        memos.kg_bridge = bridge
+    return bridge

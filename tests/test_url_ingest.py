@@ -19,7 +19,8 @@ def _as_uri(path: Path) -> str:
 # ── Original URL ingestion tests ──────────────────────────────
 
 
-def test_ingest_webpage_file_url(tmp_path):
+def test_ingest_webpage_file_url(tmp_path, monkeypatch):
+    monkeypatch.setattr("memos.ingest.url._ALLOW_FILE_SCHEME", True)
     page = tmp_path / "page.html"
     page.write_text(
         """
@@ -113,7 +114,8 @@ def test_ingest_tweet_metadata(monkeypatch):
     assert "MemOS can ingest tweets and webpages." in chunk["content"]
 
 
-def test_ingest_pdf_file_url(tmp_path):
+def test_ingest_pdf_file_url(tmp_path, monkeypatch):
+    monkeypatch.setattr("memos.ingest.url._ALLOW_FILE_SCHEME", True)
     pdf = tmp_path / "paper.pdf"
     pdf.write_bytes(
         b"%PDF-1.4\n"
@@ -131,7 +133,8 @@ def test_ingest_pdf_file_url(tmp_path):
     assert "MemOS PDF content" in result.chunks[0]["content"]
 
 
-def test_memos_ingest_url_stores_memories(tmp_path):
+def test_memos_ingest_url_stores_memories(tmp_path, monkeypatch):
+    monkeypatch.setattr("memos.ingest.url._ALLOW_FILE_SCHEME", True)
     page = tmp_path / "article.html"
     page.write_text(
         "<html><head><title>Stored page</title></head><body><p>Saved into MemOS.</p></body></html>", encoding="utf-8"
@@ -147,7 +150,8 @@ def test_memos_ingest_url_stores_memories(tmp_path):
     assert "imported" in items[0].tags
 
 
-def test_api_ingest_url_dry_run(tmp_path):
+def test_api_ingest_url_dry_run(tmp_path, monkeypatch):
+    monkeypatch.setattr("memos.ingest.url._ALLOW_FILE_SCHEME", True)
     from fastapi.testclient import TestClient
 
     page = tmp_path / "api-page.html"
@@ -263,8 +267,9 @@ def test_doc_api_key_bracket_placeholder_not_flagged():
     assert m is None, f"Bracket placeholder matched unexpectedly: {m.group() if m else ''}"
 
 
-def test_skip_sanitization_param(tmp_path):
+def test_skip_sanitization_param(tmp_path, monkeypatch):
     """The skip_sanitization parameter on ingest_url should bypass sanitizer."""
+    monkeypatch.setattr("memos.ingest.url._ALLOW_FILE_SCHEME", True)
     page = tmp_path / "doc.html"
     page.write_text(
         "<html><head><title>Doc</title></head>"
@@ -279,3 +284,128 @@ def test_skip_sanitization_param(tmp_path):
     assert not result.errors, f"Unexpected errors with skip_sanitization: {result.errors}"
     items = memos.search("API_KEY")
     assert len(items) >= 1, "Chunks should be stored when skip_sanitization=True"
+
+
+# ── SSRF safety tests ───────────────────────────────────────────
+
+
+class TestURLIngestSSRF:
+    def test_file_scheme_blocked_by_default(self, tmp_path):
+        page = tmp_path / "secret.txt"
+        page.write_text("secret content", encoding="utf-8")
+        result = URLIngestor().ingest(_as_uri(page))
+        assert result.total_chunks == 0
+        assert any("file://" in e for e in result.errors)
+
+    def test_file_scheme_allowed_with_env(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("memos.ingest.url._ALLOW_FILE_SCHEME", True)
+        page = tmp_path / "page.html"
+        page.write_text(
+            "<html><head><title>Local</title></head><body><p>Content</p></body></html>",
+            encoding="utf-8",
+        )
+        result = URLIngestor().ingest(_as_uri(page))
+        assert result.total_chunks >= 1
+        assert not result.errors
+
+    def test_unsupported_scheme_rejected(self):
+        result = URLIngestor().ingest("ftp://example.com/file")
+        assert result.total_chunks == 0
+        assert any("Unsupported" in e for e in result.errors)
+
+    def test_private_ip_blocked_by_default(self, monkeypatch):
+        from unittest.mock import patch as umock_patch
+
+        monkeypatch.setattr("memos.ingest.url._ALLOW_PRIVATE_URLS", False)
+
+        with umock_patch("memos.ingest.url._resolve_host", return_value=["127.0.0.1"]):
+            result = URLIngestor().ingest("http://localhost/admin")
+        assert result.total_chunks == 0
+        assert any("private" in e.lower() or "internal" in e.lower() for e in result.errors)
+
+    def test_cloud_metadata_ip_blocked(self, monkeypatch):
+        from unittest.mock import patch as umock_patch
+
+        monkeypatch.setattr("memos.ingest.url._ALLOW_PRIVATE_URLS", False)
+
+        with umock_patch("memos.ingest.url._resolve_host", return_value=["169.254.169.254"]):
+            result = URLIngestor().ingest("http://metadata.google.internal/computeMetadata/v1/")
+        assert result.total_chunks == 0
+        assert any("private" in e.lower() or "internal" in e.lower() for e in result.errors)
+
+    def test_public_ip_allowed(self, monkeypatch):
+        from memos.ingest.url import _FetchedURL
+
+        monkeypatch.setattr("memos.ingest.url._ALLOW_PRIVATE_URLS", False)
+        ingestor = URLIngestor()
+        monkeypatch.setattr(
+            ingestor,
+            "_fetch",
+            lambda url: _FetchedURL(
+                url="https://example.com/page",
+                data=b"<html><body><p>Public content</p></body></html>",
+                content_type="text/html",
+            ),
+        )
+        result = ingestor.ingest("https://example.com/page")
+        assert result.total_chunks >= 1
+        assert not result.errors
+
+    def test_private_url_allowed_with_env(self, monkeypatch):
+        from memos.ingest.url import _FetchedURL
+
+        monkeypatch.setattr("memos.ingest.url._ALLOW_PRIVATE_URLS", True)
+        ingestor = URLIngestor()
+        monkeypatch.setattr(
+            ingestor,
+            "_fetch",
+            lambda url: _FetchedURL(
+                url="http://internal.local/data",
+                data=b"<html><body><p>Internal data</p></body></html>",
+                content_type="text/html",
+            ),
+        )
+        result = ingestor.ingest("http://internal.local/data")
+        assert result.total_chunks >= 1
+
+
+class TestPrivateIPDetection:
+    def test_loopback_ipv4(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("127.0.0.1") is True
+
+    def test_private_10_range(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("10.0.0.1") is True
+
+    def test_private_172_range(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("172.16.0.1") is True
+
+    def test_private_192_range(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("192.168.1.1") is True
+
+    def test_link_local(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("169.254.169.254") is True
+
+    def test_loopback_ipv6(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("::1") is True
+
+    def test_public_ip_not_private(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("8.8.8.8") is False
+
+    def test_invalid_ip_not_private(self):
+        from memos.ingest.url import _is_private_ip
+
+        assert _is_private_ip("not-an-ip") is False

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memos-os"
-version = "2.3.2"
+version = "2.3.3"
 description = "Memory Operating System for LLM Agents — persistent, smart, local-first memory"
 readme = "README.md"
 license = {text = "MIT"}
@@ -27,7 +27,7 @@ qdrant = ["qdrant-client>=1.17.1"]
 pinecone = ["pinecone-client>=3.0"]
 parquet = ["pyarrow>=12.0"]
 server = ["fastapi>=0.104", "uvicorn>=0.44.0"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff==0.15.10", "freezegun>=1.2"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff==0.15.10", "freezegun>=1.5.1"]
 
 [project.scripts]
 memos = "memos.cli:main"

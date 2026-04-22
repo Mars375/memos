@@ -37,9 +37,15 @@ pytest -k "test_learn"        # by name
 
 MemOS is structured in three layers (see [PRD.md](PRD.md)):
 
-- **Capture** — `cli.py`, `api/`, `mcp_server.py`, `ingest/`
-- **Engine** — `core.py`, `storage/`, `retrieval/`, `decay/`, `versioning/`, `dedup.py`
-- **Knowledge Surface** — `knowledge_graph.py`, `wiki_living.py`, `brain.py`, `web/`
+- **Capture** — `cli/`, `api/`, `mcp_server.py`, `mcp_tools/`, `ingest/`
+- **Engine** — `core.py`, extracted `_*_facade.py` modules, `storage/`, `retrieval/`, `decay/`, `versioning/`, `dedup.py`
+- **Knowledge Surface** — `knowledge_graph.py`, `wiki_engine.py`, `wiki_entities.py`, `wiki_models.py`, `wiki_templates.py`, `brain.py`, `web/`
+
+Recent structural notes:
+
+- The CLI parser now lives in `src/memos/cli/_parser/` rather than a single `cli.py` or `cli/_parser.py` monolith.
+- The living wiki keeps `wiki_living.py` only as a backward-compatibility shim; new code should prefer the split wiki modules directly.
+- MCP transport remains in `mcp_server.py`, while tool implementations live in `src/memos/mcp_tools/`.
 
 ## License
 

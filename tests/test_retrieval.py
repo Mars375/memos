@@ -310,3 +310,174 @@ class TestTemporalProximityScoring:
         d = sb.to_dict()
         assert "temporal_proximity" in d
         assert d["temporal_proximity"] == 0.025
+
+
+# ---------------------------------------------------------------------------
+# Targeted exception handling — engine.py
+# ---------------------------------------------------------------------------
+
+
+class _CrashingEmbedder:
+    """Embedder that raises a specific exception on encode()."""
+
+    def __init__(self, exc: type[BaseException]) -> None:
+        self._exc = exc
+
+    def encode(self, text: str):
+        raise self._exc("boom")
+
+    @property
+    def model_name(self) -> str:
+        return "crash-test"
+
+
+class _WorkingEmbedder:
+    """Embedder that returns a fixed vector."""
+
+    def encode(self, text: str):
+        return [1.0, 0.0, 0.0]
+
+    @property
+    def model_name(self) -> str:
+        return "test-model"
+
+
+class TestEngineEmbedderFallback:
+    """Verify local embedder failures fall through gracefully."""
+
+    @pytest.fixture()
+    def engine_no_store(self):
+        from memos.retrieval.engine import RetrievalEngine
+        from memos.storage.memory_backend import InMemoryBackend
+
+        return RetrievalEngine(
+            store=InMemoryBackend(),
+            embedder=_CrashingEmbedder(RuntimeError),
+            embed_host="http://127.0.0.1:0",  # unreachable
+        )
+
+    def test_runtime_error_falls_through(self, engine_no_store) -> None:
+        """RuntimeError from local embedder should be caught, result is None."""
+        vec = engine_no_store._get_embedding("test")
+        assert vec is None  # both embedder and Ollama fail gracefully
+
+    def test_os_error_caught(self) -> None:
+        from memos.retrieval.engine import RetrievalEngine
+        from memos.storage.memory_backend import InMemoryBackend
+
+        eng = RetrievalEngine(
+            store=InMemoryBackend(),
+            embedder=_CrashingEmbedder(OSError),
+            embed_host="http://127.0.0.1:0",
+        )
+        assert eng._get_embedding("test") is None
+
+    def test_import_error_caught(self) -> None:
+        from memos.retrieval.engine import RetrievalEngine
+        from memos.storage.memory_backend import InMemoryBackend
+
+        eng = RetrievalEngine(
+            store=InMemoryBackend(),
+            embedder=_CrashingEmbedder(ImportError),
+            embed_host="http://127.0.0.1:0",
+        )
+        assert eng._get_embedding("test") is None
+
+    def test_unexpected_exception_propagates(self) -> None:
+        """Non-targeted exceptions (e.g. KeyboardInterrupt) must NOT be swallowed."""
+        from memos.retrieval.engine import RetrievalEngine
+        from memos.storage.memory_backend import InMemoryBackend
+
+        eng = RetrievalEngine(
+            store=InMemoryBackend(),
+            embedder=_CrashingEmbedder(KeyboardInterrupt),
+            embed_host="http://127.0.0.1:0",
+        )
+        with pytest.raises(KeyboardInterrupt):
+            eng._get_embedding("test")
+
+    def test_working_embedder_returns_vector(self) -> None:
+        from memos.retrieval.engine import RetrievalEngine
+        from memos.storage.memory_backend import InMemoryBackend
+
+        eng = RetrievalEngine(
+            store=InMemoryBackend(),
+            embedder=_WorkingEmbedder(),
+            embed_host="http://127.0.0.1:0",
+        )
+        vec = eng._get_embedding("test")
+        assert vec == [1.0, 0.0, 0.0]
+
+
+class TestEngineOllamaFallback:
+    """Verify Ollama HTTP failures fall through gracefully."""
+
+    def test_connection_refused_keyword_only(self) -> None:
+        """When no embedder and Ollama is unreachable, search falls back to keyword-only."""
+        from memos.retrieval.engine import RetrievalEngine
+        from memos.storage.memory_backend import InMemoryBackend
+
+        eng = RetrievalEngine(
+            store=InMemoryBackend(),
+            embed_host="http://127.0.0.1:0",  # nothing there
+        )
+        results = eng.search("test query", top=5)
+        assert isinstance(results, list)  # no crash, returns empty
+
+
+# ---------------------------------------------------------------------------
+# Targeted exception handling — hybrid.py llm_rerank
+# ---------------------------------------------------------------------------
+
+
+class _CrashingLLMClient:
+    """LLM client that raises a specific exception on chat()."""
+
+    def __init__(self, exc: type[BaseException]) -> None:
+        self._exc = exc
+
+    def chat(self, prompt: str) -> str:
+        raise self._exc("llm boom")
+
+
+class TestLLMRerankFallback:
+    """Verify LLM client failures in llm_rerank fall through gracefully."""
+
+    def test_connection_error_returns_original_order(self) -> None:
+        retriever = HybridRetriever()
+        candidates = [_FakeRecallResult("docker deployment", score=0.8)]
+        result = retriever.llm_rerank("docker", candidates, llm_client=_CrashingLLMClient(ConnectionError))
+        assert result == candidates[:5]
+
+    def test_timeout_error_returns_original_order(self) -> None:
+        retriever = HybridRetriever()
+        candidates = [_FakeRecallResult("docker deployment", score=0.8)]
+        result = retriever.llm_rerank("docker", candidates, llm_client=_CrashingLLMClient(TimeoutError))
+        assert result == candidates[:5]
+
+    def test_runtime_error_returns_original_order(self) -> None:
+        retriever = HybridRetriever()
+        candidates = [_FakeRecallResult("docker deployment", score=0.8)]
+        result = retriever.llm_rerank("docker", candidates, llm_client=_CrashingLLMClient(RuntimeError))
+        assert result == candidates[:5]
+
+    def test_attribute_error_returns_original_order(self) -> None:
+        """AttributeError (e.g. client missing .chat) should be caught."""
+        retriever = HybridRetriever()
+        candidates = [_FakeRecallResult("docker deployment", score=0.8)]
+        result = retriever.llm_rerank("docker", candidates, llm_client=_CrashingLLMClient(AttributeError))
+        assert result == candidates[:5]
+
+    def test_unexpected_exception_propagates(self) -> None:
+        """Non-targeted exceptions (e.g. KeyboardInterrupt) must NOT be swallowed."""
+        retriever = HybridRetriever()
+        candidates = [_FakeRecallResult("docker deployment", score=0.8)]
+        with pytest.raises(KeyboardInterrupt):
+            retriever.llm_rerank("docker", candidates, llm_client=_CrashingLLMClient(KeyboardInterrupt))
+
+    def test_no_llm_client_passes_through(self) -> None:
+        """Without an LLM client, candidates are returned as-is."""
+        retriever = HybridRetriever()
+        candidates = [_FakeRecallResult("docker deployment", score=0.8)]
+        result = retriever.llm_rerank("docker", candidates, llm_client=None, top_k=3)
+        assert result == candidates[:3]

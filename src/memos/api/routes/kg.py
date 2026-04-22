@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import APIRouter
 
-from ..errors import handle_exception, not_found, validation_error
+from ..errors import error_response, handle_exception, not_found, validation_error
 from ..schemas import FactRequest, InferRequest
 
 
@@ -33,6 +33,8 @@ def create_kg_router(_kg) -> APIRouter:
                 source=body.source,
             )
             return {"status": "ok", "id": fact_id, "confidence_label": confidence_label}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_add_fact")
 
@@ -41,6 +43,8 @@ def create_kg_router(_kg) -> APIRouter:
         try:
             facts = _kg.query(entity, time=time, direction=direction)
             return {"status": "ok", "entity": entity, "facts": facts}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_query")
 
@@ -49,6 +53,8 @@ def create_kg_router(_kg) -> APIRouter:
         try:
             facts = _kg.timeline(entity)
             return {"status": "ok", "entity": entity, "timeline": facts}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_timeline")
 
@@ -83,6 +89,8 @@ def create_kg_router(_kg) -> APIRouter:
                 max_depth=body.max_depth,
             )
             return {"status": "ok", "inferred_count": len(new_ids), "fact_ids": new_ids}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_infer")
 
@@ -139,6 +147,8 @@ def create_kg_router(_kg) -> APIRouter:
         try:
             communities = _kg.detect_communities(algorithm=algorithm)
             return {"status": "ok", "communities": communities, "total": len(communities)}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_communities")
 
@@ -147,6 +157,8 @@ def create_kg_router(_kg) -> APIRouter:
         try:
             nodes = _kg.god_nodes(top_k=top_k)
             return {"status": "ok", "nodes": nodes, "total": len(nodes)}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_god_nodes")
 
@@ -155,6 +167,8 @@ def create_kg_router(_kg) -> APIRouter:
         try:
             connections = _kg.surprising_connections(top_k=top_k)
             return {"status": "ok", "connections": connections, "total": len(connections)}
+        except ValueError as exc:
+            return error_response(str(exc), status_code=400)
         except Exception as exc:
             return handle_exception(exc, context="kg_surprising")
 

@@ -60,7 +60,7 @@ class EncryptedStorageBackend(StorageBackend):
             if any(s in k.lower() for s in sensitive_keys) and isinstance(v, str):
                 try:
                     dec_meta[k] = self._crypto.decrypt(v)
-                except Exception:
+                except (ValueError, UnicodeDecodeError):
                     dec_meta[k] = v  # Not encrypted, keep as-is
             else:
                 dec_meta[k] = v

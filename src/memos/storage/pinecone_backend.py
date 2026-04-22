@@ -117,7 +117,7 @@ class PineconeBackend(StorageBackend):
                     for k in keys:
                         del self._embed_cache[k]
                 return vec
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError):
             logger.debug("Embedding fetch failed for Pinecone", exc_info=True)
             pass
         return None
@@ -244,7 +244,7 @@ class PineconeBackend(StorageBackend):
                 return None
             metadata = vec_data.metadata if hasattr(vec_data, "metadata") else vec_data.get("metadata", {})
             return self._metadata_to_item(metadata)
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError):
             logger.warning("Pinecone get() failed for %s", item_id, exc_info=True)
             return None
 
@@ -255,7 +255,7 @@ class PineconeBackend(StorageBackend):
         try:
             self._index.delete(ids=[pinecone_id], namespace=ns)
             return True
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError):
             logger.warning("Pinecone delete() failed for %s", item_id, exc_info=True)
             return False
 
@@ -282,7 +282,7 @@ class PineconeBackend(StorageBackend):
                                 vec_data.metadata if hasattr(vec_data, "metadata") else vec_data.get("metadata", {})
                             )
                             items.append(self._metadata_to_item(metadata))
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError, TypeError):
             logger.debug("Pinecone list_all() failed", exc_info=True)
             pass
 
@@ -307,7 +307,7 @@ class PineconeBackend(StorageBackend):
                     metadata = match.get("metadata", match.metadata if hasattr(match, "metadata") else {})
                     items.append(self._metadata_to_item(metadata))
                 return items
-            except Exception:
+            except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError):
                 logger.warning(
                     "Pinecone vector search failed for namespace=%r, falling back to keyword",
                     ns,
@@ -347,7 +347,7 @@ class PineconeBackend(StorageBackend):
                 metadata = match.get("metadata", match.metadata if hasattr(match, "metadata") else {})
                 output.append((self._metadata_to_item(metadata), score))
             return output
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError):
             return []
 
     def list_namespaces(self) -> list[str]:
@@ -356,7 +356,7 @@ class PineconeBackend(StorageBackend):
         try:
             namespaces = self._index.list_namespaces()
             return sorted(ns[len(prefix) :] for ns in namespaces if ns.startswith(prefix))
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError):
             return []
 
     def _keyword_search(self, query: str, limit: int, namespace: str) -> list[MemoryItem]:

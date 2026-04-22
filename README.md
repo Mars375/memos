@@ -5,7 +5,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.3.2-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.3-purple.svg)](https://github.com/Mars375/memos/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
@@ -13,12 +13,12 @@
 
 ---
 
-## What's new in v2.3.2
+## What's new in v2.3.3
 
-- **Core decomposition** — extracted dedicated feedback, I/O, maintenance, sharing, and versioning facades out of `core.py`
-- **Safer MemOS nucleus** — left `core.py` focused on the primary CRUD and orchestration contract instead of cross-cutting concerns
-- **Scan reuse optimization** — reused preloaded item lists across context, retrieval, and consolidation paths to avoid redundant store scans
-- **Regression coverage** — added facade characterization tests plus scan-reuse tests to preserve behavior while refactoring
+- **Hardening follow-up** — serialized conversation mining on shared `MemOS` state to avoid namespace leakage under concurrent traffic
+- **Rate-limit correctness** — fixed stale bucket cleanup on short-lived CI runners and guarded invalid `max_buckets` settings
+- **Final split pass** — completed the `memory.py` route split and reduced `wiki_engine.py` to a coordinator facade backed by focused helper modules
+- **Direct regression coverage** — added dedicated tests for split facades, MCP tools, and wiki modules instead of relying only on compatibility shims
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
@@ -307,8 +307,16 @@ Full stack with ChromaDB + Ollama embeddings:
 ```bash
 git clone https://github.com/Mars375/memos
 cd memos
-docker compose --profile chroma up -d
+docker run -p 8100:8000 \
+  -e MEMOS_BACKEND=chroma \
+  -e MEMOS_CHROMA_URL=http://host.docker.internal:8000 \
+  -e MEMOS_EMBED_HOST=http://host.docker.internal:11434 \
+  --add-host=host.docker.internal:host-gateway \
+  -v memos-data:/root/.memos \
+  ghcr.io/mars375/memos:latest
 ```
+
+If you want MemOS plus ChromaDB/Qdrant together, use your own compose/orchestrator setup — the repository no longer ships a root `docker-compose.yml`.
 
 ---
 
@@ -437,7 +445,7 @@ ruff check src/ tests/
 ruff format src/ tests/
 
 # Tests (Python 3.11 / 3.12 / 3.13)
-pytest -q --tb=short          # ~2100 tests
+pytest -q --tb=short          # ~2400 tests
 pytest tests/test_core.py     # specific module
 ```
 

@@ -34,14 +34,30 @@ __all__ = ["create_mcp_app", "run_stdio", "TOOLS", "_dispatch", "_dispatch_inner
 
 _MCP_VERSION = "2025-03-26"
 
-_CORS_ALLOWED_ORIGINS = os.environ.get("MEMOS_CORS_ORIGINS", "*")
+_CORS_ALLOWED_ORIGINS = os.environ.get("MEMOS_CORS_ORIGINS", "")
 
-_CORS_HEADERS = {
-    "Access-Control-Allow-Origin": _CORS_ALLOWED_ORIGINS,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
-    "Access-Control-Expose-Headers": "Mcp-Session-Id",
-}
+
+def _cors_headers(request_origin: str | None = None) -> dict[str, str]:
+    """Build CORS headers. When MEMOS_CORS_ORIGINS is unset/empty, reflect
+    the request Origin only (same-origin policy). When set to ``*``, allow
+    all. Otherwise treat it as a comma-separated allowlist."""
+    allowed = _CORS_ALLOWED_ORIGINS.strip()
+    if allowed == "*":
+        origin = "*"
+    elif allowed:
+        allowed_set = {o.strip() for o in allowed.split(",") if o.strip()}
+        origin = request_origin if request_origin in allowed_set else ""
+    else:
+        origin = request_origin or ""
+
+    hdrs: dict[str, str] = {
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
+        "Access-Control-Expose-Headers": "Mcp-Session-Id",
+    }
+    if origin:
+        hdrs["Access-Control-Allow-Origin"] = origin
+    return hdrs
 
 
 def _dispatch_inner(memos: Any, tool: str, args: dict) -> dict:
@@ -83,26 +99,29 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
     if not _FASTAPI_AVAILABLE:
         raise ImportError("Install memos[server]: pip install memos[server]")
 
-    def _h(session_id: str | None = None) -> dict:
-        h = dict(_CORS_HEADERS)
+    def _h(session_id: str | None = None, request: Request | None = None) -> dict:
+        origin = request.headers.get("origin") if request else None
+        h = _cors_headers(origin)
         if session_id:
             h["Mcp-Session-Id"] = session_id
         return h
 
-    def _ok(req_id: Any, result: Any, sid: str | None = None) -> JSONResponse:
+    def _ok(req_id: Any, result: Any, sid: str | None = None, request: Request | None = None) -> JSONResponse:
         return JSONResponse(
             {"jsonrpc": "2.0", "id": req_id, "result": result},
-            headers=_h(sid),
+            headers=_h(sid, request),
         )
 
-    def _err(req_id: Any, code: int, msg: str, status: int = 200, sid: str | None = None) -> JSONResponse:
+    def _err(
+        req_id: Any, code: int, msg: str, status: int = 200, sid: str | None = None, request: Request | None = None
+    ) -> JSONResponse:
         return JSONResponse(
             {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": msg}},
             status_code=status,
-            headers=_h(sid),
+            headers=_h(sid, request),
         )
 
-    async def _handle(body: dict, sid: str) -> JSONResponse:
+    async def _handle(body: dict, sid: str, request: Request) -> JSONResponse:
         req_id = body.get("id")
         method = body.get("method", "")
         params = body.get("params") or {}
@@ -115,22 +134,23 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
                     "serverInfo": {"name": "memos-mcp", "version": "1.0.0"},
                 },
                 sid,
+                request,
             )
         elif method in ("notifications/initialized", "initialized"):
-            return JSONResponse({}, headers=_h(sid))
+            return JSONResponse({}, headers=_h(sid, request))
         elif method == "tools/list":
-            return _ok(req_id, {"tools": TOOLS}, sid)
+            return _ok(req_id, {"tools": TOOLS}, sid, request)
         elif method == "tools/call":
             result = _dispatch(memos, params.get("name", ""), params.get("arguments") or {}, hooks=hooks)
-            return _ok(req_id, result, sid)
+            return _ok(req_id, result, sid, request)
         elif method == "ping":
-            return _ok(req_id, {}, sid)
+            return _ok(req_id, {}, sid, request)
         else:
-            return _err(req_id, -32601, f"Method not found: {method}", 404, sid)
+            return _err(req_id, -32601, f"Method not found: {method}", 404, sid, request)
 
     @app.options("/mcp")
-    async def mcp_options() -> JSONResponse:
-        return JSONResponse({}, headers=_CORS_HEADERS)
+    async def mcp_options(request: Request) -> JSONResponse:
+        return JSONResponse({}, headers=_h(request=request))
 
     @app.post("/mcp")
     async def mcp_post(request: Request):
@@ -138,10 +158,10 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
         try:
             body = await request.json()
         except Exception:
-            return _err(None, -32700, "Parse error", 400, sid)
+            return _err(None, -32700, "Parse error", 400, sid, request)
 
         if "text/event-stream" in request.headers.get("Accept", ""):
-            resp = await _handle(body, sid)
+            resp = await _handle(body, sid, request)
             data = resp.body.decode() if hasattr(resp, "body") else "{}"
 
             async def _sse():
@@ -151,14 +171,13 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
                 _sse(),
                 media_type="text/event-stream",
                 headers={
-                    **_CORS_HEADERS,
-                    "Mcp-Session-Id": sid,
+                    **_h(sid, request),
                     "Cache-Control": "no-cache",
                     "X-Accel-Buffering": "no",
                 },
             )
 
-        return await _handle(body, sid)
+        return await _handle(body, sid, request)
 
     @app.get("/mcp")
     async def mcp_get(request: Request):
@@ -173,11 +192,11 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
         return StreamingResponse(
             _keepalive(),
             media_type="text/event-stream",
-            headers={**_CORS_HEADERS, "Mcp-Session-Id": sid, "Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={**_h(sid, request), "Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
     @app.get("/.well-known/mcp.json")
-    async def mcp_discovery() -> JSONResponse:
+    async def mcp_discovery(request: Request) -> JSONResponse:
         return JSONResponse(
             {
                 "schema_version": "1.0",
@@ -188,7 +207,7 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
                 "endpoint": "/mcp",
                 "capabilities": {"tools": True},
             },
-            headers=_CORS_HEADERS,
+            headers=_h(request=request),
         )
 
 

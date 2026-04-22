@@ -268,3 +268,102 @@ class TestCreateMiddleware:
         limiter = RateLimiter()
         middleware = create_rate_limit_middleware(limiter)
         assert callable(middleware)
+
+
+class TestTrustedClients:
+    def test_trusted_client_bypasses_limit(self):
+        limiter = RateLimiter(
+            default_max=1,
+            rules=[],
+            trusted_clients={"internal-service"},
+        )
+        req = MockRequest("/api/v1/learn", client_host="10.0.0.1")
+        req.headers["x-forwarded-for"] = "internal-service"
+
+        for _ in range(20):
+            allowed, headers, _ = limiter.check(req)
+            assert allowed is True
+        assert headers.get("X-RateLimit-Trusted") == "true"
+
+    def test_trusted_client_shows_in_status(self):
+        limiter = RateLimiter(default_max=5, rules=[], trusted_clients={"10.0.0.1"})
+        req = MockRequest("/api/v1/test", client_host="10.0.0.1")
+        status = limiter.get_status(req)
+        assert status["trusted"] is True
+
+    def test_non_trusted_client_not_flagged(self):
+        limiter = RateLimiter(default_max=5, rules=[], trusted_clients={"10.0.0.1"})
+        req = MockRequest("/api/v1/test", client_host="192.168.1.1")
+        status = limiter.get_status(req)
+        assert status["trusted"] is False
+
+
+class TestBucketEviction:
+    def test_max_buckets_evicts_oldest(self):
+        limiter = RateLimiter(default_max=5, rules=[], max_buckets=3)
+        for i in range(5):
+            req = MockRequest("/api/v1/test", client_host=f"1.1.1.{i}")
+            limiter.check(req)
+        assert len(limiter._buckets) <= 3
+
+    def test_non_positive_max_buckets_clamps_to_one(self):
+        limiter = RateLimiter(default_max=5, rules=[], max_buckets=0)
+        req1 = MockRequest("/api/v1/test", client_host="1.1.1.1")
+        req2 = MockRequest("/api/v1/test", client_host="2.2.2.2")
+        limiter.check(req1)
+        limiter.check(req2)
+        assert limiter.max_buckets == 1
+        assert len(limiter._buckets) == 1
+        assert "2.2.2.2" in limiter._buckets
+
+    def test_stale_buckets_evicted_on_access(self):
+        limiter = RateLimiter(default_max=5, rules=[], max_buckets=1000)
+        req = MockRequest("/api/v1/test", client_host="1.1.1.1")
+        limiter.check(req)
+
+        for _client_buckets in limiter._buckets.values():
+            for bucket in _client_buckets.values():
+                bucket.last_access = time.monotonic() - 7200
+
+        req2 = MockRequest("/api/v1/test", client_host="2.2.2.2")
+        limiter.check(req2)
+        assert "1.1.1.1" not in limiter._buckets
+
+    def test_status_includes_active_clients(self):
+        limiter = RateLimiter(default_max=5, rules=[], max_buckets=50)
+        for i in range(3):
+            req = MockRequest("/api/v1/test", client_host=f"1.1.1.{i}")
+            limiter.check(req)
+        req = MockRequest("/api/v1/test", client_host="1.1.1.0")
+        status = limiter.get_status(req)
+        assert status["active_clients"] == 3
+        assert status["max_clients"] == 50
+
+
+class TestXFFHardening:
+    def test_malformed_xff_falls_back_to_client_ip(self):
+        limiter = RateLimiter(default_max=1, rules=[])
+        req = MockRequest("/api/v1/test", client_host="10.0.0.1")
+        req.headers["x-forwarded-for"] = "!!!spoofed!!!"
+        allowed, _, _ = limiter.check(req)
+        assert allowed is True
+
+        req2 = MockRequest("/api/v1/test", client_host="10.0.0.1")
+        allowed2, _, _ = limiter.check(req2)
+        assert allowed2 is False
+
+    def test_valid_xff_used_as_key(self):
+        limiter = RateLimiter(default_max=1, rules=[])
+        req = MockRequest("/api/v1/test", client_host="10.0.0.1")
+        req.headers["x-forwarded-for"] = "1.2.3.4"
+        allowed, _, _ = limiter.check(req)
+        assert allowed is True
+        status = limiter.get_status(req)
+        assert status["client"] == "1.2.3.4"
+
+    def test_empty_xff_falls_back(self):
+        limiter = RateLimiter(default_max=1, rules=[])
+        req = MockRequest("/api/v1/test", client_host="10.0.0.1")
+        req.headers["x-forwarded-for"] = ""
+        status = limiter.get_status(req)
+        assert status["client"] == "10.0.0.1"

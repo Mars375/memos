@@ -312,7 +312,7 @@ class RetrievalEngine:
         if self._embedder is not None:
             try:
                 vec = self._embedder.encode(text)
-            except Exception:
+            except (RuntimeError, ValueError, OSError, ImportError):
                 logger.warning("Local embedder failed", exc_info=True)
                 pass  # Fall through to Ollama
 
@@ -332,7 +332,7 @@ class RetrievalEngine:
                 embeddings = data.get("embeddings", [])
                 if embeddings:
                     vec = embeddings[0]
-            except Exception:
+            except (httpx.HTTPError, ValueError, KeyError, TypeError):
                 logger.warning("Ollama embedding failed", exc_info=True)
                 pass  # Graceful fallback to keyword-only
 

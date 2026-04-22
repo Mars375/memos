@@ -76,21 +76,32 @@ class QdrantBackend(StorageBackend):
 
     def _ensure_collection(self, namespace: str = ""):
         self._ensure_client()
-        from qdrant_client.models import Distance, VectorParams
-
         name = self._collection_name(namespace)
-        if name not in self._collections:
-            try:
-                self._client.get_collection(name)
-            except Exception:
-                self._client.create_collection(
-                    collection_name=name,
-                    vectors_config=VectorParams(
-                        size=self._vector_size,
-                        distance=Distance.COSINE,
-                    ),
-                )
+        if name in self._collections:
+            return
+
+        try:
+            self._client.get_collection(name)
             self._collections[name] = True
+            return
+        except Exception:
+            pass
+
+        try:
+            from qdrant_client.models import Distance, VectorParams
+        except ImportError as exc:
+            raise ImportError(
+                "qdrant-client is required to create a Qdrant collection. Install with: pip install memos[qdrant]"
+            ) from exc
+
+        self._client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(
+                size=self._vector_size,
+                distance=Distance.COSINE,
+            ),
+        )
+        self._collections[name] = True
 
     def _get_embedding(self, text: str) -> Optional[list[float]]:
         if text in self._embed_cache:
@@ -114,14 +125,22 @@ class QdrantBackend(StorageBackend):
                     for k in keys:
                         del self._embed_cache[k]
                 return vec
-        except Exception:
+        except (httpx.HTTPError, ConnectionError, OSError, ValueError, KeyError):
             logger.debug("Embedding fetch failed for Qdrant", exc_info=True)
             pass
         return None
 
     def upsert(self, item: MemoryItem, *, namespace: str = "") -> None:
         self._ensure_collection(namespace)
-        from qdrant_client.models import PointStruct
+        try:
+            from qdrant_client.models import PointStruct
+        except ImportError:
+
+            class PointStruct:  # type: ignore[no-redef]
+                def __init__(self, id, vector, payload):
+                    self.id = id
+                    self.vector = vector
+                    self.payload = payload
 
         name = self._collection_name(namespace)
         payload = {
@@ -167,7 +186,13 @@ class QdrantBackend(StorageBackend):
         self._ensure_collection(namespace)
         name = self._collection_name(namespace)
         point_id = self._id_to_uuid(item_id)
-        from qdrant_client.models import PointIdsList
+        try:
+            from qdrant_client.models import PointIdsList
+        except ImportError:
+
+            class PointIdsList:  # type: ignore[no-redef]
+                def __init__(self, points):
+                    self.points = points
 
         try:
             self._client.delete(
@@ -326,7 +351,7 @@ class QdrantBackend(StorageBackend):
         try:
             collections = self._client.get_collections().collections
             return sorted(c.name[len(prefix) :] for c in collections if c.name.startswith(prefix))
-        except Exception:
+        except (ConnectionError, OSError, RuntimeError, ValueError, AttributeError):
             return []
 
     # --- Internal helpers ---
@@ -380,7 +405,7 @@ class QdrantBackend(StorageBackend):
         if not raw_id:
             try:
                 raw_id = QdrantBackend._uuid_to_id(point_id)
-            except Exception:
+            except (ValueError, IndexError):
                 raw_id = point_id[:16]
 
         metadata_raw = payload.get("metadata", "{}")

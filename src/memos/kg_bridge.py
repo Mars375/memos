@@ -304,14 +304,7 @@ class KGBridge:
         return refined
 
     def _collect_facts(self, entities: list[str]) -> list[dict[str, Any]]:
-        facts: list[dict[str, Any]] = []
-        seen_ids: set[str] = set()
-        for entity in entities:
-            for fact in self._kg.query(entity):
-                if fact["id"] in seen_ids:
-                    continue
-                seen_ids.add(fact["id"])
-                facts.append(fact)
+        facts = self._kg.query_entities(entities)
         facts.sort(key=lambda f: (f.get("created_at") or 0, f.get("id") or ""), reverse=True)
         return facts
 

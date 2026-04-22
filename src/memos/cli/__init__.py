@@ -27,7 +27,6 @@ from .commands_io import (
     cmd_skills_export,
 )
 from .commands_knowledge import (
-    cmd_brain_search,
     cmd_kg_add,
     cmd_kg_backlinks,
     cmd_kg_infer,
@@ -40,9 +39,7 @@ from .commands_knowledge import (
     cmd_kg_stats,
     cmd_kg_timeline,
     cmd_wiki_compile,
-    cmd_wiki_graph,
     cmd_wiki_list,
-    cmd_wiki_living,
     cmd_wiki_read,
 )
 from .commands_memory import (
@@ -114,6 +111,7 @@ from .commands_versioning import (
     cmd_version_gc,
     cmd_version_stats,
 )
+from .commands_wiki import cmd_brain_search, cmd_wiki_graph, cmd_wiki_living
 
 
 def main(argv: list[str] | None = None) -> None:
