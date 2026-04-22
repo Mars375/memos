@@ -163,6 +163,14 @@ class TestEngineStatsList:
         assert s["total_memory_links"] >= 3
         assert "wiki_dir" in s
 
+    def test_list_pages_cache_invalidated_on_create(self, engine: LivingWikiEngine) -> None:
+        engine.update(force=True)
+        initial = engine.list_pages()
+        engine.create_page("Delta Page", entity_type="concept")
+        refreshed = engine.list_pages()
+        assert len(refreshed) == len(initial) + 1
+        assert any(page.entity == "Delta Page" for page in refreshed)
+
     def test_list_pages(self, engine: LivingWikiEngine) -> None:
         engine.update(force=True)
         pages = engine.list_pages()
@@ -246,6 +254,18 @@ class TestEngineCreatePage:
         engine.create_page("DupEntity", entity_type="default")
         result = engine.create_page("DupEntity", entity_type="default")
         assert result["status"] == "already_exists"
+
+    def test_create_page_slug_collision_duplicate(self, engine: LivingWikiEngine) -> None:
+        engine.init()
+        first = engine.create_page("Foo Bar", entity_type="default")
+        second = engine.create_page("Foo-Bar", entity_type="default")
+
+        assert first["status"] == "created"
+        assert second["status"] == "already_exists"
+
+        page = engine.read_page("Foo Bar")
+        assert page is not None
+        assert 'title: "Foo Bar"' in page
 
 
 # ---------------------------------------------------------------------------

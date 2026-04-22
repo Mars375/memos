@@ -62,6 +62,8 @@ def add_fact(
                 (short_id(), entity_name, now),
             )
     kg._conn.commit()
+    kg._communities_cache = None
+    kg._communities_cache_ts = 0.0
     return fact_id
 
 
@@ -73,4 +75,7 @@ def invalidate(kg, fact_id: str, reason: str | None = None) -> bool:
         (now, fact_id),
     )
     kg._conn.commit()
+    if cur.rowcount > 0:
+        kg._communities_cache = None
+        kg._communities_cache_ts = 0.0
     return cur.rowcount > 0

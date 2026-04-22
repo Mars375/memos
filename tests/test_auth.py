@@ -158,6 +158,17 @@ class TestFastAPIAuth:
         assert data["auth_enabled"] is True
         assert data["active_keys"] == 1
 
+    def test_health_no_auth_required_on_prefixed_route(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/api/v1/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["auth_enabled"] is True
+        assert data["active_keys"] == 1
+
     def test_health_unauthenticated_no_auth_state(self):
         from memos.api import create_fastapi_app
 
@@ -176,6 +187,27 @@ class TestFastAPIAuth:
 
         client = TestClient(app_with_auth)
         resp = client.get("/")
+        assert resp.status_code == 200
+
+    def test_dashboard_alias_no_auth_required(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/dashboard")
+        assert resp.status_code == 200
+
+    def test_redoc_no_auth_required(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/redoc")
+        assert resp.status_code == 200
+
+    def test_static_assets_no_auth_required(self, app_with_auth):
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app_with_auth)
+        resp = client.get("/static/dashboard.css")
         assert resp.status_code == 200
 
     def test_rate_limit_enforced(self, app_rate_limited):

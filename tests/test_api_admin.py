@@ -271,6 +271,18 @@ class TestSharing:
         assert data["status"] == "ok"
         assert data["share"]["status"] == "accepted"
 
+    def test_share_accept_wrong_target_is_forbidden(self, client):
+        resp = client.post(
+            "/api/v1/share/offer",
+            json={"target_agent": "other-agent"},
+        )
+        share_id = resp.json()["share"]["id"]
+        resp = client.post(f"/api/v1/share/{share_id}/accept")
+        assert resp.status_code == 403
+        data = resp.json()
+        assert data["status"] == "error"
+        assert data["code"] == "ERROR"
+
     def test_share_reject(self, client):
         offer = self._create_offer(client)
         share_id = offer["share"]["id"]
@@ -308,9 +320,10 @@ class TestSharing:
         offer = self._create_offer(client, target="agent-no-accept")
         share_id = offer["share"]["id"]
         resp = client.get(f"/api/v1/share/{share_id}/export")
-        assert resp.status_code == 200
+        assert resp.status_code == 409
         data = resp.json()
         assert data["status"] == "error"
+        assert data["code"] == "ERROR"
 
     def test_share_import(self, client, memos):
         item = memos.learn("shared knowledge", tags=["share-test"], importance=0.7)  # noqa: F841
@@ -362,15 +375,15 @@ class TestSharing:
 
     def test_share_accept_not_found(self, client):
         resp = client.post("/api/v1/share/nonexistent-id/accept")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
-        assert data["status"] == "error"
+        assert data["code"] == "NOT_FOUND"
 
     def test_share_reject_not_found(self, client):
         resp = client.post("/api/v1/share/nonexistent-id/reject")
-        assert resp.status_code == 200
+        assert resp.status_code == 404
         data = resp.json()
-        assert data["status"] == "error"
+        assert data["code"] == "NOT_FOUND"
 
 
 # ── Mine Conversation (1 endpoint) ───────────────────────────
@@ -397,6 +410,28 @@ class TestMineConversation:
 
 
 # ── Dashboard (1 endpoint) ───────────────────────────────────
+
+
+class TestShareLifecycleErrors:
+    def test_invalid_share_accept_returns_404(self, client):
+        resp = client.post("/api/v1/share/not-a-share/accept")
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_invalid_share_reject_returns_404(self, client):
+        resp = client.post("/api/v1/share/not-a-share/reject")
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_invalid_share_revoke_returns_404(self, client):
+        resp = client.post("/api/v1/share/not-a-share/revoke")
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "NOT_FOUND"
+
+    def test_invalid_share_export_returns_404(self, client):
+        resp = client.get("/api/v1/share/not-a-share/export")
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "NOT_FOUND"
 
 
 class TestDashboard:

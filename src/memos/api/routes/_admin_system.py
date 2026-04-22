@@ -42,9 +42,8 @@ def register_admin_system_routes(
     async def health():
         """Public liveness probe — intentionally minimal.
 
-        Auth state (whether keys are configured, how many) is NOT exposed
-        here because this endpoint is unauthenticated.  See
-        ``/api/v1/health`` for the authenticated variant.
+        Auth state (whether keys are configured, how many) is NOT exposed.
+        See ``/api/v1/health`` for the full readiness probe.
         """
         return {
             "status": "ok",
@@ -53,7 +52,7 @@ def register_admin_system_routes(
 
     @router.get("/api/v1/health")
     async def api_v1_health():
-        """Authenticated health check with version, uptime, and auth state."""
+        """Health check with version, uptime, and auth state."""
         uptime = time.time() - _start_time
         try:
             import importlib.metadata
@@ -112,6 +111,23 @@ def register_admin_system_routes(
 
     # ── Multi-Agent Sharing ───────────────────────────────────
 
+    from ...sharing.models import ShareStatus
+
+    def _share_actor() -> str:
+        return getattr(memos, "_agent_id", "") or "default"
+
+    def _share_value_error_response(exc: ValueError):
+        message = str(exc)
+        if message.startswith("Share '") and message.endswith("not found"):
+            return not_found(message)
+        if message.startswith("Only target agent") or message.startswith("Only source agent"):
+            return error_response(message, status_code=403)
+        if message.startswith("Share is ") or message.startswith("Cannot revoke share"):
+            return error_response(message, status_code=409)
+        if message == "Share not found or not accepted":
+            return not_found(message)
+        return error_response(message, status_code=400)
+
     @router.post("/api/v1/share/offer")
     async def api_share_offer(body: ShareOfferRequest):
         from ...sharing.models import SharePermission, ShareScope
@@ -132,31 +148,60 @@ def register_admin_system_routes(
 
     @router.post("/api/v1/share/{share_id}/accept")
     async def api_share_accept(share_id: str):
+        req = memos.sharing().get(share_id)
+        if req is None:
+            return not_found(f"Share '{share_id}' not found")
+        actor = _share_actor()
+        if req.target_agent != actor:
+            return error_response(f"Only target agent '{req.target_agent}' can accept this share", status_code=403)
+        if req.status != ShareStatus.PENDING:
+            return error_response(f"Share is {req.status.value}, not pending", status_code=409)
         try:
             return {"status": "ok", "share": memos.accept_share(share_id).to_dict()}
-        except ValueError as e:
-            return {"status": "error", "message": str(e)}
+        except ValueError as exc:
+            return _share_value_error_response(exc)
 
     @router.post("/api/v1/share/{share_id}/reject")
     async def api_share_reject(share_id: str):
+        req = memos.sharing().get(share_id)
+        if req is None:
+            return not_found(f"Share '{share_id}' not found")
+        actor = _share_actor()
+        if req.target_agent != actor:
+            return error_response(f"Only target agent '{req.target_agent}' can reject this share", status_code=403)
+        if req.status != ShareStatus.PENDING:
+            return error_response(f"Share is {req.status.value}, not pending", status_code=409)
         try:
             return {"status": "ok", "share": memos.reject_share(share_id).to_dict()}
-        except ValueError as e:
-            return {"status": "error", "message": str(e)}
+        except ValueError as exc:
+            return _share_value_error_response(exc)
 
     @router.post("/api/v1/share/{share_id}/revoke")
     async def api_share_revoke(share_id: str):
+        req = memos.sharing().get(share_id)
+        if req is None:
+            return not_found(f"Share '{share_id}' not found")
+        actor = _share_actor()
+        if req.source_agent != actor:
+            return error_response(f"Only source agent '{req.source_agent}' can revoke this share", status_code=403)
+        if req.status not in (ShareStatus.PENDING, ShareStatus.ACCEPTED):
+            return error_response(f"Cannot revoke share in {req.status.value} state", status_code=409)
         try:
             return {"status": "ok", "share": memos.revoke_share(share_id).to_dict()}
-        except ValueError as e:
-            return {"status": "error", "message": str(e)}
+        except ValueError as exc:
+            return _share_value_error_response(exc)
 
     @router.get("/api/v1/share/{share_id}/export")
     async def api_share_export(share_id: str):
+        req = memos.sharing().get(share_id)
+        if req is None:
+            return not_found(f"Share '{share_id}' not found")
+        if req.status != ShareStatus.ACCEPTED:
+            return error_response("Share is not accepted", status_code=409)
         try:
             return {"status": "ok", "envelope": memos.export_shared(share_id).to_dict()}
-        except ValueError as e:
-            return {"status": "error", "message": str(e)}
+        except ValueError as exc:
+            return _share_value_error_response(exc)
 
     @router.post("/api/v1/share/import")
     async def api_share_import(body: ShareImportRequest):

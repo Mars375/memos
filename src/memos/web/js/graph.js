@@ -499,7 +499,7 @@ async function loadCommunityAndGodNodes() {
 
   // Mark god nodes
   godNodes.forEach(gn => {
-    const nodeId = gn.id || gn.node_id || gn;
+    const nodeId = gn.entity || gn.id || gn.node_id || gn;
     if (nodeId) godNodeIds.add(nodeId);
   });
 }

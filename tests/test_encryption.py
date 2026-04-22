@@ -116,6 +116,15 @@ class TestEncryptedStorageBackend:
         assert result.metadata["api_key"] == "sk-12345"
         assert result.metadata["name"] == "public"
 
+    def test_search_finds_decrypted_content(self):
+        inner = InMemoryBackend()
+        crypto = MemoryCrypto.from_passphrase("pass")
+        enc = EncryptedStorageBackend(inner, crypto)
+        enc.upsert(self._make_item("secret content"))
+        results = enc.search("secret")
+        assert results
+        assert results[0].content == "secret content"
+
     def test_list_all_decrypts(self):
         inner = InMemoryBackend()
         crypto = MemoryCrypto.from_passphrase("pass")

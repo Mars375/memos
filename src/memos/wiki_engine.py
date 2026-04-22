@@ -33,6 +33,10 @@ class LivingWikiEngine:
         self._list_pages_cache: list | None = None
         self._list_pages_cache_ts: float = 0.0
 
+    def _invalidate_list_pages_cache(self) -> None:
+        self._list_pages_cache = None
+        self._list_pages_cache_ts = 0.0
+
     def _get_db(self):
         return get_db(self)
 

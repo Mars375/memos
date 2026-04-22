@@ -264,7 +264,8 @@ GET    /api/v1/export/parquet       Download .parquet backup
 POST   /mcp                         MCP JSON-RPC endpoint
 GET    /.well-known/mcp.json        MCP discovery
 GET    /dashboard                   Second Brain UI
-GET    /health                      Health check
+GET    /health                      Minimal liveness check
+GET    /api/v1/health               Full health check with uptime and auth state
 ```
 
 ---
@@ -438,7 +439,7 @@ alice.recall("what do I know?")
 ```bash
 git clone https://github.com/Mars375/memos
 cd memos
-pip install -e ".[dev]"
+pip install -e ".[dev]"  # includes pyarrow, so parquet tests run out of the box
 
 # Lint
 ruff check src/ tests/

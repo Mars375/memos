@@ -86,8 +86,11 @@ def create_page(engine, entity: str, entity_type: str = "default", content: str 
     slug = engine._safe_slug(entity)
     page_path = engine._wiki_dir / "pages" / f"{slug}.md"
 
-    existing = db.execute("SELECT name FROM entities WHERE name = ?", (entity,)).fetchone()
-    if existing is not None:
+    existing = db.execute(
+        "SELECT name FROM entities WHERE name = ? OR page_path = ?",
+        (entity, str(page_path)),
+    ).fetchone()
+    if existing is not None or page_path.exists():
         db.close()
         return {"status": "already_exists", "slug": slug, "entity": entity, "path": str(page_path)}
 
@@ -115,6 +118,9 @@ def create_page(engine, entity: str, entity_type: str = "default", content: str 
     engine._log_action(db, "create", entity, f"Manually created {entity_type} page")
     engine._append_log("create_page", f"Manually created {entity_type} page: {entity}")
     db.commit()
+    invalidate = getattr(engine, "_invalidate_list_pages_cache", None)
+    if callable(invalidate):
+        invalidate()
     db.close()
     return {"status": "created", "slug": slug, "entity": entity, "path": str(page_path)}
 

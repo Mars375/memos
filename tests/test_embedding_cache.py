@@ -1,5 +1,7 @@
 """Tests for the persistent embedding cache."""
 
+import sqlite3
+
 import pytest
 from freezegun import freeze_time
 
@@ -65,10 +67,21 @@ class TestEmbeddingCacheBasic:
         cache.put("", [0.0])
         assert cache.get("") == [0.0]
 
+    def test_corrupted_row_is_treated_as_miss(self, cache, cache_path):
+        cache.put("corrupt-me", [1.0, 2.0], model="m")
+        key = cache._make_key("corrupt-me", "m")
+        with sqlite3.connect(cache_path) as conn:
+            conn.execute("UPDATE embedding_cache SET embedding = ? WHERE cache_key = ?", ("not-json", key))
+            conn.commit()
+
+        assert cache.get("corrupt-me", model="m") is None
+        assert len(cache) == 0
+
     def test_large_vector(self, cache):
         vec = [float(i) for i in range(768)]
         cache.put("large", vec, model="nomic")
         result = cache.get("large", model="nomic")
+        assert result is not None
         assert len(result) == 768
         assert result[0] == 0.0
         assert result[767] == 767.0

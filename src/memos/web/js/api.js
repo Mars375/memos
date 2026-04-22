@@ -78,7 +78,7 @@ function buildKGEdges(nodes, kgFacts) {
     const s = entityToNode[(f.subject || '').toLowerCase()];
     const t = entityToNode[(f.object || '').toLowerCase()];
     if (s && t && s !== t) {
-      const key = [s, t].sort().join('|');
+      const key = [s, t, f.predicate || ''].join('|');
       if (!seen.has(key)) { seen.add(key); edges.push({ source: s, target: t, predicate: f.predicate, type: 'kg' }); }
     }
   });
@@ -193,7 +193,7 @@ async function fetchCommunities() {
 // ── Task 5.3: God nodes ───────────────────────────────────────
 async function fetchGodNodes(topK = 10) {
   try {
-    const r = await fetch(API + '/brain/god-nodes?top_k=' + topK).then(res => res.json());
+    const r = await fetch(API + '/kg/god-nodes?top_k=' + topK).then(res => res.json());
     return r.nodes || [];
   } catch (_) { return []; }
 }

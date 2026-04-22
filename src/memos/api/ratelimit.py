@@ -298,7 +298,7 @@ def create_rate_limit_middleware(limiter: RateLimiter):
         path = str(request.url.path) if hasattr(request, "url") else "/"
 
         # Skip non-API paths
-        if path in ("/", "/health", "/docs", "/openapi.json", "/redoc"):
+        if path in ("/", "/health", "/api/v1/health", "/docs", "/openapi.json", "/redoc"):
             return await call_next(request)
 
         allowed, headers, rule = limiter.check(request)

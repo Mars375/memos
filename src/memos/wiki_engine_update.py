@@ -87,6 +87,9 @@ def update(engine, force: bool = False) -> UpdateResult:
         f"Created {result.pages_created}, updated {result.pages_updated}, indexed {result.memories_indexed} memories, {result.backlinks_added} backlinks",
     )
     db.commit()
+    invalidate = getattr(engine, "_invalidate_list_pages_cache", None)
+    if callable(invalidate):
+        invalidate()
     db.close()
     return result
 
@@ -132,6 +135,9 @@ def update_for_item(engine, item: Any) -> UpdateResult:
             "update_for_item",
             f"Created {result.pages_created}, updated {result.pages_updated}, found {result.entities_found} entities",
         )
+        invalidate = getattr(engine, "_invalidate_list_pages_cache", None)
+        if callable(invalidate):
+            invalidate()
     finally:
         db.close()
 
@@ -196,6 +202,9 @@ def refresh_entity_page(engine, entity: str, trigger: str | None = None, db=None
         )
         if own_db:
             db.commit()
+        invalidate = getattr(engine, "_invalidate_list_pages_cache", None)
+        if callable(invalidate):
+            invalidate()
     finally:
         if own_db:
             db.close()
@@ -238,6 +247,9 @@ def update_cross_references(engine, entities: List[str], db=None) -> int:
                                 page_path.write_text(content, encoding="utf-8")
         if own_db:
             db.commit()
+        invalidate = getattr(engine, "_invalidate_list_pages_cache", None)
+        if callable(invalidate):
+            invalidate()
     finally:
         if own_db:
             db.close()
