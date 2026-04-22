@@ -32,9 +32,7 @@ def lint(kg, min_facts: int = 2) -> dict:
         total_entities, active_facts}
     """
     # Active facts only
-    rows = kg._conn.execute(
-        "SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY subject, predicate"
-    ).fetchall()
+    rows = kg._conn.execute("SELECT * FROM triples WHERE invalidated_at IS NULL ORDER BY subject, predicate").fetchall()
     facts = [row_to_dict(r) for r in rows]
 
     # --- Contradictions: same (subject, predicate) → multiple objects,

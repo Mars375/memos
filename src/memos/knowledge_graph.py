@@ -97,25 +97,28 @@ class KnowledgeGraph:
 
     # -- Fact CRUD (delegated to _kg_facts) --
 
-    def add_fact(self, subject: str, predicate: str, object: str,
-                 valid_from: str | float | None = None,
-                 valid_to: str | float | None = None,
-                 confidence: float = 1.0, source: str | None = None,
-                 confidence_label: str = "EXTRACTED") -> str:
-        return add_fact(self, subject, predicate, object, valid_from, valid_to,
-                        confidence, source, confidence_label)
+    def add_fact(
+        self,
+        subject: str,
+        predicate: str,
+        object: str,
+        valid_from: str | float | None = None,
+        valid_to: str | float | None = None,
+        confidence: float = 1.0,
+        source: str | None = None,
+        confidence_label: str = "EXTRACTED",
+    ) -> str:
+        return add_fact(self, subject, predicate, object, valid_from, valid_to, confidence, source, confidence_label)
 
     def invalidate(self, fact_id: str, reason: str | None = None) -> bool:
         return invalidate(self, fact_id, reason)
 
     # -- Read queries (delegated to _kg_query) --
 
-    def query(self, entity: str, time: float | str | None = None,
-              direction: str = "both") -> List[dict]:
+    def query(self, entity: str, time: float | str | None = None, direction: str = "both") -> List[dict]:
         return query(self, entity, time, direction)
 
-    def query_predicate(self, predicate: str,
-                        time: float | str | None = None) -> List[dict]:
+    def query_predicate(self, predicate: str, time: float | str | None = None) -> List[dict]:
         return query_predicate(self, predicate, time)
 
     def timeline(self, entity: str) -> List[dict]:
@@ -142,22 +145,18 @@ class KnowledgeGraph:
     def stats(self) -> dict:
         return stats(self)
 
-    def backlinks(self, entity: str, predicate: str | None = None,
-                  active_only: bool = True) -> List[dict]:
+    def backlinks(self, entity: str, predicate: str | None = None, active_only: bool = True) -> List[dict]:
         return backlinks(self, entity, predicate, active_only)
 
     # -- Path queries (delegated to _kg_paths) --
 
-    def neighbors(self, entity: str, depth: int = 1,
-                  direction: str = "both") -> dict:
+    def neighbors(self, entity: str, depth: int = 1, direction: str = "both") -> dict:
         return neighbors(self, entity, depth, direction)
 
-    def find_paths(self, entity_a: str, entity_b: str,
-                   max_hops: int = 3, max_paths: int = 10) -> List[List[dict]]:
+    def find_paths(self, entity_a: str, entity_b: str, max_hops: int = 3, max_paths: int = 10) -> List[List[dict]]:
         return find_paths(self, entity_a, entity_b, max_hops, max_paths)
 
-    def shortest_path(self, entity_a: str, entity_b: str,
-                      max_hops: int = 5) -> Optional[List[dict]]:
+    def shortest_path(self, entity_a: str, entity_b: str, max_hops: int = 5) -> Optional[List[dict]]:
         return shortest_path(self, entity_a, entity_b, max_hops)
 
     # -- Algorithms (delegated to _kg_algorithms) --
@@ -171,9 +170,7 @@ class KnowledgeGraph:
     def surprising_connections(self, top_k: int = 10) -> List[dict]:
         return surprising_connections(self, top_k)
 
-    def infer_transitive(self, predicate: str,
-                         inferred_predicate: str | None = None,
-                         max_depth: int = 3) -> list[str]:
+    def infer_transitive(self, predicate: str, inferred_predicate: str | None = None, max_depth: int = 3) -> list[str]:
         return infer_transitive(self, predicate, inferred_predicate, max_depth)
 
     # -- Lint (delegated to _kg_lint) --

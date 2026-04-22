@@ -116,8 +116,7 @@ def label_stats(kg) -> dict[str, int]:
     """Return counts per confidence_label (active facts only)."""
     stats = {label: 0 for label in kg.VALID_LABELS}
     rows = kg._conn.execute(
-        "SELECT confidence_label, COUNT(*) as cnt FROM triples "
-        "WHERE invalidated_at IS NULL GROUP BY confidence_label"
+        "SELECT confidence_label, COUNT(*) as cnt FROM triples WHERE invalidated_at IS NULL GROUP BY confidence_label"
     ).fetchall()
     for r in rows:
         if r["confidence_label"] in stats:

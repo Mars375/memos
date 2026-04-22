@@ -123,9 +123,7 @@ def god_nodes(kg, top_k: int = 10) -> List[dict]:
             facts_as_subject (int), facts_as_object (int),
             top_predicates (list[str])
     """
-    rows = kg._conn.execute(
-        "SELECT subject, predicate, object FROM triples WHERE invalidated_at IS NULL"
-    ).fetchall()
+    rows = kg._conn.execute("SELECT subject, predicate, object FROM triples WHERE invalidated_at IS NULL").fetchall()
 
     subject_count: dict[str, int] = defaultdict(int)
     object_count: dict[str, int] = defaultdict(int)

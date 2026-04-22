@@ -11,6 +11,7 @@ and callers can ``except`` on concrete types without breaking changes.
 # Base
 # ---------------------------------------------------------------------------
 
+
 class MemosError(Exception):
     """Base exception for all MemOS domain errors."""
 
@@ -18,6 +19,7 @@ class MemosError(Exception):
 # ---------------------------------------------------------------------------
 # Storage layer
 # ---------------------------------------------------------------------------
+
 
 class StorageError(MemosError):
     """Base for storage-backend failures."""
@@ -39,6 +41,7 @@ class StorageReadError(StorageError):
 # Embeddings
 # ---------------------------------------------------------------------------
 
+
 class EmbeddingError(MemosError):
     """Base for embedding-provider failures."""
 
@@ -54,6 +57,7 @@ class EmbeddingHostError(EmbeddingError):
 # ---------------------------------------------------------------------------
 # Ingest / parsing
 # ---------------------------------------------------------------------------
+
 
 class IngestError(MemosError):
     """Base for ingestion and parsing failures."""
@@ -71,6 +75,7 @@ class IngestChunkError(IngestError):
 # Wiki engine
 # ---------------------------------------------------------------------------
 
+
 class WikiError(MemosError):
     """Base for living-wiki failures."""
 
@@ -87,6 +92,7 @@ class WikiLintError(WikiError):
 # Knowledge graph
 # ---------------------------------------------------------------------------
 
+
 class KnowledgeGraphError(MemosError):
     """Base for knowledge-graph failures."""
 
@@ -94,6 +100,7 @@ class KnowledgeGraphError(MemosError):
 # ---------------------------------------------------------------------------
 # API / HTTP surface
 # ---------------------------------------------------------------------------
+
 
 class APIError(MemosError):
     """Base for REST / MCP API failures."""
@@ -110,6 +117,7 @@ class RateLimitError(APIError):
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
 
 class ConfigurationError(MemosError):
     """Invalid or missing configuration."""
