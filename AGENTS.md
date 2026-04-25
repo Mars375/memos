@@ -61,8 +61,8 @@ src/memos/
 ├── wiki_models.py           # wiki dataclasses
 ├── wiki_templates.py        # wiki frontmatter / templates
 ├── wiki_living.py           # backward-compat shim re-exporting wiki modules
-├── knowledge_graph.py       # KG engine
-├── brain.py                 # brain search / enriched recall surface
+├── knowledge_graph.py       # backward-compat KG shim; implementation in _kg_core + _kg_* helpers
+├── brain.py                 # backward-compat brain shim; implementation in _brain_facade + _brain_* helpers
 ├── ingest/                  # miner, parsers, chunker, URL ingest, cache
 ├── retrieval/               # hybrid retrieval engine
 ├── storage/                 # backend abstraction + concrete backends
@@ -97,12 +97,11 @@ src/memos/
 - Dashboard assets are served from `web/` via FastAPI
 
 ## Current Refactor Hotspots
-These are the main remaining large files worth attention after the recent monolith split:
+These are the main remaining files worth attention after the recent monolith split:
 
 1. `src/memos/api/routes/memory.py`
 2. `src/memos/wiki_engine.py`
-3. `src/memos/knowledge_graph.py`
-4. `src/memos/brain.py`
+3. `_brain_search.py` and `_kg_algorithms.py` are now focused helper modules, but still worth watching as the search and graph algorithm surfaces evolve
 
 ## Frontend Considerations
 - Current UI is vanilla HTML/CSS/JS served by FastAPI
