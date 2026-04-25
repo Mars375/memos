@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytest.importorskip("qdrant_client", reason="Qdrant tests require the optional qdrant extra")
+
 from memos.models import MemoryItem
 from memos.storage.qdrant_backend import QdrantBackend
 
