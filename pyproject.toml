@@ -37,6 +37,9 @@ memos = "memos.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "timeout(seconds): mark tests with an expected timeout budget",
+]
 
 [tool.ruff]
 target-version = "py311"
