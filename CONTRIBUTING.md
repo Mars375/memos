@@ -10,12 +10,30 @@ cd memos
 pip install -e ".[dev,server,parquet]"
 ```
 
+Optional storage backends are installed through extras. Use them only when you are
+working on that backend:
+
+```bash
+pip install -e ".[dev,server,parquet,qdrant,chroma,pinecone]"
+```
+
+The default contributor setup intentionally stays lightweight. Tests for optional
+backends should skip cleanly when their extra dependency is not installed.
+
 ## Running tests
 
 ```bash
 pytest -q --tb=short          # all tests
 pytest tests/test_core.py     # specific module
 pytest -k "test_learn"        # by name
+```
+
+Before opening a pull request, run the same local quality gates used by CI:
+
+```bash
+ruff check src/ tests/
+ruff format --check src/ tests/
+pytest -q --tb=short
 ```
 
 ## Code style
@@ -32,6 +50,9 @@ pytest -k "test_learn"        # by name
 3. Ensure all tests pass: `pytest -q`
 4. Keep PRs focused — one feature or fix per PR
 5. Write a clear description of what changed and why
+
+For refactors, keep public compatibility shims unless the PR explicitly removes
+the old public surface and documents the migration path.
 
 ## Architecture
 
