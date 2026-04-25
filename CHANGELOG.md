@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.3.4 (2026-04-25) — Public Readiness
+
+### Public contribution workflow
+- Added GitHub issue and pull request templates to make external contributions easier to review
+- Clarified contributor setup, optional backend extras, and local validation commands in `CONTRIBUTING.md`
+- Documented compatibility expectations for refactors so public shims are preserved unless a migration path is explicit
+
+### Reliability and packaging
+- Made Qdrant tests skip cleanly when the optional `qdrant-client` dependency is not installed, keeping the default contributor test suite green
+- Declared the pytest `timeout` marker to avoid warning noise during local and CI test runs
+- Removed the retired GLM/Z.AI provider from `opencode.json`
+
+### Markdown migration hardening
+- Chunked long markdown content instead of truncating it at import time
+- Neutralized sanitizer-sensitive `system:` labels in markdown migration input while preserving the text as documentation content
+- Counted `batch_learn` dictionary results correctly during migration and added regression coverage for the new behavior
+
+### Verification
+- Local validation before release: `ruff check`, `ruff format --check`, and full `pytest` suite green
+- PR validation for #49: Docker build, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.3 (2026-04-20) — Hardening Follow-up
 
 ### Security and correctness

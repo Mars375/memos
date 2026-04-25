@@ -5,7 +5,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.3.3-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.4-purple.svg)](https://github.com/Mars375/memos/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
@@ -13,12 +13,12 @@
 
 ---
 
-## What's new in v2.3.3
+## What's new in v2.3.4
 
-- **Hardening follow-up** — serialized conversation mining on shared `MemOS` state to avoid namespace leakage under concurrent traffic
-- **Rate-limit correctness** — fixed stale bucket cleanup on short-lived CI runners and guarded invalid `max_buckets` settings
-- **Final split pass** — completed the `memory.py` route split and reduced `wiki_engine.py` to a coordinator facade backed by focused helper modules
-- **Direct regression coverage** — added dedicated tests for split facades, MCP tools, and wiki modules instead of relying only on compatibility shims
+- **Public readiness** — added GitHub issue and PR templates plus clearer contributor validation guidance
+- **Default test reliability** — optional Qdrant tests now skip cleanly when the `qdrant` extra is not installed
+- **Markdown migration hardening** — long markdown imports are chunked instead of truncated and sanitizer-sensitive labels are neutralized
+- **Provider cleanup** — removed the retired GLM/Z.AI OpenCode provider configuration
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
