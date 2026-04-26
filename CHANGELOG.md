@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.3.5 (2026-04-26) — Brain and Knowledge Graph Cleanup
+
+### Brain search architecture
+- Kept `memos.brain` as the public compatibility module while moving the `BrainSearch` implementation into `_brain_facade.py`
+- Split brain search scoring and fused-context rendering into `_brain_scoring.py` and `_brain_context.py`
+- Reduced `_brain_search.py` to a focused orchestration mixin for recall, entity expansion, wiki lookup, KG facts, and auto-filing
+
+### Knowledge graph architecture
+- Kept `memos.knowledge_graph` as the public compatibility module while moving `KnowledgeGraph` core lifecycle logic into `_kg_core.py`
+- Split graph algorithms into `_kg_communities.py`, `_kg_centrality.py`, and `_kg_inference.py`
+- Preserved `_kg_algorithms.py` as a compatibility export shim for existing internal imports
+
+### Verification
+- Local validation before release: `ruff check`, `ruff format --check`, and full `pytest` suite green
+- PR validation for #50 and #51: Docker build, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.4 (2026-04-25) — Public Readiness
 
 ### Public contribution workflow
