@@ -2,7 +2,11 @@
 
 import pytest
 
-from memos.palace import PalaceIndex
+from memos._palace_base import PalaceSQLiteBase
+from memos._palace_diary import PalaceDiaryMixin
+from memos._palace_hierarchy import PalaceHierarchyMixin
+from memos._palace_recall import PalaceRecall as SplitPalaceRecall
+from memos.palace import PalaceIndex, PalaceRecall
 
 
 @pytest.fixture
@@ -16,6 +20,12 @@ def palace():
 
 
 class TestWingCRUD:
+    def test_split_modules_preserve_public_facade(self):
+        assert issubclass(PalaceIndex, PalaceSQLiteBase)
+        assert issubclass(PalaceIndex, PalaceHierarchyMixin)
+        assert issubclass(PalaceIndex, PalaceDiaryMixin)
+        assert PalaceRecall is SplitPalaceRecall
+
     def test_create_wing(self, palace):
         wing_id = palace.create_wing("project-x")
         assert wing_id
