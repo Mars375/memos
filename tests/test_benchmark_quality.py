@@ -3,6 +3,12 @@
 import json
 import unittest
 
+from memos._benchmark_quality_data import CATEGORIES as SplitCategories
+from memos._benchmark_quality_data import QUERY_TEMPLATES as SplitQueryTemplates
+from memos._benchmark_quality_data import generate_dataset as split_generate_dataset
+from memos._benchmark_quality_metrics import _ndcg_at_k as split_ndcg_at_k
+from memos._benchmark_quality_models import QualityReport as SplitQualityReport
+from memos._benchmark_quality_runner import run_quality_benchmark as split_run_quality_benchmark
 from memos.benchmark_quality import (
     CATEGORIES,
     QUERY_TEMPLATES,
@@ -18,6 +24,14 @@ from memos.benchmark_quality import (
 
 class TestDatasetGeneration(unittest.TestCase):
     """Tests for synthetic dataset generation."""
+
+    def test_split_modules_preserve_public_facade(self):
+        self.assertIs(CATEGORIES, SplitCategories)
+        self.assertIs(QUERY_TEMPLATES, SplitQueryTemplates)
+        self.assertIs(generate_dataset, split_generate_dataset)
+        self.assertIs(QualityReport, SplitQualityReport)
+        self.assertIs(_ndcg_at_k, split_ndcg_at_k)
+        self.assertIs(run_quality_benchmark, split_run_quality_benchmark)
 
     def test_generate_default_dataset(self):
         """Default dataset has correct structure and sizes."""
