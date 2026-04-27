@@ -4,6 +4,11 @@ import time
 
 import pytest
 
+from memos.compaction._discovery import CompactionDiscoveryMixin
+from memos.compaction._helpers import CompactionHelperMixin
+from memos.compaction._models import CompactionConfig as SplitCompactionConfig
+from memos.compaction._models import CompactionReport as SplitCompactionReport
+from memos.compaction._phases import CompactionPhasesMixin
 from memos.compaction.engine import CompactionConfig, CompactionEngine
 from memos.models import MemoryItem, generate_id
 from memos.storage.memory_backend import InMemoryBackend
@@ -58,6 +63,15 @@ def engine():
 
 class TestCompactionConfig:
     """Config dataclass tests."""
+
+    def test_split_modules_preserve_public_facade(self):
+        assert CompactionConfig is SplitCompactionConfig
+        from memos.compaction.engine import CompactionReport
+
+        assert CompactionReport is SplitCompactionReport
+        assert issubclass(CompactionEngine, CompactionDiscoveryMixin)
+        assert issubclass(CompactionEngine, CompactionPhasesMixin)
+        assert issubclass(CompactionEngine, CompactionHelperMixin)
 
     def test_default_config(self):
         config = CompactionConfig()
