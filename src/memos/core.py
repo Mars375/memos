@@ -7,6 +7,7 @@ import os
 import time
 from typing import Any, Optional
 
+from ._compounding_facade import CompoundingFacade
 from ._constants import (
     DEFAULT_ANALYTICS_RETENTION_DAYS,
     DEFAULT_CACHE_MAX_SIZE,
@@ -26,8 +27,10 @@ from ._dedup_facade import DedupFacade
 from ._feedback_facade import FeedbackFacade
 from ._ingest_facade import IngestFacade
 from ._io_facade import IOFacade
+from ._kg_facade import KGFacade
 from ._maintenance_facade import MaintenanceFacade
 from ._namespace_facade import NamespaceFacade
+from ._runtime_facade import RuntimeFacade
 from ._sharing_facade import SharingFacade
 from ._tag_facade import TagFacade
 from ._versioning_facade import VersioningFacade
@@ -55,6 +58,9 @@ logger = logging.getLogger(__name__)
 
 
 class MemOS(
+    RuntimeFacade,
+    KGFacade,
+    CompoundingFacade,
     IOFacade,
     VersioningFacade,
     SharingFacade,
@@ -235,117 +241,6 @@ class MemOS(
         self._kg_instance: Any | None = None
         self._kg_bridge_instance: Any | None = None
 
-    def enable_compounding_ingest(self, wiki_dir: Optional[str] = None) -> None:
-        """Enable compounding ingest: auto-update wiki pages on every ``learn()`` call.
-
-        When enabled, each new memory triggers a lightweight
-        :meth:`~memos.wiki_living.LivingWikiEngine.update_for_item` call
-        that creates or updates entity pages for the memory's entities and tags.
-
-        Parameters
-        ----------
-        wiki_dir:
-            Optional path to the wiki directory.  Defaults to ``~/.memos/wiki``.
-        """
-        from .wiki_living import LivingWikiEngine
-
-        self._living_wiki = LivingWikiEngine(self, wiki_dir=wiki_dir)
-        self._wiki_auto_update = True
-
-    def disable_compounding_ingest(self) -> None:
-        """Disable compounding ingest."""
-        self._living_wiki = None
-        self._wiki_auto_update = False
-
-    @property
-    def compounding_ingest(self) -> bool:
-        """Whether compounding ingest is currently enabled."""
-        return self._wiki_auto_update
-
-    @property
-    def wiki_auto_update(self) -> bool:
-        """Whether wiki auto-update is enabled on every learn() call."""
-        return self._wiki_auto_update
-
-    @wiki_auto_update.setter
-    def wiki_auto_update(self, value: bool) -> None:
-        """Enable or disable wiki auto-update."""
-        self._wiki_auto_update = value
-
-    @property
-    def living_wiki(self) -> Any:
-        """The LivingWikiEngine instance, or None if not initialized."""
-        return self._living_wiki
-
-    @property
-    def _compounding_wiki(self) -> Any:
-        """Backward-compatible alias for older compounding-ingest integrations."""
-        return self._living_wiki
-
-    @_compounding_wiki.setter
-    def _compounding_wiki(self, value: Any) -> None:
-        self._living_wiki = value
-
-    @property
-    def namespace(self) -> str:
-        return self._namespace
-
-    @namespace.setter
-    def namespace(self, value: str) -> None:
-        self._namespace = value or ""
-
-    @property
-    def acl(self) -> NamespaceACL:
-        """Access the namespace ACL for managing access control."""
-        return self._acl
-
-    @property
-    def kg(self) -> Any | None:
-        """Public knowledge-graph handle, if one has been initialized."""
-        return self._kg_instance
-
-    @kg.setter
-    def kg(self, value: Any | None) -> None:
-        self._kg_instance = value
-
-    @property
-    def kg_bridge(self) -> Any | None:
-        """Public KG bridge handle, if one has been initialized."""
-        return self._kg_bridge_instance
-
-    @kg_bridge.setter
-    def kg_bridge(self, value: Any | None) -> None:
-        self._kg_bridge_instance = value
-
-    def get_or_create_kg(self) -> Any:
-        """Return the shared KG instance, creating it lazily when first needed."""
-        if self._kg_instance is None:
-            from .knowledge_graph import KnowledgeGraph
-
-            self._kg_instance = KnowledgeGraph()
-        return self._kg_instance
-
-    def get_or_create_kg_bridge(self, kg: Any | None = None) -> Any:
-        """Return the shared KG bridge, rebinding it if the KG instance changed."""
-        target_kg = kg or self.get_or_create_kg()
-        if self._kg_bridge_instance is None or getattr(self._kg_bridge_instance, "kg", None) is not target_kg:
-            from .kg_bridge import KGBridge
-
-            self._kg_bridge_instance = KGBridge(self, target_kg)
-        return self._kg_bridge_instance
-
-    # ── ACL Guard ──────────────────────────────────────────
-
-    def _check_acl(self, permission: str) -> None:
-        """Check ACL permission for the current agent on the current namespace.
-
-        Only enforces if agent_id is set via set_agent_id().
-        Empty namespace bypasses ACL checks.
-        """
-        if not self._namespace or not hasattr(self, "_agent_id") or not self._agent_id:
-            return
-        self._acl.check(self._agent_id, self._namespace, permission)
-
     def _validate_content(self, content: str) -> None:
         if not content or not content.strip():
             raise ValueError("Memory content cannot be empty")
@@ -380,53 +275,6 @@ class MemOS(
             namespace=self._namespace,
         )
         return True
-
-    def set_agent_id(self, agent_id: str) -> None:
-        """Set the agent identity for ACL checks.
-
-        When set, all operations on namespaced memories will enforce
-        the ACL permissions for this agent.
-
-        Args:
-            agent_id: Unique identifier for the agent.
-        """
-        self._agent_id: str = agent_id
-
-    @property
-    def events(self) -> EventBus:
-        """Access the event bus for subscriptions."""
-        return self._events
-
-    @property
-    def analytics(self) -> RecallAnalytics:
-        """Access recall analytics."""
-        return self._analytics
-
-    def subscribe(
-        self,
-        callback,
-        *,
-        event_types: list[str] | None = None,
-        namespaces: list[str] | None = None,
-        tags: list[str] | None = None,
-        label: str = "",
-    ) -> str:
-        """Subscribe to memory events with optional filters."""
-        return self._events.subscribe_filtered(
-            callback,
-            event_types=event_types,
-            namespaces=namespaces,
-            tags=tags,
-            label=label,
-        )
-
-    def unsubscribe(self, subscription_id: str) -> bool:
-        """Unsubscribe from memory events by subscription ID."""
-        return self._events.unsubscribe_subscription(subscription_id)
-
-    def list_subscriptions(self) -> list[dict[str, Any]]:
-        """List active event subscriptions."""
-        return self._events.list_subscriptions()
 
     def learn(
         self,
