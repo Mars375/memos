@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 
+from memos.ingest._miner_common import MineResult as SplitMineResult
+from memos.ingest._miner_common import iter_files as split_iter_files
+from memos.ingest._miner_conversations import ConversationMiningMixin
+from memos.ingest._miner_files import FileMiningMixin
 from memos.ingest.miner import (
     Miner,
     MineResult,
@@ -16,6 +20,7 @@ from memos.ingest.miner import (
     chunk_text,
     content_hash,
     detect_room,
+    iter_files,
 )
 
 # ---------------------------------------------------------------------------
@@ -344,6 +349,13 @@ def test_mine_result_merge():
     assert r1.imported == 5
     assert r1.skipped_duplicates == 1
     assert r1.errors == ["oops"]
+
+
+def test_miner_split_modules_preserve_public_facade():
+    assert MineResult is SplitMineResult
+    assert iter_files is split_iter_files
+    assert issubclass(Miner, FileMiningMixin)
+    assert issubclass(Miner, ConversationMiningMixin)
 
 
 # ---------------------------------------------------------------------------
