@@ -47,7 +47,8 @@ src/memos/
 │       ├── context.py
 │       ├── kg.py
 │       ├── knowledge.py
-│       ├── memory.py        # main remaining API route hotspot
+│       ├── memory.py        # thin memory router composer
+│       ├── _memory_*.py     # focused memory route modules + compatibility aggregators
 │       ├── palace.py
 │       └── wiki.py
 ├── cli/                     # CLI entrypoint + split parser/command modules
@@ -97,11 +98,12 @@ src/memos/
 - Dashboard assets are served from `web/` via FastAPI
 
 ## Current Refactor Hotspots
-These are the main remaining files worth attention after the recent monolith split:
+The memory route hotspot has been split. These are the main remaining files worth attention after the recent cleanup:
 
-1. `src/memos/api/routes/memory.py`
-2. `src/memos/wiki_engine.py`
-3. `_brain_search.py` and `_kg_algorithms.py` are now focused helper modules, but still worth watching as the search and graph algorithm surfaces evolve
+1. `src/memos/core.py` — still the largest orchestration nucleus, despite facade extraction
+2. `src/memos/ingest/miner.py` and `src/memos/compaction/engine.py` — large workflow engines with multiple responsibilities
+3. `src/memos/palace.py` and wiki graph/update helpers — still broad knowledge-surface modules worth watching as features evolve
+4. `src/memos/api/schemas.py` — large shared schema surface; split only if domain churn increases
 
 ## Frontend Considerations
 - Current UI is vanilla HTML/CSS/JS served by FastAPI
