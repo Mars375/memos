@@ -39,7 +39,7 @@ ruff format src/ tests/
 src/memos/
 ├── core.py                  # MemOS orchestration nucleus
 ├── _*_facade.py             # extracted facades (dedup, feedback, ingest, io, maintenance,
-│                            # namespace, sharing, tag, versioning)
+│                            # memory CRUD, namespace, sharing, tag, versioning)
 ├── api/                     # FastAPI app wiring, auth, schemas, routes, SSE
 │   └── routes/
 │       ├── admin.py
@@ -98,12 +98,14 @@ src/memos/
 - Dashboard assets are served from `web/` via FastAPI
 
 ## Current Refactor Hotspots
-The memory route hotspot has been split. These are the main remaining files worth attention after the recent cleanup:
+The previous high-value hotspots have been split: memory routes, `core.py`, ingest miner, compaction engine, palace, and benchmark quality now route through focused modules or compatibility façades. No Python source file currently exceeds 500 lines.
 
-1. `src/memos/core.py` — still the largest orchestration nucleus, despite facade extraction
-2. `src/memos/ingest/miner.py` and `src/memos/compaction/engine.py` — large workflow engines with multiple responsibilities
-3. `src/memos/palace.py` and wiki graph/update helpers — still broad knowledge-surface modules worth watching as features evolve
-4. `src/memos/api/schemas.py` — large shared schema surface; split only if domain churn increases
+Remaining 400–500 line files are acceptable watchlist items rather than urgent split targets:
+
+1. `src/memos/wiki_entities.py` and `src/memos/wiki_graph.py` — split only if entity extraction or graph update logic grows again.
+2. `src/memos/ingest/parsers.py` and `src/memos/ingest/url.py` — split only when adding more parser families or URL providers.
+3. `src/memos/conflict.py` and `src/memos/consolidation/engine.py` — split only if conflict or consolidation workflows gain new responsibilities.
+4. `src/memos/storage/qdrant_backend.py` and `src/memos/cli/commands_io.py` — split only with backend/provider churn.
 
 ## Frontend Considerations
 - Current UI is vanilla HTML/CSS/JS served by FastAPI
