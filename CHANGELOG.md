@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.3.8 (2026-04-29) — Phase 2 ACL Hardening
+
+### Security and correctness
+- Persisted namespace ACL policies for file-backed stores using an atomic sidecar file next to the memory store
+- Reloaded persisted ACL policies during `MemOS` startup so namespace data and authorization state survive process restarts together
+- Added a `NamespaceACL` change callback so direct `mem.acl.grant()`, `revoke()`, and `clear()` calls persist changes, not only facade helpers
+- Initialized runtime agent identity explicitly and exposed `agent_id` for ACL-aware integrations
+
+### Verification
+- Local validation before release: `ruff check`, `ruff format --check`, focused ACL/API/sharing/JSON tests, and full `pytest` suite green with `2500 passed, 1 skipped`
+- PR validation for #67: Docker build, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.7 (2026-04-29) — Phase 1 Security Hardening
 
 ### Security
