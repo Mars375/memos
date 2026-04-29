@@ -164,6 +164,42 @@ async def test_http_initialize(mem):
 
 
 @pytest.mark.asyncio
+async def test_http_parse_error_returns_jsonrpc_error(mem):
+    from httpx import ASGITransport, AsyncClient
+
+    app = create_mcp_app(mem)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/mcp", content="not-json")
+        assert r.status_code == 400
+        data = r.json()
+        assert data["error"]["code"] == -32700
+
+
+@pytest.mark.asyncio
+async def test_http_mcp_rejects_oversized_body(mem, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    monkeypatch.setenv("MEMOS_MCP_MAX_REQUEST_BYTES", "16")
+    app = create_mcp_app(mem)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/mcp", content=b'{"jsonrpc":"2.0","id":1,"method":"ping"}')
+        assert r.status_code == 413
+        assert r.json()["error"]["message"] == "Request body too large"
+
+
+@pytest.mark.asyncio
+async def test_legacy_root_rejects_oversized_body(mem, monkeypatch):
+    from httpx import ASGITransport, AsyncClient
+
+    monkeypatch.setenv("MEMOS_MCP_MAX_REQUEST_BYTES", "16")
+    app = create_mcp_app(mem)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/", content=b'{"jsonrpc":"2.0","id":1,"method":"ping"}')
+        assert r.status_code == 413
+        assert r.json()["error"]["message"] == "Request body too large"
+
+
+@pytest.mark.asyncio
 async def test_http_tools_list(mem):
     from httpx import ASGITransport, AsyncClient
 
@@ -190,6 +226,31 @@ async def test_http_tool_call(mem):
         )
         text = r.json()["result"]["content"][0]["text"]
         assert "Total memories" in text
+
+
+@pytest.mark.asyncio
+async def test_standalone_mcp_requires_api_key_when_configured(mem):
+    from httpx import ASGITransport, AsyncClient
+
+    app = create_mcp_app(mem, api_keys=["sk-mcp"])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}})
+        assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_standalone_mcp_allows_valid_api_key(mem):
+    from httpx import ASGITransport, AsyncClient
+
+    app = create_mcp_app(mem, api_keys=["sk-mcp"])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            "/mcp",
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+            headers={"X-API-Key": "sk-mcp"},
+        )
+        assert r.status_code == 200
+        assert len(r.json()["result"]["tools"]) == 26
 
 
 @pytest.mark.asyncio
