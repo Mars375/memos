@@ -25,7 +25,7 @@ from ._io_facade import IOFacade
 from ._kg_facade import KGFacade
 from ._maintenance_facade import MaintenanceFacade
 from ._memory_facade import MemoryCrudFacade
-from ._namespace_facade import NamespaceFacade
+from ._namespace_facade import NamespaceFacade, acl_sidecar_path
 from ._runtime_facade import RuntimeFacade
 from ._sharing_facade import SharingFacade
 from ._tag_facade import TagFacade
@@ -89,6 +89,7 @@ class MemOS(
         **kwargs,
     ) -> None:
         self._backend_name = backend
+        acl_persist_path = kwargs.get("acl_path")
         # Storage
         if backend == "chroma":
             from .storage.chroma_backend import ChromaBackend
@@ -131,14 +132,17 @@ class MemOS(
             )
         elif backend == "json":
             p = persist_path or ".memos/store.json"
+            acl_persist_path = acl_persist_path or acl_sidecar_path(p)
             store = JsonFileBackend(path=p)
         elif backend == "local":
             # Local-first: JSON storage + built-in sentence-transformers embeddings
             # No external services needed for semantic recall.
             p = persist_path or ".memos/store.json"
+            acl_persist_path = acl_persist_path or acl_sidecar_path(p)
             store = JsonFileBackend(path=p)
         else:
             if persist_path:
+                acl_persist_path = acl_persist_path or acl_sidecar_path(persist_path)
                 store = JsonFileBackend(path=persist_path)
             else:
                 store = InMemoryBackend()
@@ -185,9 +189,13 @@ class MemOS(
 
         # Namespace (multi-agent isolation)
         self._namespace: str = ""
+        self._agent_id: str = ""
 
         # Namespace ACL (access control)
         self._acl = NamespaceACL()
+        self._acl_path: str | None = acl_persist_path
+        self._acl.set_on_change(self._save_acl_policies)
+        self._load_acl_policies()
 
         # Event bus (real-time subscriptions)
         self._events = EventBus()

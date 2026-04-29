@@ -35,7 +35,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 
 class Role(Enum):
@@ -105,9 +105,18 @@ class NamespaceACL:
     All operations are thread-safe.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, on_change: Callable[[], None] | None = None) -> None:
         self._policies: dict[tuple[str, str], NamespacePolicy] = {}  # (agent_id, namespace) -> policy
         self._lock = threading.RLock()
+        self._on_change = on_change
+
+    def set_on_change(self, callback: Callable[[], None] | None) -> None:
+        """Set a callback invoked after policy mutations."""
+        self._on_change = callback
+
+    def _notify_change(self) -> None:
+        if self._on_change is not None:
+            self._on_change()
 
     # ── Grant / Revoke ──────────────────────────────────────
 
@@ -137,7 +146,8 @@ class NamespaceACL:
                 expires_at=expires_at,
             )
             self._policies[(agent_id, namespace)] = policy
-            return policy
+        self._notify_change()
+        return policy
 
     def revoke(self, agent_id: str, namespace: str) -> Optional[NamespacePolicy]:
         """Revoke an agent's access to a namespace.
@@ -145,7 +155,10 @@ class NamespaceACL:
         Returns the removed policy, or None if no policy existed.
         """
         with self._lock:
-            return self._policies.pop((agent_id, namespace), None)
+            removed = self._policies.pop((agent_id, namespace), None)
+        if removed is not None:
+            self._notify_change()
+        return removed
 
     def deny(self, agent_id: str, namespace: str) -> NamespacePolicy:
         """Explicitly deny access to a namespace.
@@ -253,6 +266,31 @@ class NamespaceACL:
                 policies = [p for p in policies if p.namespace == namespace]
             return policies
 
+    def dump_policies(self) -> list[dict]:
+        """Serialize non-expired ACL policies for durable storage."""
+        self.cleanup_expired()
+        with self._lock:
+            policies = sorted(
+                self._policies.values(),
+                key=lambda policy: (policy.namespace, policy.agent_id),
+            )
+            return [policy.to_dict() for policy in policies]
+
+    def load_policies(self, data: list[dict]) -> int:
+        """Replace current ACL policies from serialized policy dictionaries.
+
+        Returns:
+            Number of loaded non-expired policies.
+        """
+        policies: dict[tuple[str, str], NamespacePolicy] = {}
+        for item in data:
+            policy = NamespacePolicy.from_dict(item)
+            policies[(policy.agent_id, policy.namespace)] = policy
+        with self._lock:
+            self._policies = policies
+        self.cleanup_expired()
+        return len(self._policies)
+
     # ── Stats ───────────────────────────────────────────────
 
     def stats(self) -> dict:
@@ -291,4 +329,7 @@ class NamespaceACL:
     def clear(self) -> None:
         """Remove all policies."""
         with self._lock:
+            had_policies = bool(self._policies)
             self._policies.clear()
+        if had_policies:
+            self._notify_change()

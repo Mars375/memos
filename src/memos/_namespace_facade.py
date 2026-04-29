@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from typing import TYPE_CHECKING, Any, Optional
 
 from .namespaces.acl import Role
@@ -13,8 +15,44 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def acl_sidecar_path(persist_path: str) -> str:
+    """Return the ACL sidecar path for a file-backed memory store."""
+    base, ext = os.path.splitext(persist_path)
+    if not ext:
+        return f"{base}.acl.json"
+    return f"{base}.acl{ext}"
+
+
 class NamespaceFacade:
     """Mixin providing namespace management operations for the MemOS nucleus."""
+
+    def _load_acl_policies(self) -> None:
+        """Load namespace ACL policies from the configured sidecar file."""
+        path = getattr(self, "_acl_path", None)
+        if not path or not os.path.exists(path):
+            return
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        policies = data.get("policies", []) if isinstance(data, dict) else data
+        if not isinstance(policies, list):
+            raise ValueError("ACL sidecar must contain a list of policies")
+        loaded = self._acl.load_policies(policies)
+        logger.debug("Loaded %d namespace ACL policies from %s", loaded, path)
+
+    def _save_acl_policies(self) -> None:
+        """Persist namespace ACL policies to the configured sidecar file."""
+        path = getattr(self, "_acl_path", None)
+        if not path:
+            return
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        payload = {"version": 1, "policies": self._acl.dump_policies()}
+        tmp_path = f"{path}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        os.replace(tmp_path, path)
 
     def list_namespaces(self) -> list[str]:
         """List all non-default namespaces."""

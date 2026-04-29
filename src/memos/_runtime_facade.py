@@ -35,6 +35,11 @@ class RuntimeFacade:
             return
         self._acl.check(self._agent_id, self._namespace, permission)
 
+    @property
+    def agent_id(self) -> str:
+        """Current runtime agent identity used for ACL enforcement."""
+        return self._agent_id
+
     def set_agent_id(self, agent_id: str) -> None:
         """Set the agent identity for ACL checks.
 
@@ -44,7 +49,7 @@ class RuntimeFacade:
         Args:
             agent_id: Unique identifier for the agent.
         """
-        self._agent_id: str = agent_id
+        self._agent_id = agent_id or ""
 
     @property
     def events(self) -> EventBus:

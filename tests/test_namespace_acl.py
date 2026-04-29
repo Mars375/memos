@@ -5,6 +5,7 @@ import time
 import pytest
 
 from memos import MemOS
+from memos._namespace_facade import acl_sidecar_path
 from memos.namespaces.acl import NamespaceACL, NamespacePolicy, Role
 
 
@@ -69,6 +70,11 @@ class TestNamespaceACL:
 
     def setup_method(self):
         self.acl = NamespaceACL()
+
+    def test_acl_sidecar_path_preserves_store_path_semantics(self):
+        assert acl_sidecar_path(".memos/store.json") == ".memos/store.acl.json"
+        assert acl_sidecar_path("~/.memos/store.json") == "~/.memos/store.acl.json"
+        assert acl_sidecar_path("store") == "store.acl.json"
 
     def test_grant_and_check(self):
         self.acl.grant("agent-a", "production", Role.WRITER)
@@ -165,6 +171,27 @@ class TestNamespaceACL:
         ns1_policies = self.acl.list_policies(namespace="ns1")
         assert len(ns1_policies) == 1
         assert ns1_policies[0].agent_id == "a1"
+
+    def test_dump_and_load_policies(self):
+        self.acl.grant("a1", "ns1", Role.WRITER, granted_by="admin")
+        self.acl.grant("a2", "ns2", Role.READER)
+
+        restored = NamespaceACL()
+        count = restored.load_policies(self.acl.dump_policies())
+
+        assert count == 2
+        assert restored.get_role("a1", "ns1") == Role.WRITER
+        assert restored.get_policy("a1", "ns1").granted_by == "admin"
+        assert restored.get_role("a2", "ns2") == Role.READER
+
+    def test_dump_policies_excludes_expired(self):
+        self.acl.grant("expired", "ns", Role.WRITER, expires_at=time.time() - 1)
+        self.acl.grant("active", "ns", Role.READER)
+
+        policies = self.acl.dump_policies()
+
+        assert len(policies) == 1
+        assert policies[0]["agent_id"] == "active"
 
     def test_stats(self):
         self.acl.grant("a1", "ns1", Role.OWNER)
@@ -303,6 +330,59 @@ class TestMemOSACLIntegration:
         mem.grant_namespace_access("agent-x", "ns1", "writer")
         assert mem.revoke_namespace_access("agent-x", "ns1")
         assert not mem.revoke_namespace_access("agent-x", "ns1")
+
+    def test_agent_id_is_initialized(self):
+        mem = MemOS(backend="memory")
+
+        assert mem.agent_id == ""
+
+        mem.set_agent_id("agent-a")
+        assert mem.agent_id == "agent-a"
+
+        mem.set_agent_id("")
+        assert mem.agent_id == ""
+
+    def test_acl_policies_persist_with_json_backend(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        mem = MemOS(backend="json", persist_path=str(store_path))
+        mem.acl.grant("agent-a", "production", Role.WRITER, granted_by="admin")
+
+        reopened = MemOS(backend="json", persist_path=str(store_path))
+
+        assert reopened.acl.get_role("agent-a", "production") == Role.WRITER
+        policy = reopened.acl.get_policy("agent-a", "production")
+        assert policy is not None
+        assert policy.granted_by == "admin"
+        assert (tmp_path / "store.acl.json").exists()
+
+    def test_acl_clear_persists_with_json_backend(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        mem = MemOS(backend="json", persist_path=str(store_path))
+        mem.acl.grant("agent-a", "production", Role.WRITER)
+        mem.acl.clear()
+
+        reopened = MemOS(backend="json", persist_path=str(store_path))
+
+        assert reopened.list_namespace_policies() == []
+
+    def test_acl_revoke_persists_with_json_backend(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        mem = MemOS(backend="json", persist_path=str(store_path))
+        mem.grant_namespace_access("agent-a", "production", "writer")
+        mem.revoke_namespace_access("agent-a", "production")
+
+        reopened = MemOS(backend="json", persist_path=str(store_path))
+
+        assert reopened.acl.get_role("agent-a", "production") is None
+
+    def test_denied_acl_policy_persists_with_json_backend(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        mem = MemOS(backend="json", persist_path=str(store_path))
+        mem.grant_namespace_access("agent-a", "production", "denied")
+
+        reopened = MemOS(backend="json", persist_path=str(store_path))
+
+        assert reopened.acl.get_role("agent-a", "production") == Role.DENIED
 
     def test_list_namespace_policies(self):
         mem = MemOS(backend="memory")
