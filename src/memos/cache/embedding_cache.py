@@ -75,13 +75,15 @@ class EmbeddingCache:
         self._hits = 0
         self._misses = 0
         self._evictions = 0
+        self._conn: sqlite3.Connection | None = None
 
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _init_db(self) -> None:
         """Create the cache table if it doesn't exist."""
-        with self._connect() as conn:
+        with self._lock:
+            conn = self._connect()
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS embedding_cache (
                     cache_key TEXT PRIMARY KEY,
@@ -99,10 +101,26 @@ class EmbeddingCache:
             conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._path), timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        return conn
+        """Return the instance SQLite connection, opening it on first use."""
+        if self._conn is None:
+            conn = sqlite3.connect(str(self._path), timeout=10, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn = conn
+        return self._conn
+
+    def close(self) -> None:
+        """Close the underlying SQLite connection."""
+        with self._lock:
+            if self._conn is not None:
+                self._conn.close()
+                self._conn = None
+
+    def __enter__(self) -> EmbeddingCache:
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
     @staticmethod
     def _make_key(text: str, model: str) -> str:
@@ -124,40 +142,40 @@ class EmbeddingCache:
         now = time.time()
 
         with self._lock:
-            with self._connect() as conn:
-                row = conn.execute(
-                    "SELECT embedding, created_at FROM embedding_cache WHERE cache_key = ?",
-                    (key,),
-                ).fetchone()
+            conn = self._connect()
+            row = conn.execute(
+                "SELECT embedding, created_at FROM embedding_cache WHERE cache_key = ?",
+                (key,),
+            ).fetchone()
 
-                if row is None:
-                    self._misses += 1
-                    return None
+            if row is None:
+                self._misses += 1
+                return None
 
-                # Check TTL
-                if self._ttl > 0 and (now - row[1]) > self._ttl:
-                    conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
-                    conn.commit()
-                    self._misses += 1
-                    return None
-
-                # Update access metadata (LRU tracking)
-                conn.execute(
-                    """UPDATE embedding_cache
-                       SET accessed_at = ?, access_count = access_count + 1
-                       WHERE cache_key = ?""",
-                    (now, key),
-                )
+            # Check TTL
+            if self._ttl > 0 and (now - row[1]) > self._ttl:
+                conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
                 conn.commit()
-                try:
-                    embedding = json.loads(row[0])
-                except json.JSONDecodeError:
-                    conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
-                    conn.commit()
-                    self._misses += 1
-                    return None
-                self._hits += 1
-                return embedding
+                self._misses += 1
+                return None
+
+            # Update access metadata (LRU tracking)
+            conn.execute(
+                """UPDATE embedding_cache
+                   SET accessed_at = ?, access_count = access_count + 1
+                   WHERE cache_key = ?""",
+                (now, key),
+            )
+            conn.commit()
+            try:
+                embedding = json.loads(row[0])
+            except json.JSONDecodeError:
+                conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
+                conn.commit()
+                self._misses += 1
+                return None
+            self._hits += 1
+            return embedding
 
     def put(
         self,
@@ -178,21 +196,19 @@ class EmbeddingCache:
         blob = json.dumps(embedding)
 
         with self._lock:
-            with self._connect() as conn:
-                conn.execute(
-                    """INSERT INTO embedding_cache
-                       (cache_key, embedding, model, created_at, accessed_at, access_count)
-                       VALUES (?, ?, ?, ?, ?, 1)
-                       ON CONFLICT(cache_key) DO UPDATE SET
-                         embedding = excluded.embedding,
-                         accessed_at = excluded.accessed_at,
-                         access_count = access_count + 1""",
-                    (key, blob, model, now, now),
-                )
-                conn.commit()
-
-            # Evict if over max_size
-            self._evict_if_needed()
+            conn = self._connect()
+            conn.execute(
+                """INSERT INTO embedding_cache
+                   (cache_key, embedding, model, created_at, accessed_at, access_count)
+                   VALUES (?, ?, ?, ?, ?, 1)
+                   ON CONFLICT(cache_key) DO UPDATE SET
+                     embedding = excluded.embedding,
+                     accessed_at = excluded.accessed_at,
+                     access_count = access_count + 1""",
+                (key, blob, model, now, now),
+            )
+            self._evict_if_needed(conn)
+            conn.commit()
 
     def invalidate(self, text: str, *, model: str = "") -> bool:
         """Remove a specific entry from the cache.
@@ -202,10 +218,10 @@ class EmbeddingCache:
         """
         key = self._make_key(text, model)
         with self._lock:
-            with self._connect() as conn:
-                cursor = conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
-                conn.commit()
-                return cursor.rowcount > 0
+            conn = self._connect()
+            cursor = conn.execute("DELETE FROM embedding_cache WHERE cache_key = ?", (key,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def clear(self) -> int:
         """Clear all entries from the cache.
@@ -214,17 +230,17 @@ class EmbeddingCache:
             Number of entries removed.
         """
         with self._lock:
-            with self._connect() as conn:
-                count = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
-                conn.execute("DELETE FROM embedding_cache")
-                conn.commit()
-                return count
+            conn = self._connect()
+            count = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
+            conn.execute("DELETE FROM embedding_cache")
+            conn.commit()
+            return count
 
     def stats(self) -> CacheStats:
         """Get cache performance statistics."""
         with self._lock:
-            with self._connect() as conn:
-                size = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
+            conn = self._connect()
+            size = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
 
         total = self._hits + self._misses
         hit_rate = (self._hits / total) if total > 0 else 0.0
@@ -238,29 +254,28 @@ class EmbeddingCache:
             hit_rate=hit_rate,
         )
 
-    def _evict_if_needed(self) -> None:
+    def _evict_if_needed(self, conn: sqlite3.Connection) -> None:
         """Evict oldest-accessed entries if over max_size."""
-        with self._connect() as conn:
-            count = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
 
-            if count <= self._max_size:
-                return
+        if count <= self._max_size:
+            return
 
-            excess = count - self._max_size
-            conn.execute(
-                """DELETE FROM embedding_cache
-                   WHERE cache_key IN (
-                       SELECT cache_key FROM embedding_cache
-                       ORDER BY accessed_at ASC
-                       LIMIT ?
-                   )""",
-                (excess,),
-            )
-            conn.commit()
-            self._evictions += excess
+        excess = count - self._max_size
+        conn.execute(
+            """DELETE FROM embedding_cache
+               WHERE cache_key IN (
+                   SELECT cache_key FROM embedding_cache
+                   ORDER BY accessed_at ASC
+                   LIMIT ?
+               )""",
+            (excess,),
+        )
+        self._evictions += excess
 
     def __len__(self) -> int:
-        with self._connect() as conn:
+        with self._lock:
+            conn = self._connect()
             return conn.execute("SELECT COUNT(*) FROM embedding_cache").fetchone()[0]
 
     def __contains__(self, text: str) -> bool:

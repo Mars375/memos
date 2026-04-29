@@ -90,6 +90,38 @@ class TestEmbeddingCacheBasic:
         cache.put("Bonjour le monde 🌍", [1.0, 2.0])
         assert cache.get("Bonjour le monde 🌍") == [1.0, 2.0]
 
+    def test_reuses_connection_within_instance(self, cache):
+        cache.put("first", [1.0])
+        first_conn = cache._conn
+        assert first_conn is not None
+
+        cache.get("first")
+        cache.put("second", [2.0])
+        cache.stats()
+
+        assert cache._conn is first_conn
+
+    def test_close_reopens_connection_on_next_use(self, cache):
+        cache.put("persist", [1.0])
+        first_conn = cache._conn
+
+        cache.close()
+        assert cache._conn is None
+
+        assert cache.get("persist") == [1.0]
+        assert cache._conn is not None
+        assert cache._conn is not first_conn
+
+    def test_context_manager_closes_connection(self, cache_path):
+        with EmbeddingCache(path=cache_path) as cache:
+            cache.put("managed", [3.0])
+            assert cache._conn is not None
+
+        assert cache._conn is None
+
+        reopened = EmbeddingCache(path=cache_path)
+        assert reopened.get("managed") == [3.0]
+
 
 class TestEmbeddingCacheTTL:
     """TTL-based expiry."""
