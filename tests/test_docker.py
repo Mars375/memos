@@ -14,8 +14,27 @@ def test_dockerfile_exists():
 def test_dockerfile_installs_memos():
     content = (ROOT / "Dockerfile").read_text()
     assert "pip install" in content
-    assert ".[server,chroma,local,parquet]" in content
+    for extra in ('"server"', '"chroma"', '"parquet"'):
+        assert extra in content
+    assert '"local"' not in content
+    assert "pip wheel --no-deps --wheel-dir /wheels ." in content
     assert "dev" not in content
+
+
+def test_dockerfile_omits_heavy_local_embedding_extra():
+    content = (ROOT / "Dockerfile").read_text()
+    assert "sentence-transformers" not in content
+    assert "torch" not in content
+
+
+def test_dockerfile_caches_dependency_wheels_before_project_source():
+    content = (ROOT / "Dockerfile").read_text()
+    assert content.startswith("# syntax=docker/dockerfile:1")
+    assert "--mount=type=cache,target=/root/.cache/pip" in content
+    assert "pip wheel --wheel-dir /wheels -r /tmp/requirements.txt" in content
+    assert content.index("COPY pyproject.toml README.md ./") < content.index("pip wheel --wheel-dir /wheels -r")
+    assert content.index("pip wheel --wheel-dir /wheels -r") < content.index("COPY src/ src/")
+    assert content.index("COPY src/ src/") < content.index("pip wheel --no-deps --wheel-dir /wheels .")
 
 
 def test_dockerfile_uses_multistage_non_root_runtime():
@@ -32,6 +51,14 @@ def test_dockerfile_excludes_tests_and_tools_from_runtime_image():
     content = (ROOT / "Dockerfile").read_text()
     assert "COPY tests/" not in content
     assert "COPY tools/" not in content
+
+
+def test_dockerignore_excludes_non_runtime_context():
+    content = (ROOT / ".dockerignore").read_text()
+    assert ".git" in content
+    assert "tests" in content
+    assert "tools" in content
+    assert ".memos" in content
 
 
 def test_dockerfile_sets_data_volume_defaults_and_healthcheck():

@@ -305,6 +305,8 @@ docker run -p 8100:8000 \
   ghcr.io/mars375/memos:latest
 ```
 
+The official Docker image keeps the runtime lean by omitting the optional `memos-os[local]` embedding stack, which pulls in large ML dependencies such as Torch. The `local` Docker example above uses JSON-backed local storage; for semantic embeddings in containers, point MemOS at an external Ollama/Chroma setup or build a custom image with the `local` extra.
+
 Full stack with ChromaDB + Ollama embeddings:
 ```bash
 git clone https://github.com/Mars375/memos
