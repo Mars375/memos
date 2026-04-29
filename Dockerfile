@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM python:3.11-slim AS builder
 
 WORKDIR /build
@@ -8,9 +10,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml README.md ./
+
+RUN python - <<'PY' > /tmp/requirements.txt
+import tomllib
+
+with open("pyproject.toml", "rb") as f:
+    pyproject = tomllib.load(f)
+
+requirements = list(pyproject["project"]["dependencies"])
+extras = pyproject["project"]["optional-dependencies"]
+for extra in ("server", "chroma", "parquet"):
+    requirements.extend(extras[extra])
+
+print("\n".join(requirements))
+PY
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --wheel-dir /wheels -r /tmp/requirements.txt
+
 COPY src/ src/
 
-RUN pip wheel --no-cache-dir --wheel-dir /wheels ".[server,chroma,local,parquet]"
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --no-deps --wheel-dir /wheels .
 
 FROM python:3.11-slim AS runtime
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+DOCKER_WORKFLOW = ROOT / ".github" / "workflows" / "docker.yml"
 
 
 def test_dockerfile_exists():
@@ -14,8 +15,27 @@ def test_dockerfile_exists():
 def test_dockerfile_installs_memos():
     content = (ROOT / "Dockerfile").read_text()
     assert "pip install" in content
-    assert ".[server,chroma,local,parquet]" in content
+    for extra in ('"server"', '"chroma"', '"parquet"'):
+        assert extra in content
+    assert '"local"' not in content
+    assert "pip wheel --no-deps --wheel-dir /wheels ." in content
     assert "dev" not in content
+
+
+def test_dockerfile_omits_heavy_local_embedding_extra():
+    content = (ROOT / "Dockerfile").read_text()
+    assert "sentence-transformers" not in content
+    assert "torch" not in content
+
+
+def test_dockerfile_caches_dependency_wheels_before_project_source():
+    content = (ROOT / "Dockerfile").read_text()
+    assert content.startswith("# syntax=docker/dockerfile:1")
+    assert "--mount=type=cache,target=/root/.cache/pip" in content
+    assert "pip wheel --wheel-dir /wheels -r /tmp/requirements.txt" in content
+    assert content.index("COPY pyproject.toml README.md ./") < content.index("pip wheel --wheel-dir /wheels -r")
+    assert content.index("pip wheel --wheel-dir /wheels -r") < content.index("COPY src/ src/")
+    assert content.index("COPY src/ src/") < content.index("pip wheel --no-deps --wheel-dir /wheels .")
 
 
 def test_dockerfile_uses_multistage_non_root_runtime():
@@ -32,6 +52,14 @@ def test_dockerfile_excludes_tests_and_tools_from_runtime_image():
     content = (ROOT / "Dockerfile").read_text()
     assert "COPY tests/" not in content
     assert "COPY tools/" not in content
+
+
+def test_dockerignore_excludes_non_runtime_context():
+    content = (ROOT / ".dockerignore").read_text()
+    assert ".git" in content
+    assert "tests" in content
+    assert "tools" in content
+    assert ".memos" in content
 
 
 def test_dockerfile_sets_data_volume_defaults_and_healthcheck():
@@ -56,6 +84,23 @@ def test_cli_env_vars():
     ns = p.parse_args(["serve", "--backend", "chroma"])
     assert ns.backend == "chroma"
     assert ns.port == 8000
+
+
+def test_docker_workflow_uses_scoped_trusted_cache():
+    content = DOCKER_WORKFLOW.read_text()
+    assert "cache-from: type=gha,scope=memos-docker-main" in content
+    assert "cache-to: type=gha,scope=memos-docker-main,mode=max,ignore-error=true" in content
+    assert "if: github.event_name != 'pull_request'" in content
+
+
+def test_docker_workflow_smoke_tests_pull_requests_without_push():
+    content = DOCKER_WORKFLOW.read_text()
+    assert "Build PR smoke image" in content
+    assert "Smoke test PR image" in content
+    assert "load: true" in content
+    assert "tags: memos:smoke" in content
+    assert "getpass.getuser() == 'memos'" in content
+    assert "platforms: linux/amd64" in content
 
 
 # ── Compose tests removed ──────────────────────────────────────────────────
