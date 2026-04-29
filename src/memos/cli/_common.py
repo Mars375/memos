@@ -31,6 +31,7 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         "vector_size": getattr(ns, "vector_size", None),
         "embed_host": getattr(ns, "embed_host", None),
         "embed_model": getattr(ns, "embed_model", None),
+        "cache_path": getattr(ns, "cache_path", None),
         "sanitize": not getattr(ns, "no_sanitize", False) or None,
     }
     cfg = resolve({k: v for k, v in cli_overrides.items() if v is not None})
@@ -68,6 +69,8 @@ def _get_memos(ns: argparse.Namespace) -> MemOS:
         kwargs["embed_model"] = cfg["embed_model"]
     if cfg.get("embed_timeout"):
         kwargs["embed_timeout"] = int(cfg["embed_timeout"])
+    if cfg.get("cache_path"):
+        kwargs["cache_path"] = cfg["cache_path"]
     if cfg.get("persist_path"):
         kwargs["persist_path"] = cfg["persist_path"]
     if not cfg.get("sanitize", True):

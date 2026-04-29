@@ -277,6 +277,7 @@ All options can be set via environment variables:
 ```bash
 MEMOS_BACKEND=chroma              # memory | json | chroma | qdrant | pinecone
 MEMOS_PERSIST_PATH=~/.memos/      # path for json/sqlite storage
+MEMOS_CACHE_PATH=~/.memos/embeddings.db  # path for local embedding cache
 
 # ChromaDB
 MEMOS_CHROMA_URL=http://chroma:8000
@@ -300,7 +301,7 @@ Single container (local backend, no dependencies):
 ```bash
 docker run -p 8100:8000 \
   -e MEMOS_BACKEND=local \
-  -v memos-data:/root/.memos \
+  -v memos-data:/data/.memos \
   ghcr.io/mars375/memos:latest
 ```
 
@@ -313,9 +314,11 @@ docker run -p 8100:8000 \
   -e MEMOS_CHROMA_URL=http://host.docker.internal:8000 \
   -e MEMOS_EMBED_HOST=http://host.docker.internal:11434 \
   --add-host=host.docker.internal:host-gateway \
-  -v memos-data:/root/.memos \
+  -v memos-data:/data/.memos \
   ghcr.io/mars375/memos:latest
 ```
+
+The container runs as a non-root `memos` user. Mount persistent data at `/data/.memos` so the runtime user can write stores, caches, and generated sidecar files.
 
 If you want MemOS plus ChromaDB/Qdrant together, use your own compose/orchestrator setup — the repository no longer ships a root `docker-compose.yml`.
 
