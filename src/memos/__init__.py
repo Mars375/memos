@@ -1,6 +1,6 @@
 """MemOS — Memory Operating System for LLM Agents."""
 
-__version__ = "2.3.5"
+__version__ = "2.3.6"
 
 from .brain import BrainSearch, BrainSearchResult
 from .core import MemOS

@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.3.6 (2026-04-29) — Refactor Completion
+
+### Core and workflow architecture
+- Extracted the `MemOS` memory CRUD, recall, streaming, search, forget, and stats surface into `MemoryCrudFacade` while preserving the public `memos.core` entrypoint and compatibility exports
+- Split ingest mining, compaction engine, memory palace, and benchmark quality workflows into focused helper modules with stable public shims
+- Updated Docker PR behavior so pull requests build images without publishing them, keeping fork/PR validation safe
+
+### Project guidance
+- Refreshed `AGENTS.md` to reflect the post-refactor architecture and document the remaining 400–500 line files as watchlist items rather than urgent split targets
+- Confirmed that no Python source file under `src/memos/` exceeds 500 lines after the cleanup campaign
+
+### Verification
+- Local validation before release: `ruff check`, `ruff format --check`, and full `pytest` suite green with `2481 passed, 1 skipped`
+- PR validation for #57, #58, #59, #60, #61, #62, and #63: Docker build, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.5 (2026-04-26) — Brain and Knowledge Graph Cleanup
 
 ### Brain search architecture

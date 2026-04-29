@@ -3,7 +3,7 @@
 ## Project Overview
 Persistent, structured, local-first memory backend for LLM agents. Python 3.11+, FastAPI server, MCP endpoint, pluggable storage backends, and a lightweight dashboard.
 
-**Version:** 2.3.5
+**Version:** 2.3.6
 **Author:** Mars375
 **License:** MIT
 
