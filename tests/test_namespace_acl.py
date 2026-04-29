@@ -304,6 +304,17 @@ class TestMemOSACLIntegration:
         assert mem.revoke_namespace_access("agent-x", "ns1")
         assert not mem.revoke_namespace_access("agent-x", "ns1")
 
+    def test_agent_id_is_initialized(self):
+        mem = MemOS(backend="memory")
+
+        assert mem.agent_id == ""
+
+        mem.set_agent_id("agent-a")
+        assert mem.agent_id == "agent-a"
+
+        mem.set_agent_id("")
+        assert mem.agent_id == ""
+
     def test_list_namespace_policies(self):
         mem = MemOS(backend="memory")
         mem.grant_namespace_access("a1", "ns1", "owner")

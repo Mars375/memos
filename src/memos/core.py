@@ -185,6 +185,7 @@ class MemOS(
 
         # Namespace (multi-agent isolation)
         self._namespace: str = ""
+        self._agent_id: str = ""
 
         # Namespace ACL (access control)
         self._acl = NamespaceACL()
