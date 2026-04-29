@@ -28,6 +28,8 @@ _MAX_BUCKETS: int = int(os.environ.get("MEMOS_RATELIMIT_MAX_BUCKETS", "10000"))
 
 _STALE_BUCKET_TTL: float = float(os.environ.get("MEMOS_RATELIMIT_BUCKET_TTL", "3600"))
 
+_MAX_RULE_CACHE: int = max(1, int(os.environ.get("MEMOS_RATELIMIT_MAX_RULE_CACHE", "4096")))
+
 
 @dataclass
 class TokenBucket:
@@ -108,6 +110,7 @@ class RateLimiter:
         key_func: Optional callable(request) -> str to extract client identifier.
                   Defaults to X-Forwarded-For or client IP.
         max_buckets: Maximum number of client buckets before eviction.
+        max_rule_cache: Maximum number of endpoint path rule-cache entries.
         trusted_clients: Set of client identifiers that bypass rate limiting.
     """
 
@@ -118,6 +121,7 @@ class RateLimiter:
         rules: Optional[list[EndpointRule]] = None,
         key_func: Any = None,
         max_buckets: int = _MAX_BUCKETS,
+        max_rule_cache: int = _MAX_RULE_CACHE,
         trusted_clients: Optional[set[str]] = None,
     ) -> None:
         self.default_max = default_max
@@ -125,8 +129,9 @@ class RateLimiter:
         self.rules = rules or list(DEFAULT_RULES)
         self.key_func = key_func
         self.max_buckets = max(1, int(max_buckets))
+        self.max_rule_cache = max(1, int(max_rule_cache))
         self.trusted_clients = trusted_clients if trusted_clients is not None else set(_TRUSTED_CLIENTS)
-        self._rule_cache: dict[str, EndpointRule] = {}
+        self._rule_cache: OrderedDict[str, EndpointRule] = OrderedDict()
         self._buckets: OrderedDict[str, dict[str, TokenBucket]] = OrderedDict()
 
     def _client_key(self, request: Any) -> str:
@@ -146,18 +151,26 @@ class RateLimiter:
     def _match_rule(self, path: str) -> EndpointRule:
         cached = self._rule_cache.get(path)
         if cached is not None:
+            self._rule_cache.move_to_end(path)
             return cached
         for rule in self.rules:
             if path.startswith(rule.pattern):
-                self._rule_cache[path] = rule
+                self._cache_rule(path, rule)
                 return rule
         default = EndpointRule(
             pattern="__default__",
             max_requests=self.default_max,
             window_seconds=self.default_window,
         )
-        self._rule_cache[path] = default
+        self._cache_rule(path, default)
         return default
+
+    def _cache_rule(self, path: str, rule: EndpointRule) -> None:
+        """Store a matched rule in the bounded path cache."""
+        self._rule_cache[path] = rule
+        self._rule_cache.move_to_end(path)
+        while len(self._rule_cache) > self.max_rule_cache:
+            self._rule_cache.popitem(last=False)
 
     def _get_bucket(self, client: str, rule: EndpointRule) -> TokenBucket:
         if client not in self._buckets:
@@ -251,6 +264,8 @@ class RateLimiter:
             "default_window": self.default_window,
             "active_clients": len(self._buckets),
             "max_clients": self.max_buckets,
+            "rule_cache_size": len(self._rule_cache),
+            "max_rule_cache": self.max_rule_cache,
         }
 
     def reset(self, client: Optional[str] = None) -> int:
