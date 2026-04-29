@@ -103,6 +103,7 @@ class TestRateLimiter:
         limiter = RateLimiter()
         assert limiter.default_max == 100
         assert len(limiter.rules) == len(DEFAULT_RULES)
+        assert limiter.max_rule_cache >= 1
 
     def test_custom_rules(self):
         rules = [EndpointRule(pattern="/api/v1/test", max_requests=5)]
@@ -179,6 +180,38 @@ class TestRateLimiter:
         assert rule.pattern == "__default__"
         assert headers["X-RateLimit-Limit"] == "50"
 
+    def test_rule_cache_is_bounded(self):
+        limiter = RateLimiter(default_max=50, rules=[], max_rule_cache=3)
+
+        for i in range(10):
+            limiter.check(MockRequest(f"/api/v1/unknown/{i}"))
+
+        assert len(limiter._rule_cache) == 3
+        assert list(limiter._rule_cache) == [
+            "/api/v1/unknown/7",
+            "/api/v1/unknown/8",
+            "/api/v1/unknown/9",
+        ]
+
+    def test_rule_cache_hit_updates_lru_order(self):
+        limiter = RateLimiter(default_max=50, rules=[], max_rule_cache=3)
+        for path in ["/a", "/b", "/c"]:
+            limiter.check(MockRequest(path))
+
+        limiter.check(MockRequest("/a"))
+        limiter.check(MockRequest("/d"))
+
+        assert list(limiter._rule_cache) == ["/c", "/a", "/d"]
+        assert "/b" not in limiter._rule_cache
+
+    def test_non_positive_rule_cache_clamps_to_one(self):
+        limiter = RateLimiter(default_max=50, rules=[], max_rule_cache=0)
+        limiter.check(MockRequest("/first"))
+        limiter.check(MockRequest("/second"))
+
+        assert limiter.max_rule_cache == 1
+        assert list(limiter._rule_cache) == ["/second"]
+
     def test_custom_key_func(self):
         limiter = RateLimiter(
             default_max=2,
@@ -213,6 +246,8 @@ class TestRateLimiter:
         assert status["total_policies"] == 1
         assert status["policies"][0]["endpoint"] == "/api/v1/learn"
         assert status["policies"][0]["remaining"] == 9
+        assert status["rule_cache_size"] == 1
+        assert status["max_rule_cache"] == limiter.max_rule_cache
 
     def test_reset_specific_client(self):
         limiter = RateLimiter(default_max=1, rules=[])
