@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.3.7 (2026-04-29) — Phase 1 Security Hardening
+
+### Security
+- Replaced new memory encryption writes with Fernet authenticated encryption while preserving decrypt-only compatibility for legacy encrypted stores
+- Hardened API key validation with constant-time digest comparison across configured keys
+- Applied API rate limits before route execution so blocked requests cannot trigger endpoint side effects
+- Bounded MCP JSON-RPC request bodies for HTTP and stdio transports to reject oversized payloads safely
+- Added optional API-key protection for standalone MCP apps created with `create_mcp_app()`
+
+### Verification
+- Local validation before release: `ruff check`, `ruff format --check`, focused security tests, and full `pytest` suite green with `2492 passed, 1 skipped`
+- PR validation for #65: Docker build, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.6 (2026-04-29) — Refactor Completion
 
 ### Core and workflow architecture
