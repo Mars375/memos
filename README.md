@@ -5,7 +5,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.3.5-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.6-purple.svg)](https://github.com/Mars375/memos/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
@@ -13,12 +13,12 @@
 
 ---
 
-## What's new in v2.3.5
+## What's new in v2.3.6
 
-- **Brain/KG facade cleanup** — public Brain and KnowledgeGraph modules now stay as compatibility shims over focused internals
-- **Brain search split** — scoring and context rendering live in dedicated helpers while `_brain_search.py` stays orchestration-focused
-- **Knowledge graph algorithms split** — community detection, centrality/bridge scoring, and inference now live in separate modules behind the existing shim
-- **Validation** — full lint, format, Python 3.11/3.12/3.13 tests, and Docker build checks are green
+- **Final refactor cleanup** — remaining high-value hotspots now route through focused modules or compatibility facades
+- **Core memory facade** — `learn`, `recall`, streaming, search, forget, and stats moved behind `MemoryCrudFacade` while `MemOS` stays the public entrypoint
+- **Workflow splits** — ingest mining, compaction, palace, and benchmark quality code now live in smaller focused modules
+- **Validation** — no Python source file exceeds 500 lines; full lint, format, Python 3.11/3.12/3.13 tests, and Docker build checks are green
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
