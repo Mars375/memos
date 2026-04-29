@@ -5,7 +5,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.3.8-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.9-purple.svg)](https://github.com/Mars375/memos/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
@@ -13,12 +13,12 @@
 
 ---
 
-## What's new in v2.3.8
+## What's new in v2.3.9
 
-- **Durable namespace ACLs** — file-backed stores now persist namespace access policies in a sidecar and reload them on startup
-- **Direct ACL mutation persistence** — `mem.acl.grant()`, `revoke()`, and `clear()` now save policy changes automatically
-- **Runtime identity initialization** — `MemOS` initializes agent identity explicitly and exposes `agent_id` for ACL-aware code paths
-- **Validation** — full lint, format, Python 3.11/3.12/3.13 tests, and Docker build checks are green
+- **Embedding cache lifecycle** — local embedding cache instances now reuse a SQLite connection and expose explicit close/context-manager support
+- **Bounded rate-limit metadata** — route rule matching now uses a bounded LRU cache and reports cache sizing in runtime status
+- **Docker runtime hardening** — images now build wheels in a builder stage, run as a non-root `memos` user, use `/data/.memos` persistence defaults, and include a healthcheck
+- **Validation** — lint, Python 3.11/3.12/3.13 tests, and Docker build checks are green
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
