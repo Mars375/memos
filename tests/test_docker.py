@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+DOCKER_WORKFLOW = ROOT / ".github" / "workflows" / "docker.yml"
 
 
 def test_dockerfile_exists():
@@ -83,6 +84,23 @@ def test_cli_env_vars():
     ns = p.parse_args(["serve", "--backend", "chroma"])
     assert ns.backend == "chroma"
     assert ns.port == 8000
+
+
+def test_docker_workflow_uses_scoped_trusted_cache():
+    content = DOCKER_WORKFLOW.read_text()
+    assert "cache-from: type=gha,scope=memos-docker-main" in content
+    assert "cache-to: type=gha,scope=memos-docker-main,mode=max,ignore-error=true" in content
+    assert "if: github.event_name != 'pull_request'" in content
+
+
+def test_docker_workflow_smoke_tests_pull_requests_without_push():
+    content = DOCKER_WORKFLOW.read_text()
+    assert "Build PR smoke image" in content
+    assert "Smoke test PR image" in content
+    assert "load: true" in content
+    assert "tags: memos:smoke" in content
+    assert "getpass.getuser() == 'memos'" in content
+    assert "platforms: linux/amd64" in content
 
 
 # ── Compose tests removed ──────────────────────────────────────────────────
