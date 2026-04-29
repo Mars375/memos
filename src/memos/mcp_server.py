@@ -33,8 +33,51 @@ except ImportError:
 __all__ = ["create_mcp_app", "run_stdio", "TOOLS", "_dispatch", "_dispatch_inner", "add_mcp_routes"]
 
 _MCP_VERSION = "2025-03-26"
+_DEFAULT_MAX_MCP_REQUEST_BYTES = 1_048_576
 
 _CORS_ALLOWED_ORIGINS = os.environ.get("MEMOS_CORS_ORIGINS", "")
+
+
+class MCPRequestTooLarge(ValueError):
+    """Raised when an MCP JSON-RPC request exceeds the configured size limit."""
+
+
+def _max_mcp_request_bytes() -> int:
+    raw = os.environ.get("MEMOS_MCP_MAX_REQUEST_BYTES", str(_DEFAULT_MAX_MCP_REQUEST_BYTES))
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return _DEFAULT_MAX_MCP_REQUEST_BYTES
+
+
+async def _read_json_limited(request: Request) -> dict[str, Any]:
+    max_bytes = _max_mcp_request_bytes()
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            parsed_length = int(content_length)
+        except ValueError as exc:
+            raise ValueError("Invalid Content-Length") from exc
+        if parsed_length > max_bytes:
+            raise MCPRequestTooLarge
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            raise MCPRequestTooLarge
+        chunks.append(chunk)
+    raw = b"".join(chunks)
+    body = json.loads(raw)
+    if not isinstance(body, dict):
+        raise ValueError("JSON-RPC request must be an object")
+    return body
+
+
+def _keys_from_env() -> list[str] | None:
+    raw = os.environ.get("MEMOS_API_KEYS") or os.environ.get("MEMOS_API_KEY") or ""
+    keys = [key.strip() for key in raw.split(",") if key.strip()]
+    return keys or None
 
 
 def _cors_headers(request_origin: str | None = None) -> dict[str, str]:
@@ -156,7 +199,9 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
     async def mcp_post(request: Request):
         sid = request.headers.get("Mcp-Session-Id") or str(uuid.uuid4())
         try:
-            body = await request.json()
+            body = await _read_json_limited(request)
+        except MCPRequestTooLarge:
+            return _err(None, -32600, "Request body too large", 413, sid, request)
         except Exception:
             return _err(None, -32700, "Parse error", 400, sid, request)
 
@@ -211,12 +256,34 @@ def add_mcp_routes(app: Any, memos: Any, hooks: Any = None) -> None:
         )
 
 
-def create_mcp_app(memos: Any) -> Any:
+def create_mcp_app(memos: Any, api_keys: list[str] | None = None) -> Any:
     """Create a standalone FastAPI MCP HTTP server."""
     if not _FASTAPI_AVAILABLE:
         raise ImportError("Install memos[server]: pip install memos[server]")
 
     app = FastAPI(title="MemOS MCP Server", version="1.0.0")
+    resolved_api_keys = api_keys if api_keys is not None else _keys_from_env()
+    if resolved_api_keys:
+        from .api.auth import APIKeyManager
+
+        key_manager = APIKeyManager(keys=resolved_api_keys)
+
+        @app.middleware("http")
+        async def mcp_auth_middleware(request: Request, call_next):
+            if request.url.path == "/health":
+                return await call_next(request)
+            api_key = request.headers.get("X-API-Key", "")
+            if not api_key:
+                return JSONResponse(
+                    status_code=401,
+                    content={"status": "error", "message": "Missing X-API-Key header"},
+                )
+            if not key_manager.validate(api_key):
+                return JSONResponse(
+                    status_code=403,
+                    content={"status": "error", "message": "Invalid API key"},
+                )
+            return await call_next(request)
 
     @app.get("/health")
     def health() -> dict:
@@ -227,7 +294,12 @@ def create_mcp_app(memos: Any) -> Any:
     @app.post("/")
     async def handle_root(request: Request):
         try:
-            body = await request.json()
+            body = await _read_json_limited(request)
+        except MCPRequestTooLarge:
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Request body too large"}},
+                status_code=413,
+            )
         except Exception:
             return JSONResponse(
                 {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
@@ -275,6 +347,9 @@ def run_stdio(memos: Any) -> None:
     for line in sys.stdin:
         line = line.strip()
         if not line:
+            continue
+        if len(line.encode("utf-8")) > _max_mcp_request_bytes():
+            _send({"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Request body too large"}})
             continue
         try:
             body = json.loads(line)

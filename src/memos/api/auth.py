@@ -89,7 +89,10 @@ class APIKeyManager:
         if not self._hashed_keys:
             return True  # No keys configured = auth disabled
         hashed = self._hash_key(key)
-        return hmac.compare_digest(hashed, hashed in self._hashed_keys and hashed or "")
+        valid = False
+        for registered in self._hashed_keys:
+            valid |= hmac.compare_digest(hashed, registered)
+        return valid
 
     @property
     def auth_enabled(self) -> bool:
@@ -148,9 +151,6 @@ def create_auth_middleware(key_manager: APIKeyManager):
 
             # Rate limiting
             allowed, headers = key_manager.rate_limiter.check(api_key)
-            response = await call_next(request)
-            for k, v in headers.items():
-                response.headers[k] = v
             if not allowed:
                 from starlette.responses import JSONResponse
 
@@ -159,6 +159,9 @@ def create_auth_middleware(key_manager: APIKeyManager):
                     content={"status": "error", "message": "Rate limit exceeded"},
                     headers=headers,
                 )
+            response = await call_next(request)
+            for k, v in headers.items():
+                response.headers[k] = v
             return response
 
         return await call_next(request)

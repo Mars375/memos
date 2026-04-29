@@ -9,6 +9,20 @@ from memos.storage.encrypted_backend import EncryptedStorageBackend
 from memos.storage.memory_backend import InMemoryBackend
 
 
+def _legacy_encrypt(crypto: MemoryCrypto, plaintext: str) -> str:
+    """Create a pre-v2 ciphertext fixture for compatibility tests."""
+    import base64
+    import hashlib
+    import os
+
+    data = plaintext.encode("utf-8")
+    nonce = os.urandom(16)
+    stream = crypto._legacy_keystream(nonce, len(data))
+    cipher = bytes(a ^ b for a, b in zip(data, stream))
+    mac = hashlib.sha256(crypto._legacy_key + nonce + cipher).digest()[:16]
+    return base64.b64encode(crypto._salt + mac + nonce + cipher).decode("ascii")
+
+
 class TestMemoryCrypto:
     """Test the core crypto module."""
 
@@ -17,6 +31,7 @@ class TestMemoryCrypto:
         plaintext = "This is sensitive data"
         encrypted = crypto.encrypt(plaintext)
         assert encrypted != plaintext
+        assert encrypted.startswith("memos:v2:")
         assert crypto.decrypt(encrypted) == plaintext
 
     def test_encrypt_empty_string(self):
@@ -38,6 +53,13 @@ class TestMemoryCrypto:
         with pytest.raises(ValueError, match="Integrity check failed"):
             c2.decrypt(encrypted)
 
+    def test_tampered_ciphertext_fails(self):
+        crypto = MemoryCrypto.from_passphrase("key")
+        encrypted = crypto.encrypt("secret stuff")
+        tampered = encrypted[:-1] + ("A" if encrypted[-1] != "A" else "B")
+        with pytest.raises(ValueError, match="Integrity check failed"):
+            crypto.decrypt(tampered)
+
     def test_deterministic_key_derivation(self):
         salt = "ab" * 16  # 16 bytes = 32 hex chars
         c1 = MemoryCrypto.from_passphrase("key", salt_hex=salt)
@@ -45,6 +67,12 @@ class TestMemoryCrypto:
         assert c1._key == c2._key
         enc = c1.encrypt("data")
         assert c2.decrypt(enc) == "data"
+
+    def test_legacy_ciphertext_decrypts(self):
+        crypto = MemoryCrypto.from_passphrase("legacy-pass")
+        legacy = _legacy_encrypt(crypto, "legacy secret")
+        assert not legacy.startswith("memos:v2:")
+        assert crypto.decrypt(legacy) == "legacy secret"
 
     def test_unicode_content(self):
         crypto = MemoryCrypto.from_passphrase("key")
