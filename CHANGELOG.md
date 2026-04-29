@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.3.9 (2026-04-29) — Performance and Docker Hardening
+
+### Performance and resource bounds
+- Reused a single SQLite connection per local embedding cache instance and added explicit `close()` plus context-manager lifecycle support
+- Bounded the API rate-limit route rule cache with LRU eviction and exposed current/max rule cache sizing in rate-limit status
+
+### Docker runtime hardening
+- Split the Docker image into builder and runtime stages so build tooling stays out of the final image
+- Removed development extras, tests, and tools from the runtime image install path
+- Ran the container as a non-root `memos` user with writable `/data/.memos` persistence and cache defaults
+- Added a container healthcheck and documented the non-root Docker volume path
+
+### Verification
+- Local validation for #69: full `pytest` suite green with `2503 passed, 1 skipped`
+- Local validation for #70: full `pytest` suite green with `2506 passed, 1 skipped`
+- Local validation for #71: focused Docker/config tests, Ruff lint/format, and Docker image metadata inspection green
+- PR validation for #69, #70, and #71: Docker build, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.8 (2026-04-29) — Phase 2 ACL Hardening
 
 ### Security and correctness
