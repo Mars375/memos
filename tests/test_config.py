@@ -60,6 +60,11 @@ class TestResolve:
         assert cfg["backend"] == "chroma"
         assert cfg["port"] == 9999
 
+    def test_cache_path_env(self):
+        with patch.dict(os.environ, {"MEMOS_CACHE_PATH": "/data/.memos/embeddings.db"}, clear=False):
+            cfg = resolve()
+        assert cfg["cache_path"] == "/data/.memos/embeddings.db"
+
     def test_cli_overrides_env(self):
         with patch.dict(os.environ, {"MEMOS_BACKEND": "chroma"}, clear=False):
             cfg = resolve({"backend": "memory"})
