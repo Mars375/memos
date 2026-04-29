@@ -19,12 +19,21 @@ class TestAPIKeyManager:
         assert mgr.key_count == 1
         assert mgr.validate("sk-test-123") is True
         assert mgr.validate("wrong-key") is False
+        assert mgr.validate("") is False
 
     def test_remove_key(self):
         mgr = APIKeyManager(keys=["sk-test-123"])
         mgr.remove_key("sk-test-123")
         assert mgr.key_count == 0
         assert not mgr.auth_enabled
+        assert mgr.validate("sk-test-123") is True  # no keys configured = auth disabled
+
+    def test_removed_key_no_longer_validates_when_other_keys_remain(self):
+        mgr = APIKeyManager(keys=["sk-test-123", "sk-other"])
+        mgr.remove_key("sk-test-123")
+        assert mgr.auth_enabled
+        assert mgr.validate("sk-test-123") is False
+        assert mgr.validate("sk-other") is True
 
     def test_key_hashing(self):
         """Keys are stored hashed, not plaintext."""
@@ -38,6 +47,11 @@ class TestAPIKeyManager:
         assert mgr.validate("key-a") is True
         assert mgr.validate("key-b") is True
         assert mgr.validate("key-d") is False
+
+    def test_validate_checks_against_each_stored_hash(self):
+        mgr = APIKeyManager(keys=["key-a", "key-b", "key-c"])
+        assert mgr.validate("key-c") is True
+        assert mgr.validate("key-c ") is False
 
     def test_add_key_with_name(self):
         mgr = APIKeyManager()
@@ -221,6 +235,37 @@ class TestFastAPIAuth:
         assert resp2.status_code == 200
         resp3 = client.get("/api/v1/stats", headers=headers)
         assert resp3.status_code == 429
+
+    def test_rate_limited_learn_does_not_persist_side_effect(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+        from memos.core import MemOS
+
+        mem = MemOS(backend="memory", sanitize=False)
+        app = create_fastapi_app(memos=mem, api_keys=["sk-test"], rate_limit=1)
+        client = TestClient(app)
+        headers = {"X-API-Key": "sk-test"}
+
+        resp1 = client.post("/api/v1/learn", json={"content": "first"}, headers=headers)
+        assert resp1.status_code == 200
+        resp2 = client.post("/api/v1/learn", json={"content": "second"}, headers=headers)
+        assert resp2.status_code == 429
+        assert mem.stats().total_memories == 1
+
+    def test_invalid_key_does_not_consume_valid_key_rate_limit(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+
+        app = create_fastapi_app(api_keys=["sk-test"], rate_limit=1)
+        client = TestClient(app)
+
+        for _ in range(3):
+            resp = client.get("/api/v1/stats", headers={"X-API-Key": "wrong"})
+            assert resp.status_code == 403
+        resp = client.get("/api/v1/stats", headers={"X-API-Key": "sk-test"})
+        assert resp.status_code == 200
 
     def test_learn_with_auth(self, app_with_auth):
         from fastapi.testclient import TestClient
