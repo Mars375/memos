@@ -137,6 +137,25 @@ def test_checkout_credentials_are_not_persisted():
     assert disabled_count == checkout_count
 
 
+def test_workflow_jobs_have_explicit_timeouts():
+    docker_content = DOCKER_WORKFLOW.read_text()
+    publish_content = PUBLISH_WORKFLOW.read_text()
+    test_content = TEST_WORKFLOW.read_text()
+
+    assert "  lint:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10" in test_content
+    assert "  test:\n    runs-on: ubuntu-latest\n    timeout-minutes: 25" in test_content
+    assert (
+        "  smoke:\n    if: github.event_name == 'pull_request'\n    runs-on: ubuntu-latest\n    timeout-minutes: 20"
+        in docker_content
+    )
+    assert (
+        "  build-and-push:\n    if: github.event_name != 'pull_request'\n    runs-on: ubuntu-latest\n    timeout-minutes: 60"
+        in docker_content
+    )
+    assert "  test:\n    runs-on: ubuntu-latest\n    timeout-minutes: 25" in publish_content
+    assert "  publish:\n    needs: test\n    runs-on: ubuntu-latest\n    timeout-minutes: 15" in publish_content
+
+
 # ── Compose tests removed ──────────────────────────────────────────────────
 # docker-compose.yml was deleted in commit 25183a5.
 # Docker deployment now uses `docker run` (see README).
