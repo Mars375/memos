@@ -5,7 +5,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.3.9-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.10-purple.svg)](https://github.com/Mars375/memos/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
@@ -13,11 +13,11 @@
 
 ---
 
-## What's new in v2.3.9
+## What's new in v2.3.10
 
-- **Embedding cache lifecycle** — local embedding cache instances now reuse a SQLite connection and expose explicit close/context-manager support
-- **Bounded rate-limit metadata** — route rule matching now uses a bounded LRU cache and reports cache sizing in runtime status
-- **Docker runtime hardening** — images now build wheels in a builder stage, run as a non-root `memos` user, use `/data/.memos` persistence defaults, and include a healthcheck
+- **Lean Docker image** — the official image omits the optional local embedding stack that pulled Torch/CUDA wheels into runtime builds
+- **Faster Docker CI** — dependency wheels are cached before project source is copied, PRs run a real smoke image, and Buildx cache uses a trusted scope
+- **Smaller runtime context** — `.dockerignore` keeps repository-only files out of Docker builds while preserving the non-root `/data/.memos` runtime contract
 - **Validation** — lint, Python 3.11/3.12/3.13 tests, and Docker build checks are green
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
