@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCKER_WORKFLOW = ROOT / ".github" / "workflows" / "docker.yml"
+PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
+TEST_WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
 
 
 def test_dockerfile_exists():
@@ -95,12 +97,30 @@ def test_docker_workflow_uses_scoped_trusted_cache():
 
 def test_docker_workflow_smoke_tests_pull_requests_without_push():
     content = DOCKER_WORKFLOW.read_text()
+    smoke_job = content.split("  smoke:", maxsplit=1)[1].split("\n\n  build-and-push:", maxsplit=1)[0]
+    publish_job = content.split("  build-and-push:", maxsplit=1)[1]
+
     assert "Build PR smoke image" in content
     assert "Smoke test PR image" in content
     assert "load: true" in content
     assert "tags: memos:smoke" in content
     assert "getpass.getuser() == 'memos'" in content
     assert "platforms: linux/amd64" in content
+    assert "if: github.event_name == 'pull_request'" in smoke_job
+    assert "packages: write" not in smoke_job
+    assert "packages: write" in publish_job
+
+
+def test_workflows_use_least_privilege_permissions():
+    docker_content = DOCKER_WORKFLOW.read_text()
+    publish_content = PUBLISH_WORKFLOW.read_text()
+    test_content = TEST_WORKFLOW.read_text()
+
+    assert "permissions:\n  contents: read" in test_content
+    assert "permissions:\n  contents: read" in publish_content
+    assert "permissions:\n      contents: read\n      id-token: write" in publish_content
+    assert "  smoke:\n    if: github.event_name == 'pull_request'" in docker_content
+    assert "  build-and-push:\n    if: github.event_name != 'pull_request'" in docker_content
 
 
 # ── Compose tests removed ──────────────────────────────────────────────────
