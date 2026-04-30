@@ -156,6 +156,19 @@ def test_workflow_jobs_have_explicit_timeouts():
     assert "  publish:\n    needs: test\n    runs-on: ubuntu-latest\n    timeout-minutes: 15" in publish_content
 
 
+def test_workflows_define_safe_concurrency_groups():
+    docker_content = DOCKER_WORKFLOW.read_text()
+    publish_content = PUBLISH_WORKFLOW.read_text()
+    test_content = TEST_WORKFLOW.read_text()
+
+    assert "concurrency:\n  group: tests-${{ github.ref }}\n  cancel-in-progress: true" in test_content
+    assert (
+        "concurrency:\n  group: docker-${{ github.ref }}\n  cancel-in-progress: ${{ github.ref_type != 'tag' }}"
+        in docker_content
+    )
+    assert "concurrency:\n  group: publish-${{ github.ref }}\n  cancel-in-progress: false" in publish_content
+
+
 # ── Compose tests removed ──────────────────────────────────────────────────
 # docker-compose.yml was deleted in commit 25183a5.
 # Docker deployment now uses `docker run` (see README).
