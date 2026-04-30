@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.3.10 (2026-04-29) — Docker Image Optimization
+
+### Docker performance and size
+- Slimmed the official Docker image by omitting the optional `memos-os[local]` embedding stack that pulled Torch/CUDA wheels into runtime builds
+- Split Docker wheel building into cached dependency wheels before `COPY src/`, followed by a no-dependency project wheel for source-only rebuilds
+- Added `.dockerignore` entries for repository-only files, caches, tests, tools, and local `.memos` data
+
+### CI and runtime verification
+- Added a pull-request Docker smoke build with `load: true` that verifies the container runs as `memos` and keeps `/data/.memos` defaults
+- Scoped Buildx GHA cache to the trusted main cache and avoided cache export from pull-request builds
+- Kept publish builds multi-platform while preserving the non-root runtime, healthcheck, and `/data/.memos` image contract
+
+### Verification
+- Local validation for #73: focused Docker/config tests, Ruff lint/format, Docker build, Docker smoke run, and image metadata inspection green
+- PR validation for #73: Docker PR smoke build, lint, and Python 3.11/3.12/3.13 tests all green
+- Post-merge validation for #73: Docker publish, lint, and Python 3.11/3.12/3.13 tests all green
+
+---
+
 ## v2.3.9 (2026-04-29) — Performance and Docker Hardening
 
 ### Performance and resource bounds
