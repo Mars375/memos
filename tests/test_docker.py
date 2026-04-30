@@ -123,6 +123,20 @@ def test_workflows_use_least_privilege_permissions():
     assert "  build-and-push:\n    if: github.event_name != 'pull_request'" in docker_content
 
 
+def test_checkout_credentials_are_not_persisted():
+    workflow_contents = [
+        DOCKER_WORKFLOW.read_text(),
+        PUBLISH_WORKFLOW.read_text(),
+        TEST_WORKFLOW.read_text(),
+    ]
+
+    checkout_count = sum(content.count("uses: actions/checkout@v6") for content in workflow_contents)
+    disabled_count = sum(content.count("persist-credentials: false") for content in workflow_contents)
+
+    assert checkout_count == 6
+    assert disabled_count == checkout_count
+
+
 # ── Compose tests removed ──────────────────────────────────────────────────
 # docker-compose.yml was deleted in commit 25183a5.
 # Docker deployment now uses `docker run` (see README).
