@@ -169,6 +169,21 @@ def test_workflows_define_safe_concurrency_groups():
     assert "concurrency:\n  group: publish-${{ github.ref }}\n  cancel-in-progress: false" in publish_content
 
 
+def test_python_workflows_cache_pip_dependencies():
+    workflow_contents = [
+        PUBLISH_WORKFLOW.read_text(),
+        TEST_WORKFLOW.read_text(),
+    ]
+
+    setup_python_count = sum(content.count("uses: actions/setup-python@v6") for content in workflow_contents)
+    cache_count = sum(content.count("cache: pip") for content in workflow_contents)
+    dependency_path_count = sum(content.count("cache-dependency-path: pyproject.toml") for content in workflow_contents)
+
+    assert setup_python_count == 4
+    assert cache_count == setup_python_count
+    assert dependency_path_count == setup_python_count
+
+
 # ── Compose tests removed ──────────────────────────────────────────────────
 # docker-compose.yml was deleted in commit 25183a5.
 # Docker deployment now uses `docker run` (see README).
