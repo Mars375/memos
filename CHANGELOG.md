@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.3.11 (2026-05-01) — CI and Supply-Chain Hardening
+
+### GitHub Actions hardening
+- Restricted workflow permissions to least-privilege scopes, including read-only PR smoke jobs and publish-only package writes
+- Disabled `actions/checkout` credential persistence across workflows so Git credentials are not left in checked-out repositories
+- Added explicit job timeouts for lint, tests, Docker smoke/publish, and PyPI publish paths
+- Added workflow-level concurrency groups to cancel obsolete branch/PR runs while preserving tag and publish executions
+
+### CI performance and maintenance
+- Enabled `actions/setup-python` pip caching keyed by `pyproject.toml` for test and publish workflows
+- Grouped Dependabot updates for pip dependencies and GitHub Actions to reduce weekly PR noise
+- Added regression tests for workflow permissions, checkout credentials, timeouts, concurrency, Python cache settings, and Dependabot grouping
+
+### Verification
+- Local validation for #75–#80: focused workflow/Dependabot tests and Ruff lint/format checks green
+- PR validation for #75–#80: Docker PR smoke, lint, and Python 3.11/3.12/3.13 tests all green
+- Post-merge validation for #75–#80: Docker publish, lint, Python tests, and Dependabot dynamic grouping runs all green
+
+---
+
 ## v2.3.10 (2026-04-29) — Docker Image Optimization
 
 ### Docker performance and size
