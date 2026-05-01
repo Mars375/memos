@@ -5,7 +5,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v2.3.10-purple.svg)](https://github.com/Mars375/memos/releases)
+[![Version](https://img.shields.io/badge/version-v2.3.11-purple.svg)](https://github.com/Mars375/memos/releases)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/Mars375/memos/actions)
 [![CI](https://github.com/Mars375/memos/actions/workflows/test.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/test.yml)
 [![Docker](https://github.com/Mars375/memos/actions/workflows/docker.yml/badge.svg)](https://github.com/Mars375/memos/actions/workflows/docker.yml)
@@ -13,12 +13,12 @@
 
 ---
 
-## What's new in v2.3.10
+## What's new in v2.3.11
 
-- **Lean Docker image** — the official image omits the optional local embedding stack that pulled Torch/CUDA wheels into runtime builds
-- **Faster Docker CI** — dependency wheels are cached before project source is copied, PRs run a real smoke image, and Buildx cache uses a trusted scope
-- **Smaller runtime context** — `.dockerignore` keeps repository-only files out of Docker builds while preserving the non-root `/data/.memos` runtime contract
-- **Validation** — lint, Python 3.11/3.12/3.13 tests, and Docker build checks are green
+- **Least-privilege CI** — GitHub Actions now use scoped permissions, disabled checkout credential persistence, and isolated Docker PR smoke jobs
+- **Bounded workflow runtime** — every CI job has an explicit timeout and superseded branch/PR runs are cancelled without interrupting release/tag publishes
+- **Faster dependency setup** — Python jobs cache pip dependencies from `pyproject.toml`, while Dependabot groups weekly pip and GitHub Actions updates
+- **Validation** — lint, Python 3.11/3.12/3.13 tests, Docker checks, and Dependabot grouping runs are green
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
