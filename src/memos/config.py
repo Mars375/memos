@@ -9,7 +9,9 @@ Resolution order (highest priority first):
 
 from __future__ import annotations
 
+import json
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -92,15 +94,34 @@ def config_path() -> Path:
     """Return the config file path (MEMOS_CONFIG env or ~/.memos.toml)."""
     env = os.environ.get("MEMOS_CONFIG")
     if env:
-        return Path(env)
+        return Path(env).expanduser()
     return Path.home() / ".memos.toml"
+
+
+def _expand_path(path: Path | None) -> Path:
+    """Return a user-expanded config path."""
+    return (path or config_path()).expanduser()
+
+
+def _fsync_directory(path: Path) -> None:
+    """Best-effort fsync for a directory entry after atomic replacement."""
+    if not hasattr(os, "O_DIRECTORY"):
+        return
+    try:
+        fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def load_config(path: Path | None = None) -> dict[str, Any]:
     """Load config from TOML file. Returns empty dict if missing or unreadable."""
     if tomllib is None:
         return {}
-    p = path or config_path()
+    p = _expand_path(path)
     if not p.is_file():
         return {}
     try:
@@ -148,7 +169,7 @@ def write_config(
     path: Path | None = None,
 ) -> Path:
     """Write a minimal TOML config file. Creates parent dirs as needed."""
-    p = path or config_path()
+    p = _expand_path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
 
     lines = ["# MemOS CLI configuration\n", "[memos]\n"]
@@ -158,8 +179,22 @@ def write_config(
         if isinstance(v, bool):
             lines.append(f"{k} = {'true' if v else 'false'}\n")
         elif isinstance(v, str):
-            lines.append(f'{k} = "{v}"\n')
+            lines.append(f"{k} = {json.dumps(v)}\n")
         elif isinstance(v, (int, float)):
             lines.append(f"{k} = {v}\n")
-    p.write_text("".join(lines))
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            os.chmod(tmp, 0o600)
+            f.write("".join(lines))
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(p)
+        os.chmod(p, 0o600)
+        _fsync_directory(p)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
     return p
