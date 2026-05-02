@@ -25,6 +25,24 @@ class IOFacade:
     def _check_acl(self, permission: str) -> None:
         """ACL guard — resolved at runtime on the MemOS composite."""
 
+    def _rollback_failed_import(self, item_id: str, existing: MemoryItem | None) -> None:
+        """Best-effort rollback after an import side effect fails."""
+        if existing is None:
+            self._store.delete(item_id, namespace=self._namespace)
+            return
+        self._store.upsert(existing, namespace=self._namespace)
+        self._retrieval.index(existing)
+
+    def _commit_imported_item(self, item: MemoryItem, existing: MemoryItem | None) -> None:
+        """Store, index, and version an imported item as one rollbackable unit."""
+        try:
+            self._store.upsert(item, namespace=self._namespace)
+            self._retrieval.index(item)
+            self._versioning.record_version(item, source="import")
+        except Exception:
+            self._rollback_failed_import(item.id, existing)
+            raise
+
     # ── JSON export/import ────────────────────────────────────
 
     def export_json(self, *, include_metadata: bool = True) -> dict:
@@ -44,6 +62,8 @@ class IOFacade:
                     "created_at": item.created_at,
                     "accessed_at": item.accessed_at,
                     "access_count": item.access_count,
+                    "relevance_score": item.relevance_score,
+                    **({"ttl": item.ttl} if item.ttl is not None else {}),
                     **({"metadata": item.metadata} if include_metadata else {}),
                 }
                 for item in items
@@ -72,28 +92,27 @@ class IOFacade:
                     result["skipped"] += 1
                     continue
 
-                if existing and merge == "overwrite":
-                    self._store.delete(mem_id, namespace=self._namespace)
-                    result["overwritten"] += 1
-
                 tags = list(entry.get("tags", []))
                 if tags_prefix:
                     tags.extend(tags_prefix)
 
+                item = MemoryItem(
+                    id=mem_id,
+                    content=entry["content"].strip(),
+                    tags=tags,
+                    importance=max(0.0, min(1.0, entry.get("importance", DEFAULT_IMPORTANCE))),
+                    created_at=entry.get("created_at", time.time()),
+                    accessed_at=entry.get("accessed_at", time.time()),
+                    access_count=entry.get("access_count", 0),
+                    relevance_score=entry.get("relevance_score", 0.0),
+                    metadata=entry.get("metadata", {}),
+                    ttl=entry.get("ttl"),
+                )
+
                 if not dry_run:
-                    item = MemoryItem(
-                        id=mem_id,
-                        content=entry["content"].strip(),
-                        tags=tags,
-                        importance=max(0.0, min(1.0, entry.get("importance", DEFAULT_IMPORTANCE))),
-                        created_at=entry.get("created_at", time.time()),
-                        accessed_at=entry.get("accessed_at", time.time()),
-                        access_count=entry.get("access_count", 0),
-                        metadata=entry.get("metadata", {}),
-                    )
-                    self._store.upsert(item, namespace=self._namespace)
-                    self._retrieval.index(item)
-                    self._versioning.record_version(item, source="import")
+                    self._commit_imported_item(item, existing)
+                if existing and merge == "overwrite":
+                    result["overwritten"] += 1
                 result["imported"] += 1
             except Exception as e:
                 result["errors"].append(str(e))
@@ -175,14 +194,10 @@ class IOFacade:
                     result["skipped"] += 1
                     continue
 
-                if existing and merge == "overwrite":
-                    self._store.delete(item.id, namespace=self._namespace)
-                    result["overwritten"] += 1
-
                 if not dry_run:
-                    self._store.upsert(item, namespace=self._namespace)
-                    self._retrieval.index(item)
-                    self._versioning.record_version(item, source="import")
+                    self._commit_imported_item(item, existing)
+                if existing and merge == "overwrite":
+                    result["overwritten"] += 1
                 result["imported"] += 1
             except Exception as e:
                 result["errors"].append(str(e))
