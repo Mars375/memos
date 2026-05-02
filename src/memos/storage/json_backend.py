@@ -10,6 +10,7 @@ For high-throughput or multi-process scenarios, use SQLite, Chroma, or Qdrant.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Optional
@@ -34,7 +35,7 @@ class JsonFileBackend(StorageBackend):
     """
 
     def __init__(self, path: str | Path = ".memos/store.json") -> None:
-        self._path = Path(path)
+        self._path = Path(path).expanduser()
         self._lock = threading.Lock()
         self._data: dict[str, dict[str, dict]] = {_DEFAULT: {}}
         self._load()
@@ -52,20 +53,57 @@ class JsonFileBackend(StorageBackend):
                     for ns, items in raw.items():
                         if isinstance(items, dict):
                             self._data[ns] = {k: v for k, v in items.items() if isinstance(v, dict) and "content" in v}
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                self._quarantine_corrupt_store()
+                self._data = {_DEFAULT: {}}
+            except OSError:
                 self._data = {_DEFAULT: {}}
         else:
             self._data = {_DEFAULT: {}}
 
+    def _quarantine_corrupt_store(self) -> None:
+        """Move an unreadable JSON store aside before future writes replace it."""
+        corrupt_path = self._path.with_suffix(f"{self._path.suffix}.corrupt")
+        counter = 1
+        while corrupt_path.exists():
+            corrupt_path = self._path.with_suffix(f"{self._path.suffix}.corrupt.{counter}")
+            counter += 1
+        try:
+            self._path.replace(corrupt_path)
+        except OSError:
+            pass
+
+    def _fsync_parent_dir(self) -> None:
+        """Best-effort fsync for the directory entry created by atomic replace."""
+        if not hasattr(os, "O_DIRECTORY"):
+            return
+        try:
+            fd = os.open(self._path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        except OSError:
+            return
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
     def _save(self) -> None:
         """Atomically write store to disk."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(
-            json.dumps(self._data, ensure_ascii=False, indent=None),
-            encoding="utf-8",
-        )
-        tmp.replace(self._path)
+        tmp = self._path.with_name(f".{self._path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                os.chmod(tmp, 0o600)
+                json.dump(self._data, f, ensure_ascii=False, indent=None)
+                f.flush()
+                os.fsync(f.fileno())
+            tmp.replace(self._path)
+            os.chmod(self._path, 0o600)
+            self._fsync_parent_dir()
+        finally:
+            try:
+                tmp.unlink()
+            except FileNotFoundError:
+                pass
 
     # ---- helpers ----
 
