@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from memos.core import MemOS
+from memos.wiki import WikiEngine
 from memos.wiki_living import LivingWikiEngine
 
 
@@ -22,6 +23,17 @@ def mem():
 @pytest.fixture
 def engine(mem, tmp_path):
     return LivingWikiEngine(mem, wiki_dir=str(tmp_path / "wiki"))
+
+
+def test_wiki_defaults_colocate_with_persist_path(tmp_path):
+    store_path = tmp_path / "data" / "store.json"
+    mem = MemOS(backend="json", persist_path=str(store_path))
+
+    classic = WikiEngine(mem)
+    living = LivingWikiEngine(mem)
+
+    assert classic._wiki_dir == store_path.parent / "wiki"
+    assert living._wiki_dir == store_path.parent / "wiki" / "living"
 
 
 # ── Index Generation ────────────────────────────────────────────

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,19 +37,46 @@ def test_dockerfile_caches_dependency_wheels_before_project_source():
     assert content.startswith("# syntax=docker/dockerfile:1")
     assert "--mount=type=cache,target=/root/.cache/pip" in content
     assert "pip wheel --wheel-dir /wheels -r /tmp/requirements.txt" in content
-    assert content.index("COPY pyproject.toml README.md ./") < content.index("pip wheel --wheel-dir /wheels -r")
+    assert content.index("COPY pyproject.toml README.md LICENSE ./") < content.index("pip wheel --wheel-dir /wheels -r")
     assert content.index("pip wheel --wheel-dir /wheels -r") < content.index("COPY src/ src/")
     assert content.index("COPY src/ src/") < content.index("pip wheel --no-deps --wheel-dir /wheels .")
 
 
+def test_dockerfile_copies_license_into_runtime_image():
+    content = (ROOT / "Dockerfile").read_text()
+
+    assert "COPY pyproject.toml README.md LICENSE ./" in content
+    assert "COPY --from=builder /build/LICENSE /licenses/memos/LICENSE" in content
+
+
+def test_dockerfile_references_existing_pyproject_extras():
+    docker_content = (ROOT / "Dockerfile").read_text()
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    extras = data["project"]["optional-dependencies"]
+
+    for extra in ("server", "chroma", "parquet"):
+        assert f'"{extra}"' in docker_content
+        assert extra in extras
+
+
 def test_dockerfile_uses_multistage_non_root_runtime():
     content = (ROOT / "Dockerfile").read_text()
-    assert "FROM python:3.11-slim AS builder" in content
-    assert "FROM python:3.11-slim AS runtime" in content
+    assert "FROM python:3.11-slim@sha256:" in content
+    assert "AS builder" in content
+    assert "AS runtime" in content
     assert "USER memos" in content
     assert "build-essential" in content
-    runtime_stage = content.split("FROM python:3.11-slim AS runtime", maxsplit=1)[1]
+    runtime_stage = content.split(" AS runtime", maxsplit=1)[1]
     assert "build-essential" not in runtime_stage
+
+
+def test_dockerfile_base_images_are_digest_pinned():
+    content = (ROOT / "Dockerfile").read_text()
+    from_lines = [line for line in content.splitlines() if line.startswith("FROM ")]
+
+    assert from_lines
+    for line in from_lines:
+        assert re.match(r"FROM python:3\.11-slim@sha256:[0-9a-f]{64} AS (builder|runtime)$", line)
 
 
 def test_dockerfile_excludes_tests_and_tools_from_runtime_image():
@@ -102,6 +131,15 @@ def test_docker_workflow_smoke_tests_pull_requests_without_push():
 
     assert "Build PR smoke image" in content
     assert "Smoke test PR image" in content
+    assert "docker run --rm -d --name memos-smoke -p 8000:8000 memos:smoke" in content
+    assert "http://127.0.0.1:8000/health" in content
+    assert "http://127.0.0.1:8000/.well-known/mcp.json" in content
+    assert "http://127.0.0.1:8000/mcp" in content
+    assert "MEMOS_API_KEY=smoke-secret" in content
+    assert "http://127.0.0.1:8001/mcp" in content
+    assert '"X-API-Key": "smoke-secret"' in content
+    assert "assert exc.code == 401" in content
+    assert "Access-Control-Request-Headers" in content
     assert "load: true" in content
     assert "tags: memos:smoke" in content
     assert "getpass.getuser() == 'memos'" in content
@@ -109,6 +147,13 @@ def test_docker_workflow_smoke_tests_pull_requests_without_push():
     assert "if: github.event_name == 'pull_request'" in smoke_job
     assert "packages: write" not in smoke_job
     assert "packages: write" in publish_job
+
+
+def test_docker_workflow_publishes_sbom_and_provenance():
+    content = DOCKER_WORKFLOW.read_text()
+
+    assert "sbom: true" in content
+    assert "provenance: mode=max" in content
 
 
 def test_workflows_use_least_privilege_permissions():
@@ -130,7 +175,9 @@ def test_checkout_credentials_are_not_persisted():
         TEST_WORKFLOW.read_text(),
     ]
 
-    checkout_count = sum(content.count("uses: actions/checkout@v6") for content in workflow_contents)
+    checkout_count = sum(
+        content.count("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd") for content in workflow_contents
+    )
     disabled_count = sum(content.count("persist-credentials: false") for content in workflow_contents)
 
     assert checkout_count == 6
@@ -175,13 +222,58 @@ def test_python_workflows_cache_pip_dependencies():
         TEST_WORKFLOW.read_text(),
     ]
 
-    setup_python_count = sum(content.count("uses: actions/setup-python@v6") for content in workflow_contents)
+    setup_python_count = sum(
+        content.count("actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405") for content in workflow_contents
+    )
     cache_count = sum(content.count("cache: pip") for content in workflow_contents)
     dependency_path_count = sum(content.count("cache-dependency-path: pyproject.toml") for content in workflow_contents)
 
     assert setup_python_count == 4
     assert cache_count == setup_python_count
     assert dependency_path_count == setup_python_count
+
+
+def test_publish_workflow_validates_and_smoke_tests_built_wheel():
+    content = PUBLISH_WORKFLOW.read_text()
+
+    assert "pip install build twine" in content
+    assert "python -m twine check dist/*" in content
+    assert "python -m venv /tmp/memos-wheel-smoke" in content
+    assert "/tmp/memos-wheel-smoke/bin/pip install dist/*.whl" in content
+    assert 'metadata.version("memos-os") == memos.__version__' in content
+    assert "/tmp/memos-wheel-smoke/bin/memos --help" in content
+
+
+def test_publish_workflow_links_to_canonical_pypi_project_url():
+    content = PUBLISH_WORKFLOW.read_text()
+
+    assert "url: https://pypi.org/project/memos-os/" in content
+    assert "https://pypi.org/p/memos-os" not in content
+
+
+def test_publish_workflow_smoke_tests_built_sdist():
+    content = PUBLISH_WORKFLOW.read_text()
+
+    assert "Smoke test built sdist" in content
+    assert "python -m venv /tmp/memos-sdist-smoke" in content
+    assert "/tmp/memos-sdist-smoke/bin/pip install dist/*.tar.gz" in content
+    assert "/tmp/memos-sdist-smoke/bin/memos --help" in content
+
+
+def test_github_actions_are_pinned_to_full_commit_shas():
+    workflow_contents = [
+        DOCKER_WORKFLOW.read_text(),
+        PUBLISH_WORKFLOW.read_text(),
+        TEST_WORKFLOW.read_text(),
+    ]
+
+    for content in workflow_contents:
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("uses:"):
+                continue
+            ref = stripped.split("@", maxsplit=1)[1]
+            assert re.fullmatch(r"[0-9a-f]{40}", ref), stripped
 
 
 # ── Compose tests removed ──────────────────────────────────────────────────

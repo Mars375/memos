@@ -90,6 +90,8 @@ class MemOS(
     ) -> None:
         self._backend_name = backend
         acl_persist_path = kwargs.get("acl_path")
+        if acl_persist_path:
+            acl_persist_path = os.path.expanduser(acl_persist_path)
         # Storage
         if backend == "chroma":
             from .storage.chroma_backend import ChromaBackend
@@ -131,19 +133,20 @@ class MemOS(
                 serverless=kwargs.get("pinecone_serverless", True),
             )
         elif backend == "json":
-            p = persist_path or ".memos/store.json"
+            p = os.path.expanduser(persist_path or ".memos/store.json")
             acl_persist_path = acl_persist_path or acl_sidecar_path(p)
             store = JsonFileBackend(path=p)
         elif backend == "local":
             # Local-first: JSON storage + built-in sentence-transformers embeddings
             # No external services needed for semantic recall.
-            p = persist_path or ".memos/store.json"
+            p = os.path.expanduser(persist_path or ".memos/store.json")
             acl_persist_path = acl_persist_path or acl_sidecar_path(p)
             store = JsonFileBackend(path=p)
         else:
             if persist_path:
-                acl_persist_path = acl_persist_path or acl_sidecar_path(persist_path)
-                store = JsonFileBackend(path=persist_path)
+                p = os.path.expanduser(persist_path)
+                acl_persist_path = acl_persist_path or acl_sidecar_path(p)
+                store = JsonFileBackend(path=p)
             else:
                 store = InMemoryBackend()
 
@@ -193,6 +196,7 @@ class MemOS(
 
         # Namespace ACL (access control)
         self._acl = NamespaceACL()
+        self._persist_path: str | None = getattr(store, "_path", None) and str(getattr(store, "_path"))
         self._acl_path: str | None = acl_persist_path
         self._acl.set_on_change(self._save_acl_policies)
         self._load_acl_policies()

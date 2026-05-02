@@ -29,13 +29,13 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -44,10 +44,10 @@ jobs:
             type=raw,value=latest
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
 
       - name: Build PR smoke image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
         with:
           context: .
           load: true
@@ -59,6 +59,89 @@ jobs:
       - name: Smoke test PR image
         run: |
           docker run --rm memos:smoke python -c "import os, getpass, memos; assert getpass.getuser() == 'memos'; assert os.environ['MEMOS_PERSIST_PATH'] == '/data/.memos/store.json'; assert os.environ['MEMOS_CACHE_PATH'] == '/data/.memos/embeddings.db'; print(memos.__version__)"
+          docker run --rm -d --name memos-smoke -p 8000:8000 memos:smoke
+          trap 'docker rm -f memos-smoke' EXIT
+          python - <<'PY'
+          import json
+          import time
+          import urllib.request
+
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2) as response:
+                      assert response.status == 200
+                  break
+              except Exception:
+                  time.sleep(1)
+          else:
+              raise SystemExit("MemOS container did not become healthy")
+
+          with urllib.request.urlopen("http://127.0.0.1:8000/.well-known/mcp.json", timeout=2) as response:
+              discovery = json.loads(response.read())
+          assert discovery["endpoint"] == "/mcp"
+
+          request = urllib.request.Request(
+              "http://127.0.0.1:8000/mcp",
+              data=b'{"jsonrpc":"2.0","id":1,"method":"ping"}',
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          with urllib.request.urlopen(request, timeout=2) as response:
+              assert json.loads(response.read())["result"] == {}
+          PY
+          docker run --rm -d --name memos-smoke-auth -p 8001:8000 -e MEMOS_API_KEY=smoke-secret memos:smoke
+          trap 'docker rm -f memos-smoke memos-smoke-auth' EXIT
+          python - <<'PY'
+          import json
+          import time
+          import urllib.error
+          import urllib.request
+
+          for _ in range(30):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8001/health", timeout=2) as response:
+                      assert response.status == 200
+                  break
+              except Exception:
+                  time.sleep(1)
+          else:
+              raise SystemExit("Authenticated MemOS container did not become healthy")
+
+          options_request = urllib.request.Request(
+              "http://127.0.0.1:8001/mcp",
+              headers={
+                  "Origin": "http://localhost:8000",
+                  "Access-Control-Request-Method": "POST",
+                  "Access-Control-Request-Headers": "Content-Type, X-API-Key",
+              },
+              method="OPTIONS",
+          )
+          with urllib.request.urlopen(options_request, timeout=2) as response:
+              assert response.status == 200
+              assert "X-API-Key" in response.headers["Access-Control-Allow-Headers"]
+
+          unauthenticated = urllib.request.Request(
+              "http://127.0.0.1:8001/mcp",
+              data=b'{"jsonrpc":"2.0","id":1,"method":"ping"}',
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              urllib.request.urlopen(unauthenticated, timeout=2)
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 401
+          else:
+              raise AssertionError("Unauthenticated MCP request unexpectedly succeeded")
+
+          authenticated = urllib.request.Request(
+              "http://127.0.0.1:8001/mcp",
+              data=b'{"jsonrpc":"2.0","id":1,"method":"ping"}',
+              headers={"Content-Type": "application/json", "X-API-Key": "smoke-secret"},
+              method="POST",
+          )
+          with urllib.request.urlopen(authenticated, timeout=2) as response:
+              assert json.loads(response.read())["result"] == {}
+          PY
 
   build-and-push:
     if: github.event_name != 'pull_request'
@@ -69,12 +152,12 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -82,7 +165,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -91,10 +174,10 @@ jobs:
             type=raw,value=latest
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd
 
       - name: Build and push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f
         with:
           context: .
           push: true
@@ -103,3 +186,5 @@ jobs:
           cache-from: type=gha,scope=memos-docker-main
           cache-to: type=gha,scope=memos-docker-main,mode=max,ignore-error=true
           platforms: linux/amd64,linux/arm64
+          sbom: true
+          provenance: mode=max

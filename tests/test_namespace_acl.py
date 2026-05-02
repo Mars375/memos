@@ -1,5 +1,7 @@
 """Tests for namespace access control (RBAC)."""
 
+import json
+import os
 import time
 
 import pytest
@@ -354,6 +356,69 @@ class TestMemOSACLIntegration:
         assert policy is not None
         assert policy.granted_by == "admin"
         assert (tmp_path / "store.acl.json").exists()
+
+    def test_acl_sidecar_uses_private_file_permissions(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        mem = MemOS(backend="json", persist_path=str(store_path))
+        mem.acl.grant("agent-a", "production", Role.WRITER)
+
+        acl_path = tmp_path / "store.acl.json"
+
+        assert oct(os.stat(acl_path).st_mode & 0o777) == "0o600"
+
+    def test_acl_sidecar_load_ignores_corrupt_json(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        acl_path = tmp_path / "store.acl.json"
+        acl_path.write_text("NOT JSON{{{")
+
+        mem = MemOS(backend="json", persist_path=str(store_path))
+
+        assert mem.list_namespace_policies() == []
+
+    def test_acl_sidecar_load_ignores_invalid_shape(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        acl_path = tmp_path / "store.acl.json"
+        acl_path.write_text(json.dumps({"version": 1, "policies": {"bad": "shape"}}))
+
+        mem = MemOS(backend="json", persist_path=str(store_path))
+
+        assert mem.list_namespace_policies() == []
+
+    def test_acl_sidecar_load_ignores_malformed_policy(self, tmp_path):
+        store_path = tmp_path / "store.json"
+        acl_path = tmp_path / "store.acl.json"
+        acl_path.write_text(json.dumps({"version": 1, "policies": [{"agent_id": "missing-fields"}]}))
+
+        mem = MemOS(backend="json", persist_path=str(store_path))
+
+        assert mem.list_namespace_policies() == []
+
+    def test_custom_acl_path_expands_user_home(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        mem = MemOS(backend="json", persist_path=str(tmp_path / "store.json"), acl_path="~/.memos/custom.acl.json")
+
+        mem.acl.grant("agent-a", "production", Role.WRITER)
+
+        assert (tmp_path / ".memos" / "custom.acl.json").is_file()
+        assert not (tmp_path / "~").exists()
+
+    def test_acl_sidecar_save_is_atomic_on_replace_failure(self, tmp_path, monkeypatch):
+        store_path = tmp_path / "store.json"
+        acl_path = tmp_path / "store.acl.json"
+        acl_path.write_text(json.dumps({"version": 1, "policies": []}) + "\n")
+
+        mem = MemOS(backend="json", persist_path=str(store_path))
+
+        def fail_replace(src, dst):
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(os, "replace", fail_replace)
+
+        with pytest.raises(OSError, match="replace failed"):
+            mem.acl.grant("agent-a", "production", Role.WRITER)
+
+        assert acl_path.read_text() == json.dumps({"version": 1, "policies": []}) + "\n"
+        assert not list(tmp_path.glob("store.acl.json.*.tmp"))
 
     def test_acl_clear_persists_with_json_backend(self, tmp_path):
         store_path = tmp_path / "store.json"

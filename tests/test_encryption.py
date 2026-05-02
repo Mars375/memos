@@ -106,7 +106,9 @@ class TestEncryptedStorageBackend:
             content=content,
             tags=["test"],
             importance=0.5,
+            relevance_score=kw.get("relevance_score", 0.0),
             metadata=kw.get("metadata", {}),
+            ttl=kw.get("ttl"),
         )
 
     def test_encrypts_content_at_rest(self):
@@ -129,6 +131,19 @@ class TestEncryptedStorageBackend:
         enc.upsert(item)
         result = enc.get("test-id")
         assert result.content == "secret content"
+
+    def test_preserves_ttl_and_relevance_score(self):
+        inner = InMemoryBackend()
+        crypto = MemoryCrypto.from_passphrase("pass")
+        enc = EncryptedStorageBackend(inner, crypto)
+        item = self._make_item("secret content", ttl=120.0, relevance_score=0.82)
+
+        enc.upsert(item)
+        result = enc.get("test-id")
+
+        assert result is not None
+        assert result.ttl == 120.0
+        assert result.relevance_score == 0.82
 
     def test_encrypts_sensitive_metadata(self):
         inner = InMemoryBackend()

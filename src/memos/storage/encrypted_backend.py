@@ -43,7 +43,9 @@ class EncryptedStorageBackend(StorageBackend):
             created_at=item.created_at,
             accessed_at=item.accessed_at,
             access_count=item.access_count,
+            relevance_score=item.relevance_score,
             metadata=enc_meta,
+            ttl=item.ttl,
         )
 
     def _decrypt_item(self, item: MemoryItem) -> MemoryItem:
@@ -74,7 +76,9 @@ class EncryptedStorageBackend(StorageBackend):
             created_at=item.created_at,
             accessed_at=item.accessed_at,
             access_count=item.access_count,
+            relevance_score=item.relevance_score,
             metadata=dec_meta,
+            ttl=item.ttl,
         )
 
     def upsert(self, item: MemoryItem, *, namespace: str = "") -> None:

@@ -1,6 +1,7 @@
 """Tests for JsonFileBackend — persistent file-backed storage."""
 
 import json
+import os
 
 import pytest
 
@@ -137,6 +138,31 @@ class TestJsonFileBackendPersistence:
         store_path.write_text("NOT VALID JSON{{{")
         b = JsonFileBackend(path=store_path)
         assert b.list_all() == []
+        assert not store_path.exists()
+        assert store_path.with_suffix(".json.corrupt").read_text() == "NOT VALID JSON{{{"
+
+    def test_invalid_utf8_file_graceful(self, store_path):
+        store_path.write_bytes(b"\xff\xfe\x00")
+
+        b = JsonFileBackend(path=store_path)
+
+        assert b.list_all() == []
+        assert not store_path.exists()
+        assert store_path.with_suffix(".json.corrupt").read_bytes() == b"\xff\xfe\x00"
+
+    def test_save_uses_private_file_permissions(self, store_path):
+        b = JsonFileBackend(path=store_path)
+        b.upsert(_item("private"))
+
+        assert oct(os.stat(store_path).st_mode & 0o777) == "0o600"
+
+    def test_path_expands_user_home(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        b = JsonFileBackend(path="~/.memos/store.json")
+        b.upsert(_item("home path"))
+
+        assert (tmp_path / ".memos" / "store.json").is_file()
+        assert not (tmp_path / "~").exists()
 
     def test_missing_directory_created(self, tmp_path):
         path = tmp_path / "sub" / "dir" / "store.json"
