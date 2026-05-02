@@ -95,11 +95,13 @@ def _cors_headers(request_origin: str | None = None) -> dict[str, str]:
 
     hdrs: dict[str, str] = {
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key, Mcp-Session-Id",
         "Access-Control-Expose-Headers": "Mcp-Session-Id",
     }
     if origin:
         hdrs["Access-Control-Allow-Origin"] = origin
+        if origin != "*":
+            hdrs["Vary"] = "Origin"
     return hdrs
 
 
@@ -270,7 +272,7 @@ def create_mcp_app(memos: Any, api_keys: list[str] | None = None) -> Any:
 
         @app.middleware("http")
         async def mcp_auth_middleware(request: Request, call_next):
-            if request.url.path == "/health":
+            if request.url.path == "/health" or (request.method == "OPTIONS" and request.url.path == "/mcp"):
                 return await call_next(request)
             api_key = request.headers.get("X-API-Key", "")
             if not api_key:
