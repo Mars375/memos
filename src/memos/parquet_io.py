@@ -34,6 +34,8 @@ def _items_to_rows(items: list[MemoryItem], *, include_metadata: bool = True) ->
             "created_at": item.created_at,
             "accessed_at": item.accessed_at,
             "access_count": item.access_count,
+            "relevance_score": item.relevance_score,
+            "ttl": item.ttl,
         }
         if include_metadata:
             row["metadata_json"] = json.dumps(item.metadata, default=str)
@@ -70,7 +72,9 @@ def _rows_to_items(
             created_at=float(row.get("created_at", time.time())),
             accessed_at=float(row.get("accessed_at", time.time())),
             access_count=int(row.get("access_count", 0)),
+            relevance_score=float(row.get("relevance_score", 0.0)),
             metadata=metadata,
+            ttl=row.get("ttl"),
         )
         items.append(item)
     return items
@@ -114,6 +118,8 @@ def export_parquet(
                 pa.field("created_at", pa.float64()),
                 pa.field("accessed_at", pa.float64()),
                 pa.field("access_count", pa.int64()),
+                pa.field("relevance_score", pa.float64()),
+                pa.field("ttl", pa.float64()),
             ]
         )
         if include_metadata:

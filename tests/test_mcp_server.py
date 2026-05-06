@@ -239,6 +239,35 @@ async def test_standalone_mcp_requires_api_key_when_configured(mem):
 
 
 @pytest.mark.asyncio
+async def test_standalone_mcp_allows_auth_enabled_cors_preflight(mem):
+    from httpx import ASGITransport, AsyncClient
+
+    app = create_mcp_app(mem, api_keys=["sk-mcp"])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.options("/mcp", headers={"Origin": "http://localhost:3000"})
+
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "x-api-key" in r.headers["access-control-allow-headers"].lower()
+    assert r.headers["vary"] == "Origin"
+
+
+@pytest.mark.asyncio
+async def test_integrated_mcp_allows_auth_enabled_cors_preflight(mem):
+    from httpx import ASGITransport, AsyncClient
+
+    from memos.api import create_fastapi_app
+
+    app = create_fastapi_app(memos=mem, api_keys=["sk-api"])
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.options("/mcp", headers={"Origin": "http://localhost:3000"})
+
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "x-api-key" in r.headers["access-control-allow-headers"].lower()
+
+
+@pytest.mark.asyncio
 async def test_standalone_mcp_allows_valid_api_key(mem):
     from httpx import ASGITransport, AsyncClient
 

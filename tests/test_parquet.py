@@ -76,7 +76,16 @@ class TestExportParquet:
         table = pq.read_table(str(path))
         assert table.num_rows == 3
         cols = table.column_names
-        for col in ("id", "content", "tags", "importance", "created_at", "accessed_at", "access_count"):
+        for col in (
+            "id",
+            "content",
+            "tags",
+            "importance",
+            "created_at",
+            "accessed_at",
+            "access_count",
+            "relevance_score",
+        ):
             assert col in cols
 
 
@@ -171,6 +180,61 @@ class TestImportParquet:
         assert result["imported"] == 1
         assert m2.stats().total_memories == 0
 
+    def test_import_dry_run_overwrite_preserves_existing(self, mem, tmp_path):
+        path = tmp_path / "rt.parquet"
+        mem.export_parquet(str(path))
+        first_id = mem.export_json()["memories"][0]["id"]
+        original = mem._store.get(first_id, namespace=mem._namespace)
+        assert original is not None
+
+        result = mem.import_parquet(str(path), merge="overwrite", dry_run=True)
+
+        assert result["overwritten"] == 3
+        assert result["imported"] == 3
+        preserved = mem._store.get(first_id, namespace=mem._namespace)
+        assert preserved is not None
+        assert preserved.content == original.content
+
+    def test_import_overwrite_index_failure_preserves_existing(self, mem, tmp_path, monkeypatch):
+        path = tmp_path / "rt.parquet"
+        mem.export_parquet(str(path))
+        first_id = mem.export_json()["memories"][0]["id"]
+        original = mem._store.get(first_id, namespace=mem._namespace)
+        assert original is not None
+
+        def fail_index(item):
+            raise RuntimeError("index failed")
+
+        monkeypatch.setattr(mem._retrieval, "index", fail_index)
+
+        result = mem.import_parquet(str(path), merge="overwrite")
+
+        assert result["errors"]
+        assert "index failed" in result["errors"][0]
+        preserved = mem._store.get(first_id, namespace=mem._namespace)
+        assert preserved is not None
+        assert preserved.content == original.content
+
+    def test_import_overwrite_versioning_failure_preserves_existing(self, mem, tmp_path, monkeypatch):
+        path = tmp_path / "rt.parquet"
+        mem.export_parquet(str(path))
+        first_id = mem.export_json()["memories"][0]["id"]
+        original = mem._store.get(first_id, namespace=mem._namespace)
+        assert original is not None
+
+        def fail_record_version(item, *, source):
+            raise RuntimeError("versioning failed")
+
+        monkeypatch.setattr(mem._versioning, "record_version", fail_record_version)
+
+        result = mem.import_parquet(str(path), merge="overwrite")
+
+        assert result["errors"]
+        assert "versioning failed" in result["errors"][0]
+        preserved = mem._store.get(first_id, namespace=mem._namespace)
+        assert preserved is not None
+        assert preserved.content == original.content
+
     def test_import_file_not_found(self, tmp_path):
         m = MemOS(backend="memory", sanitize=False)
         with pytest.raises(FileNotFoundError):
@@ -216,6 +280,32 @@ class TestParquetMetadata:
 
         items = m2._store.list_all()
         assert items[0].metadata == {}
+
+    def test_ttl_and_relevance_roundtrip(self, tmp_path):
+        from memos.models import MemoryItem
+
+        m = MemOS(backend="memory", sanitize=False)
+        m._store.upsert(
+            MemoryItem(
+                id="scored",
+                content="scored parquet memory",
+                relevance_score=0.91,
+                ttl=1800.0,
+            ),
+            namespace=m._namespace,
+        )
+
+        path = tmp_path / "scored.parquet"
+        m.export_parquet(str(path))
+
+        m2 = MemOS(backend="memory", sanitize=False)
+        result = m2.import_parquet(str(path))
+
+        assert result["imported"] == 1
+        restored = m2._store.get("scored", namespace=m2._namespace)
+        assert restored is not None
+        assert restored.relevance_score == 0.91
+        assert restored.ttl == 1800.0
 
 
 # ── CLI Parquet Tests ─────────────────────────────────────

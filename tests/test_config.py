@@ -90,6 +90,21 @@ class TestWriteConfig:
         assert 'backend = "chroma"' in content
         assert "port = 9000" in content
 
+    def test_config_path_expands_env_home(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("MEMOS_CONFIG", "~/.memos.toml")
+
+        assert config_path() == tmp_path / ".memos.toml"
+
+    def test_write_expands_explicit_home_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        result = write_config({"backend": "json"}, Path("~/.memos.toml"))
+
+        assert result == tmp_path / ".memos.toml"
+        assert result.is_file()
+        assert not (tmp_path / "~").exists()
+
     def test_write_ignores_unknown_keys(self, tmp_path: Path):
         p = tmp_path / ".memos.toml"
         write_config({"backend": "memory", "foobar": True}, p)
@@ -100,6 +115,52 @@ class TestWriteConfig:
         p = tmp_path / ".memos.toml"
         write_config({"sanitize": False}, p)
         assert "sanitize = false" in p.read_text()
+
+    def test_write_escapes_strings_as_valid_toml(self, tmp_path: Path):
+        p = tmp_path / ".memos.toml"
+        write_config({"backend": 'json "quoted"'}, p)
+
+        cfg = load_config(p)
+
+        assert cfg["backend"] == 'json "quoted"'
+
+    def test_write_uses_private_file_permissions(self, tmp_path: Path):
+        p = tmp_path / ".memos.toml"
+        write_config({"backend": "memory"}, p)
+
+        assert oct(os.stat(p).st_mode & 0o777) == "0o600"
+
+    def test_failed_write_does_not_replace_existing_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        p = tmp_path / ".memos.toml"
+        p.write_text('[memos]\nbackend = "memory"\n')
+
+        def fail_replace(self: Path, target: Path) -> None:
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(Path, "replace", fail_replace)
+
+        with pytest.raises(OSError, match="replace failed"):
+            write_config({"backend": "chroma"}, p)
+
+        assert p.read_text() == '[memos]\nbackend = "memory"\n'
+        assert not list(tmp_path.glob(".*.tmp"))
+
+    def test_write_config_temp_path_is_thread_unique(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        p = tmp_path / ".memos.toml"
+        seen: list[str] = []
+        original_open = open
+
+        def tracking_open(path, *args, **kwargs):
+            if str(path).endswith(".tmp"):
+                seen.append(str(path))
+            return original_open(path, *args, **kwargs)
+
+        monkeypatch.setattr("builtins.open", tracking_open)
+
+        write_config({"backend": "memory"}, p)
+
+        assert seen
+        assert f".{os.getpid()}." in seen[0]
 
 
 class TestConfigPath:

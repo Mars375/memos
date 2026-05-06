@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from typing import TYPE_CHECKING, Any, Optional
 
 from .namespaces.acl import Role
@@ -23,6 +24,21 @@ def acl_sidecar_path(persist_path: str) -> str:
     return f"{base}.acl{ext}"
 
 
+def _fsync_directory(path: str) -> None:
+    """Best-effort fsync for a directory entry after atomic replacement."""
+    if not hasattr(os, "O_DIRECTORY"):
+        return
+    directory = os.path.dirname(path) or "."
+    try:
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 class NamespaceFacade:
     """Mixin providing namespace management operations for the MemOS nucleus."""
 
@@ -31,12 +47,21 @@ class NamespaceFacade:
         path = getattr(self, "_acl_path", None)
         if not path or not os.path.exists(path):
             return
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+            logger.warning("Ignoring unreadable namespace ACL sidecar %s: %s", path, exc)
+            return
         policies = data.get("policies", []) if isinstance(data, dict) else data
         if not isinstance(policies, list):
-            raise ValueError("ACL sidecar must contain a list of policies")
-        loaded = self._acl.load_policies(policies)
+            logger.warning("Ignoring invalid namespace ACL sidecar %s: policies must be a list", path)
+            return
+        try:
+            loaded = self._acl.load_policies(policies)
+        except (TypeError, ValueError, KeyError) as exc:
+            logger.warning("Ignoring invalid namespace ACL sidecar %s: %s", path, exc)
+            return
         logger.debug("Loaded %d namespace ACL policies from %s", loaded, path)
 
     def _save_acl_policies(self) -> None:
@@ -48,11 +73,22 @@ class NamespaceFacade:
         if directory:
             os.makedirs(directory, exist_ok=True)
         payload = {"version": 1, "policies": self._acl.dump_policies()}
-        tmp_path = f"{path}.tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-            f.write("\n")
-        os.replace(tmp_path, path)
+        tmp_path = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                os.chmod(tmp_path, 0o600)
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+            os.chmod(path, 0o600)
+            _fsync_directory(path)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except FileNotFoundError:
+                pass
 
     def list_namespaces(self) -> list[str]:
         """List all non-default namespaces."""

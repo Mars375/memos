@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim@sha256:6d85378d88a19cd4d76079817532d62232be95757cb45945a99fec8e8084b9c2 AS builder
 
 WORKDIR /build
 
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 
 RUN python - <<'PY' > /tmp/requirements.txt
 import tomllib
@@ -33,7 +33,7 @@ COPY src/ src/
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip wheel --no-deps --wheel-dir /wheels .
 
-FROM python:3.11-slim AS runtime
+FROM python:3.11-slim@sha256:6d85378d88a19cd4d76079817532d62232be95757cb45945a99fec8e8084b9c2 AS runtime
 
 WORKDIR /app
 
@@ -50,6 +50,7 @@ RUN groupadd --system memos && \
     chown -R memos:memos /data /home/memos
 
 COPY --from=builder /wheels /wheels
+COPY --from=builder /build/LICENSE /licenses/memos/LICENSE
 RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 USER memos

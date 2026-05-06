@@ -108,7 +108,8 @@ def create_auth_middleware(key_manager: APIKeyManager):
 
     Skips authentication for unauthenticated paths: ``/``, ``/dashboard``,
     ``/health``, ``/api/v1/health``, ``/docs``, ``/redoc``, ``/openapi.json``,
-    and dashboard static assets under ``/static``.
+    dashboard static assets under ``/static``, and ``OPTIONS /mcp`` CORS
+    preflight requests.
     All other paths
     require a valid ``X-API-Key`` header when keys are configured.
 
@@ -125,6 +126,8 @@ def create_auth_middleware(key_manager: APIKeyManager):
     async def middleware(request, call_next):
         # Skip auth for health and dashboard
         path = request.url.path
+        if request.method == "OPTIONS" and path == "/mcp":
+            return await call_next(request)
         if (
             path in ("/", "/dashboard", "/health", "/api/v1/health", "/docs", "/redoc", "/openapi.json")
             or path == "/static"

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,13 +7,18 @@ name = "memos-os"
 version = "2.3.11"
 description = "Memory Operating System for LLM Agents — persistent, smart, local-first memory"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{name = "Mars375", email = "proto.labs.rnd@gmail.com"}]
 keywords = ["llm", "agent", "memory", "rag", "vector-search"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
@@ -28,10 +33,16 @@ qdrant = ["qdrant-client>=1.17.1"]
 pinecone = ["pinecone-client>=3.0"]
 parquet = ["pyarrow>=12.0"]
 server = ["fastapi>=0.104", "uvicorn>=0.44.0"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff==0.15.12", "freezegun>=1.5.1", "pyarrow>=12.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-asyncio>=0.23", "httpx", "ruff==0.15.12", "freezegun>=1.5.1", "pyarrow>=12.0", "build>=1.0"]
 
 [project.scripts]
 memos = "memos.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Mars375/memos"
+Repository = "https://github.com/Mars375/memos"
+Issues = "https://github.com/Mars375/memos/issues"
+Changelog = "https://github.com/Mars375/memos/blob/main/CHANGELOG.md"
 
 [tool.setuptools.package-data]
 "memos.web" = ["*.html", "*.css", "js/*.js"]
