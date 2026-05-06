@@ -219,6 +219,32 @@ class TestNamespaceACL:
         self.acl.clear()
         assert self.acl.stats()["total_policies"] == 0
 
+    def test_grant_callback_failure_rolls_back_policy(self):
+        self.acl.set_on_change(lambda: (_ for _ in ()).throw(OSError("persist failed")))
+
+        with pytest.raises(OSError, match="persist failed"):
+            self.acl.grant("agent", "ns", Role.WRITER)
+
+        assert self.acl.get_role("agent", "ns") is None
+
+    def test_revoke_callback_failure_restores_policy(self):
+        self.acl.grant("agent", "ns", Role.WRITER)
+        self.acl.set_on_change(lambda: (_ for _ in ()).throw(OSError("persist failed")))
+
+        with pytest.raises(OSError, match="persist failed"):
+            self.acl.revoke("agent", "ns")
+
+        assert self.acl.get_role("agent", "ns") == Role.WRITER
+
+    def test_clear_callback_failure_restores_policies(self):
+        self.acl.grant("agent", "ns", Role.WRITER)
+        self.acl.set_on_change(lambda: (_ for _ in ()).throw(OSError("persist failed")))
+
+        with pytest.raises(OSError, match="persist failed"):
+            self.acl.clear()
+
+        assert self.acl.get_role("agent", "ns") == Role.WRITER
+
     def test_expiration(self):
         # Grant with past expiration
         self.acl.grant("agent", "ns", Role.WRITER, expires_at=time.time() - 100)

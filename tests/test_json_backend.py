@@ -164,6 +164,35 @@ class TestJsonFileBackendPersistence:
         assert (tmp_path / ".memos" / "store.json").is_file()
         assert not (tmp_path / "~").exists()
 
+    def test_upsert_save_failure_rolls_back_in_memory_state(self, backend, monkeypatch):
+        item = _item("will fail", mid="failing-id")
+
+        def fail_save():
+            raise OSError("save failed")
+
+        monkeypatch.setattr(backend, "_save", fail_save)
+
+        with pytest.raises(OSError, match="save failed"):
+            backend.upsert(item)
+
+        assert backend.get(item.id) is None
+
+    def test_delete_save_failure_rolls_back_in_memory_state(self, backend, monkeypatch):
+        item = _item("to keep", mid="keep-id")
+        backend.upsert(item)
+
+        def fail_save():
+            raise OSError("save failed")
+
+        monkeypatch.setattr(backend, "_save", fail_save)
+
+        with pytest.raises(OSError, match="save failed"):
+            backend.delete(item.id)
+
+        restored = backend.get(item.id)
+        assert restored is not None
+        assert restored.content == item.content
+
     def test_missing_directory_created(self, tmp_path):
         path = tmp_path / "sub" / "dir" / "store.json"
         b = JsonFileBackend(path=path)

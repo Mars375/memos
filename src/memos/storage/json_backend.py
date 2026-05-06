@@ -148,8 +148,17 @@ class JsonFileBackend(StorageBackend):
 
     def upsert(self, item: MemoryItem, *, namespace: str = _DEFAULT) -> None:
         with self._lock:
-            self._bucket(namespace)[item.id] = self._item_to_dict(item)
-            self._save()
+            bucket = self._bucket(namespace)
+            previous = bucket.get(item.id)
+            bucket[item.id] = self._item_to_dict(item)
+            try:
+                self._save()
+            except Exception:
+                if previous is None:
+                    bucket.pop(item.id, None)
+                else:
+                    bucket[item.id] = previous
+                raise
 
     def get(self, item_id: str, *, namespace: str = _DEFAULT) -> Optional[MemoryItem]:
         with self._lock:
@@ -160,8 +169,12 @@ class JsonFileBackend(StorageBackend):
         with self._lock:
             bucket = self._bucket(namespace)
             if item_id in bucket:
-                del bucket[item_id]
-                self._save()
+                previous = bucket.pop(item_id)
+                try:
+                    self._save()
+                except Exception:
+                    bucket[item_id] = previous
+                    raise
                 return True
             return False
 

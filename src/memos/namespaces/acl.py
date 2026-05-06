@@ -137,6 +137,8 @@ class NamespaceACL:
         import time as _time
 
         with self._lock:
+            key = (agent_id, namespace)
+            previous = self._policies.get(key)
             policy = NamespacePolicy(
                 agent_id=agent_id,
                 namespace=namespace,
@@ -145,8 +147,16 @@ class NamespaceACL:
                 granted_at=_time.time(),
                 expires_at=expires_at,
             )
-            self._policies[(agent_id, namespace)] = policy
-        self._notify_change()
+            self._policies[key] = policy
+        try:
+            self._notify_change()
+        except Exception:
+            with self._lock:
+                if previous is None:
+                    self._policies.pop(key, None)
+                else:
+                    self._policies[key] = previous
+            raise
         return policy
 
     def revoke(self, agent_id: str, namespace: str) -> Optional[NamespacePolicy]:
@@ -155,9 +165,15 @@ class NamespaceACL:
         Returns the removed policy, or None if no policy existed.
         """
         with self._lock:
-            removed = self._policies.pop((agent_id, namespace), None)
+            key = (agent_id, namespace)
+            removed = self._policies.pop(key, None)
         if removed is not None:
-            self._notify_change()
+            try:
+                self._notify_change()
+            except Exception:
+                with self._lock:
+                    self._policies[key] = removed
+                raise
         return removed
 
     def deny(self, agent_id: str, namespace: str) -> NamespacePolicy:
@@ -330,6 +346,12 @@ class NamespaceACL:
         """Remove all policies."""
         with self._lock:
             had_policies = bool(self._policies)
+            previous = dict(self._policies)
             self._policies.clear()
         if had_policies:
-            self._notify_change()
+            try:
+                self._notify_change()
+            except Exception:
+                with self._lock:
+                    self._policies = previous
+                raise
