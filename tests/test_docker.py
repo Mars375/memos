@@ -117,6 +117,35 @@ def test_cli_env_vars():
     assert ns.port == 8000
 
 
+def test_cmd_serve_passes_env_api_keys_to_fastapi_app(monkeypatch):
+    import sys
+    from argparse import Namespace
+
+    import memos.api as memos_api
+    from memos.cli import commands_system
+
+    captured = {}
+
+    def fake_create_fastapi_app(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    def fake_run(app, host, port):
+        captured["run"] = {"app": app, "host": host, "port": port}
+
+    monkeypatch.setenv("MEMOS_API_KEY", "smoke-secret")
+    monkeypatch.setattr(memos_api, "create_fastapi_app", fake_create_fastapi_app)
+    monkeypatch.setitem(sys.modules, "uvicorn", type("FakeUvicorn", (), {"run": staticmethod(fake_run)}))
+
+    ns = Namespace(host="127.0.0.1", port=8100, backend="memory", chroma_host="localhost", chroma_port=8000)
+    commands_system.cmd_serve(ns)
+
+    assert captured["api_keys"] == ["smoke-secret"]
+    assert captured["backend"] == "memory"
+    assert captured["run"]["host"] == "127.0.0.1"
+    assert captured["run"]["port"] == 8100
+
+
 def test_docker_workflow_uses_scoped_trusted_cache():
     content = DOCKER_WORKFLOW.read_text()
     assert "cache-from: type=gha,scope=memos-docker-main" in content

@@ -26,6 +26,9 @@ def cmd_serve(ns: argparse.Namespace) -> None:
 
     backend = os.environ.get("MEMOS_BACKEND", getattr(ns, "backend", "memory"))
     kwargs["backend"] = backend
+    raw_api_keys = os.environ.get("MEMOS_API_KEYS") or os.environ.get("MEMOS_API_KEY") or ""
+    if raw_api_keys:
+        kwargs["api_keys"] = [key.strip() for key in raw_api_keys.split(",") if key.strip()]
     if backend == "chroma":
         # Support MEMOS_CHROMA_URL (docker-compose) or individual flags
         chroma_url = os.environ.get("MEMOS_CHROMA_URL", "")
