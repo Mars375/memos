@@ -117,6 +117,15 @@ class TestTagsCLI:
 # ── API tests ───────────────────────────────────────────────────────────────
 
 
+class TestTagSchemas:
+    def test_learn_request_trims_tag_list_items_and_drops_blanks(self):
+        from memos.api.schemas import LearnRequest
+
+        req = LearnRequest(content="hello", tags=[" alpha ", " ", "beta\t", ""])
+
+        assert req.tags == ["alpha", "beta"]
+
+
 class TestTagsAPI:
     def test_api_tags_endpoint(self):
         from fastapi.testclient import TestClient
@@ -330,6 +339,21 @@ class TestRenameTagAPI:
         resp = client.post("/api/v1/tags/rename", json={"old": "x"})
         assert resp.status_code == 422
 
+    def test_api_rename_rejects_blank_tag_names(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/rename", json={"old": "   ", "new": "new"})
+        assert resp.status_code == 422
+
+        resp = client.post("/api/v1/tags/rename", json={"old": "old", "new": "\t"})
+        assert resp.status_code == 422
+
     def test_api_rename_nonexistent(self):
         from fastapi.testclient import TestClient
 
@@ -481,4 +505,18 @@ class TestDeleteTagAPI:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tags/delete", json={})
+        assert resp.status_code == 422
+
+    def test_api_delete_tag_rejects_blank_tag_name(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/delete", json={"tag": "   "})
         assert resp.status_code == 422

@@ -25,7 +25,7 @@ class LearnRequest(BaseModel):
         if isinstance(v, str):
             return [t.strip() for t in v.split(",") if t.strip()]
         if isinstance(v, list):
-            return [str(t) for t in v]
+            return [t for item in v if (t := str(item).strip())]
         return None
 
 
@@ -99,11 +99,27 @@ class TagRenameRequest(BaseModel):
     old: str = Field(..., min_length=1)
     new: str = Field(..., min_length=1)
 
+    @field_validator("old", "new")
+    @classmethod
+    def _validate_tag_name(cls, v: str) -> str:
+        tag = v.strip()
+        if not tag:
+            raise ValueError("Tag name cannot be blank")
+        return tag
+
 
 class TagDeleteRequest(BaseModel):
     """Delete a tag from all memories."""
 
     tag: str = Field(..., min_length=1)
+
+    @field_validator("tag")
+    @classmethod
+    def _validate_tag_name(cls, v: str) -> str:
+        tag = v.strip()
+        if not tag:
+            raise ValueError("Tag name cannot be blank")
+        return tag
 
 
 class ConsolidateRequest(BaseModel):
