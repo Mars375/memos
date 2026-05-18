@@ -343,6 +343,38 @@ class TestRenameTagAPI:
         assert resp.status_code == 200
         assert resp.json()["renamed"] == 0
 
+    def test_api_rename_strips_tag_names(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+
+        m = MemOS(backend=InMemoryBackend())
+        m.learn("api test", tags=["alpha"])
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/rename", json={"old": " alpha ", "new": " beta "})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["renamed"] == 1
+        assert data["old_tag"] == "alpha"
+        assert data["new_tag"] == "beta"
+        assert dict(m.list_tags()) == {"beta": 1}
+
+    def test_api_rename_rejects_blank_tag_names(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/rename", json={"old": "   ", "new": "beta"})
+
+        assert resp.status_code == 422
+
 
 # ── delete_tag tests ────────────────────────────────────────────────────────
 
@@ -481,4 +513,39 @@ class TestDeleteTagAPI:
         client = TestClient(app)
 
         resp = client.post("/api/v1/tags/delete", json={})
+        assert resp.status_code == 422
+
+    def test_api_delete_tag_strips_tag_name(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        m.learn("api test", tags=["alpha", "keep"])
+        resp = client.post("/api/v1/tags/delete", json={"tag": " alpha "})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["deleted"] == 1
+        assert data["tag"] == "alpha"
+        assert dict(m.list_tags()) == {"keep": 1}
+
+    def test_api_delete_tag_rejects_blank_tag_name(self):
+        from fastapi.testclient import TestClient
+
+        from memos.api import create_fastapi_app
+        from memos.core import MemOS
+        from memos.storage.memory_backend import InMemoryBackend
+
+        m = MemOS(backend=InMemoryBackend())
+        app = create_fastapi_app(memos=m)
+        client = TestClient(app)
+
+        resp = client.post("/api/v1/tags/delete", json={"tag": "   "})
+
         assert resp.status_code == 422
