@@ -99,11 +99,25 @@ class TagRenameRequest(BaseModel):
     old: str = Field(..., min_length=1)
     new: str = Field(..., min_length=1)
 
+    @field_validator("old", "new", mode="before")
+    @classmethod
+    def _strip_tag_name(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
 
 class TagDeleteRequest(BaseModel):
     """Delete a tag from all memories."""
 
     tag: str = Field(..., min_length=1)
+
+    @field_validator("tag", mode="before")
+    @classmethod
+    def _strip_tag_name(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class ConsolidateRequest(BaseModel):
